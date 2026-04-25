@@ -17,9 +17,9 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
 
   const navItems = [
-    { id: "home", label: "Главная", icon: "Home" },
+    ...(!user ? [{ id: "home", label: "Главная", icon: "Home" }] : []),
     { id: "search", label: "Площадки", icon: "Search" },
-    { id: "tours", label: "Туры", icon: "Route" },
+    ...(user?.role !== "venue" ? [{ id: "tours", label: "Туры", icon: "Route" }] : []),
     ...(user?.role === "organizer" ? [{ id: "projects", label: "Проекты", icon: "FolderOpen" }] : []),
     ...(user ? [{ id: "chat", label: "Сообщения", icon: "MessageCircle" }] : []),
   ];
