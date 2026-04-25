@@ -29,11 +29,11 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    const ok = await login(loginData.email, loginData.password);
-    if (ok) {
+    const errMsg = await login(loginData.email, loginData.password);
+    if (!errMsg) {
       onClose();
     } else {
-      setError("Неверный email или пароль");
+      setError(errMsg);
     }
   };
 
@@ -43,8 +43,9 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
     if (!regData.name.trim()) return setError("Введите имя");
     if (!regData.email.includes("@")) return setError("Введите корректный email");
     if (regData.password.length < 6) return setError("Пароль минимум 6 символов");
-    const ok = await register(regData);
-    if (ok) onClose();
+    const errMsg = await register(regData);
+    if (!errMsg) onClose();
+    else setError(errMsg);
   };
 
   return (
@@ -147,25 +148,12 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
                 ) : "Войти"}
               </button>
 
-              <div className="text-center">
-                <p className="text-white/30 text-xs mb-3">Тестовые аккаунты:</p>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setLoginData({ email: "org@example.ru", password: "123456" })}
-                    className="flex-1 py-2 text-xs glass rounded-lg text-white/50 hover:text-neon-cyan hover:border-neon-cyan/30 border border-white/10 transition-colors"
-                  >
-                    Организатор
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLoginData({ email: "venue@example.ru", password: "123456" })}
-                    className="flex-1 py-2 text-xs glass rounded-lg text-white/50 hover:text-neon-cyan hover:border-neon-cyan/30 border border-white/10 transition-colors"
-                  >
-                    Площадка
-                  </button>
-                </div>
-              </div>
+              <p className="text-center text-white/30 text-xs">
+                Нет аккаунта?{" "}
+                <button type="button" onClick={() => setTab("register")} className="text-neon-cyan hover:underline">
+                  Зарегистрироваться
+                </button>
+              </p>
             </form>
           ) : (
             <form onSubmit={handleRegister} className="space-y-4">

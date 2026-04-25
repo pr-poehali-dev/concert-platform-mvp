@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export type UserRole = "organizer" | "venue";
 
@@ -15,8 +15,8 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
-  register: (data: RegisterData) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<string | null>;
+  register: (data: RegisterData) => Promise<string | null>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -31,80 +31,67 @@ interface RegisterData {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const mockUsers: Record<string, User & { password: string }> = {
-  "org@example.ru": {
-    id: "1",
-    name: "Алексей Соколов",
-    email: "org@example.ru",
-    password: "123456",
-    role: "organizer",
-    city: "Москва",
-    verified: true,
-    avatar: "АС",
-    avatarColor: "from-neon-purple to-neon-cyan",
-  },
-  "venue@example.ru": {
-    id: "2",
-    name: "Music Club",
-    email: "venue@example.ru",
-    password: "123456",
-    role: "venue",
-    city: "Санкт-Петербург",
-    verified: true,
-    avatar: "MC",
-    avatarColor: "from-neon-cyan to-neon-green",
-  },
-};
+const AUTH_URL = "https://functions.poehali.dev/f5e06ba0-2cd8-4b53-8899-3cfc3badc3e8";
+const SESSION_KEY = "tourlink_session";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  useEffect(() => {
+    const sessionId = localStorage.getItem(SESSION_KEY);
+    if (!sessionId) { setIsLoading(false); return; }
+    fetch(`${AUTH_URL}?action=me`, { headers: { "X-Session-Id": sessionId } })
+      .then((r) => r.json())
+      .then((data) => { if (data.user) setUser(data.user); })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
+  }, []);
+
+  const login = async (email: string, password: string): Promise<string | null> => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const found = mockUsers[email.toLowerCase()];
-    if (found && found.password === password) {
-      const { password: _, ...userData } = found;
-      setUser(userData);
+    try {
+      const res = await fetch(`${AUTH_URL}?action=login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) return data.error || "Ошибка входа";
+      localStorage.setItem(SESSION_KEY, data.sessionId);
+      setUser(data.user);
+      return null;
+    } catch {
+      return "Ошибка соединения";
+    } finally {
       setIsLoading(false);
-      return true;
     }
-    setIsLoading(false);
-    return false;
   };
 
-  const register = async (data: RegisterData): Promise<boolean> => {
+  const register = async (data: RegisterData): Promise<string | null> => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 1000));
-    const initials = data.name
-      .split(" ")
-      .map((w) => w[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-    const colors = [
-      "from-neon-purple to-neon-cyan",
-      "from-neon-cyan to-neon-green",
-      "from-neon-pink to-neon-purple",
-      "from-neon-green to-neon-cyan",
-    ];
-    const newUser: User = {
-      id: String(Date.now()),
-      name: data.name,
-      email: data.email,
-      role: data.role,
-      city: data.city,
-      verified: false,
-      avatar: initials,
-      avatarColor: colors[Math.floor(Math.random() * colors.length)],
-    };
-    setUser(newUser);
-    setIsLoading(false);
-    return true;
+    try {
+      const res = await fetch(`${AUTH_URL}?action=register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      const json = await res.json();
+      if (!res.ok) return json.error || "Ошибка регистрации";
+      localStorage.setItem(SESSION_KEY, json.sessionId);
+      setUser(json.user);
+      return null;
+    } catch {
+      return "Ошибка соединения";
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const logout = () => setUser(null);
+  const logout = () => {
+    localStorage.removeItem(SESSION_KEY);
+    setUser(null);
+  };
 
   return (
     <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>

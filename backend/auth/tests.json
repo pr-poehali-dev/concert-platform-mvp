@@ -1,0 +1,46 @@
+{
+  "tests": [
+    {
+      "name": "Register new user",
+      "method": "POST",
+      "path": "/?action=register",
+      "body": {
+        "name": "Тест Тестов",
+        "email": "testuser_mvp99@example.ru",
+        "password": "123456",
+        "role": "organizer",
+        "city": "Москва"
+      },
+      "expectedStatus": 201,
+      "expectedBody": { "sessionId": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Login with wrong password",
+      "method": "POST",
+      "path": "/?action=login",
+      "body": {
+        "email": "testuser_mvp99@example.ru",
+        "password": "wrongpass"
+      },
+      "expectedStatus": 401,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Register duplicate email",
+      "method": "POST",
+      "path": "/?action=register",
+      "body": {
+        "name": "Дубль",
+        "email": "testuser_mvp99@example.ru",
+        "password": "123456",
+        "role": "venue",
+        "city": "СПб"
+      },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
