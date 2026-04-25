@@ -429,6 +429,125 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"deleted": True})
 
+    # ── GET user_details ──────────────────────────────────────────────────
+    if method == "GET" and action == "user_details":
+        uid = params.get("id", "")
+        if not uid:
+            return err("id required")
+        conn = get_conn()
+        cur = conn.cursor()
+
+        # Базовые данные пользователя
+        cur.execute(
+            f"""SELECT id, name, email, role, city, verified, is_admin, avatar, avatar_color,
+                       created_at, status, phone, legal_name, inn, company_type
+                FROM {SCHEMA}.users WHERE id = %s""",
+            (uid,),
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return err("Пользователь не найден", 404)
+
+        user = {
+            "id": str(row[0]), "name": row[1], "email": row[2], "role": row[3],
+            "city": row[4], "verified": row[5], "isAdmin": row[6],
+            "avatar": row[7], "avatarColor": row[8], "createdAt": str(row[9]),
+            "status": row[10] or "approved", "phone": row[11] or "",
+            "legalName": row[12] or "", "inn": row[13] or "", "companyType": row[14] or "",
+        }
+
+        # Проекты с финансами
+        cur.execute(
+            f"""SELECT id, title, artist, status, city, date_start,
+                       total_income_plan, total_income_fact,
+                       total_expenses_plan, total_expenses_fact, created_at
+                FROM {SCHEMA}.projects WHERE user_id = %s
+                ORDER BY created_at DESC""",
+            (uid,),
+        )
+        projects = []
+        for p in cur.fetchall():
+            projects.append({
+                "id": str(p[0]), "title": p[1], "artist": p[2], "status": p[3],
+                "city": p[4], "dateStart": str(p[5]) if p[5] else "",
+                "incomePlan": float(p[6] or 0), "incomeFact": float(p[7] or 0),
+                "expensesPlan": float(p[8] or 0), "expensesFact": float(p[9] or 0),
+                "createdAt": str(p[10]),
+            })
+
+        # Сводные финансы по всем проектам
+        total_income_plan = sum(p["incomePlan"] for p in projects)
+        total_income_fact = sum(p["incomeFact"] for p in projects)
+        total_expenses_plan = sum(p["expensesPlan"] for p in projects)
+        total_expenses_fact = sum(p["expensesFact"] for p in projects)
+
+        # Сотрудники
+        cur.execute(
+            f"""SELECT id, name, email, role_in_company, is_active, created_at
+                FROM {SCHEMA}.employees WHERE company_user_id = %s
+                ORDER BY created_at DESC""",
+            (uid,),
+        )
+        employees = [
+            {
+                "id": str(e[0]), "name": e[1], "email": e[2],
+                "roleInCompany": e[3], "isActive": e[4], "createdAt": str(e[5]),
+            }
+            for e in cur.fetchall()
+        ]
+
+        # Площадки (для venue-пользователей)
+        cur.execute(
+            f"""SELECT id, name, city, venue_type, capacity, price_from, verified, rating
+                FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
+            (uid,),
+        )
+        venues = [
+            {
+                "id": str(v[0]), "name": v[1], "city": v[2], "venueType": v[3],
+                "capacity": v[4], "priceFrom": float(v[5] or 0),
+                "verified": v[6], "rating": float(v[7] or 0),
+            }
+            for v in cur.fetchall()
+        ]
+
+        # Бронирования площадок (как организатор)
+        cur.execute(
+            f"""SELECT vb.id, vb.status, v.name, vb.event_date, vb.rental_amount
+                FROM {SCHEMA}.venue_bookings vb
+                LEFT JOIN {SCHEMA}.venues v ON v.id = vb.venue_id
+                WHERE vb.organizer_id = %s
+                ORDER BY vb.created_at DESC LIMIT 10""",
+            (uid,),
+        )
+        bookings = [
+            {
+                "id": str(b[0]), "status": b[1], "venueName": b[2] or "—",
+                "eventDate": str(b[3]) if b[3] else "",
+                "rentalAmount": float(b[4]) if b[4] else None,
+            }
+            for b in cur.fetchall()
+        ]
+
+        conn.close()
+        return ok({
+            "user": user,
+            "projects": projects,
+            "projectsCount": len(projects),
+            "employees": employees,
+            "employeesCount": len(employees),
+            "venues": venues,
+            "bookings": bookings,
+            "finance": {
+                "totalIncomePlan": total_income_plan,
+                "totalIncomeFact": total_income_fact,
+                "totalExpensesPlan": total_expenses_plan,
+                "totalExpensesFact": total_expenses_fact,
+                "totalProfitFact": total_income_fact - total_expenses_fact,
+            },
+        })
+
     # ── POST delete_venue ─────────────────────────────────────────────────
     if method == "POST" and action == "delete_venue":
         body = json.loads(event.get("body") or "{}")

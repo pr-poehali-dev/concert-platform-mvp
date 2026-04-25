@@ -58,6 +58,14 @@
       "expectedStatus": 403,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "User details without token",
+      "method": "GET",
+      "path": "/?action=user_details&id=00000000-0000-0000-0000-000000000000",
+      "expectedStatus": 403,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -281,6 +281,7 @@ export default function AdminPage() {
             usersSearch={usersSearch}
             usersRole={usersRole}
             usersLoading={usersLoading}
+            token={token}
             onSearchChange={val => { setUsersSearch(val); setUsersPage(1); }}
             onRoleChange={val => { setUsersRole(val); setUsersPage(1); }}
             onPageChange={setUsersPage}

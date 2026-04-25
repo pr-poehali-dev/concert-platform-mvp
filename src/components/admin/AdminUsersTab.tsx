@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { type AdminUser, formatDate } from "./types";
+import UserDetailsModal from "./UserDetailsModal";
 
 interface Props {
   users: AdminUser[];
@@ -11,6 +12,7 @@ interface Props {
   usersSearch: string;
   usersRole: string;
   usersLoading: boolean;
+  token: string;
   onSearchChange: (val: string) => void;
   onRoleChange: (val: string) => void;
   onPageChange: (page: number) => void;
@@ -22,11 +24,12 @@ interface Props {
 
 export default function AdminUsersTab({
   users, usersTotal, usersPage, usersPages,
-  usersSearch, usersRole, usersLoading,
+  usersSearch, usersRole, usersLoading, token,
   onSearchChange, onRoleChange, onPageChange,
   onRefresh, onToggleVerify, onToggleAdmin, onDelete,
 }: Props) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [detailsUser, setDetailsUser] = useState<AdminUser | null>(null);
   const confirmUser = users.find(u => u.id === confirmId);
   return (
     <div className="animate-fade-in space-y-5">
@@ -70,7 +73,9 @@ export default function AdminUsersTab({
             ) : users.length === 0 ? (
               <tr><td colSpan={7} className="text-center py-12 text-white/30">Пользователи не найдены</td></tr>
             ) : users.map((u, i) => (
-              <tr key={u.id} className={`hover:bg-white/3 transition-colors ${i < users.length - 1 ? "border-b border-white/5" : ""}`}>
+              <tr key={u.id}
+                onClick={() => setDetailsUser(u)}
+                className={`hover:bg-white/5 transition-colors cursor-pointer ${i < users.length - 1 ? "border-b border-white/5" : ""}`}>
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${u.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-xs shrink-0`}>
@@ -102,7 +107,7 @@ export default function AdminUsersTab({
                     {u.verified ? "Верифицирован" : "Не верифицирован"}
                   </Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => onToggleVerify(u.id)}
@@ -176,6 +181,14 @@ export default function AdminUsersTab({
             </div>
           </div>
         </div>
+      )}
+
+      {detailsUser && (
+        <UserDetailsModal
+          user={detailsUser}
+          token={token}
+          onClose={() => setDetailsUser(null)}
+        />
       )}
     </div>
   );
