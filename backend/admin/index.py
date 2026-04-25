@@ -363,36 +363,34 @@ def handler(event: dict, context) -> dict:
             return err("id required")
         conn = get_conn()
         cur = conn.cursor()
-        # Сначала удаляем площадки пользователя (каскадом их зависимости)
+        # Площадки пользователя — удаляем вместе с зависимостями
         cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE user_id = %s", (uid,))
         venue_ids = [str(r[0]) for r in cur.fetchall()]
         for vid in venue_ids:
             cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
             cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (vid,))
             cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (vid,))
-        if venue_ids:
-            placeholders = ",".join(["%s"] * len(venue_ids))
-            cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id IN ({placeholders})", venue_ids)
-        # Удаляем бронирования как организатора
+            cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (vid,))
+        # Бронирования как организатора или площадки
         cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE organizer_id = %s", (uid,))
         cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE venue_user_id = %s", (uid,))
-        # Удаляем сообщения и диалоги
-        cur.execute(f"DELETE FROM {SCHEMA}.messages WHERE sender_id = %s", (uid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE organizer_id = %s", (uid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE venue_user_id = %s", (uid,))
-        # Уведомления и сотрудники
+        # Диалоги и сообщения (сначала сообщения из диалогов, потом сами диалоги)
+        cur.execute(f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
+        conv_ids = [str(r[0]) for r in cur.fetchall()]
+        for cid in conv_ids:
+            cur.execute(f"DELETE FROM {SCHEMA}.messages WHERE conversation_id = %s", (cid,))
+        cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
+        # Уведомления
         cur.execute(f"DELETE FROM {SCHEMA}.notifications WHERE user_id = %s", (uid,))
+        # Сотрудники компании пользователя (нет колонки user_id — только company_user_id)
         cur.execute(f"DELETE FROM {SCHEMA}.employees WHERE company_user_id = %s", (uid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.employees WHERE user_id = %s", (uid,))
         # Проекты пользователя
         cur.execute(f"SELECT id FROM {SCHEMA}.projects WHERE user_id = %s", (uid,))
         project_ids = [str(r[0]) for r in cur.fetchall()]
         for pid in project_ids:
             cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE project_id = %s", (pid,))
             cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE project_id = %s", (pid,))
-        if project_ids:
-            placeholders = ",".join(["%s"] * len(project_ids))
-            cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id IN ({placeholders})", project_ids)
+            cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id = %s", (pid,))
         # Наконец удаляем пользователя
         cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = %s", (uid,))
         conn.commit()
