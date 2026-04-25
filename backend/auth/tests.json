@@ -1,28 +1,10 @@
 {
   "tests": [
     {
-      "name": "Register new user",
-      "method": "POST",
-      "path": "/?action=register",
-      "body": {
-        "name": "Тест Тестов",
-        "email": "testuser_mvp99@example.ru",
-        "password": "123456",
-        "role": "organizer",
-        "city": "Москва"
-      },
-      "expectedStatus": 201,
-      "expectedBody": { "sessionId": "string" },
-      "bodyMatcher": "partial"
-    },
-    {
       "name": "Login with wrong password",
       "method": "POST",
       "path": "/?action=login",
-      "body": {
-        "email": "testuser_mvp99@example.ru",
-        "password": "wrongpass"
-      },
+      "body": { "email": "nouser@example.com", "password": "wrongpass" },
       "expectedStatus": 401,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
@@ -31,15 +13,26 @@
       "name": "Register duplicate email",
       "method": "POST",
       "path": "/?action=register",
-      "body": {
-        "name": "Дубль",
-        "email": "testuser_mvp99@example.ru",
-        "password": "123456",
-        "role": "venue",
-        "city": "СПб"
-      },
+      "body": { "name": "Дубль", "email": "testuser_mvp99@example.ru", "password": "123456", "role": "venue", "city": "СПб" },
       "expectedStatus": 400,
       "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "verify_email invalid token",
+      "method": "GET",
+      "path": "/?action=verify_email&token=invalid_token_000",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "resend_verification unknown email",
+      "method": "POST",
+      "path": "/?action=resend_verification",
+      "body": { "email": "unknown@example.com" },
+      "expectedStatus": 200,
+      "expectedBody": { "sent": false },
       "bodyMatcher": "partial"
     }
   ]

@@ -1,14 +1,17 @@
 """
 Авторизация и регистрация пользователей GLOBAL LINK.
-POST ?action=register       — создать аккаунт (pending)
-POST ?action=login          — войти (пользователь или сотрудник)
-POST ?action=update_profile — обновить профиль/реквизиты/логотип
-GET  ?action=me             — данные по session_id
-GET  ?action=status         — проверить статус верификации
+POST ?action=register           — создать аккаунт + отправить письмо подтверждения
+GET  ?action=verify_email       — подтвердить email по токену из письма
+POST ?action=resend_verification— повторно отправить письмо подтверждения
+POST ?action=login              — войти (пользователь или сотрудник)
+POST ?action=update_profile     — обновить профиль/реквизиты/логотип
+GET  ?action=me                 — данные по session_id
+GET  ?action=status             — проверить статус верификации
 """
 import json, os, hashlib, secrets, random, base64, uuid
 import psycopg2
 import boto3
+import urllib.request
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826"
@@ -100,13 +103,105 @@ USER_SELECT = f"""
 """
 
 
+APP_URL = "https://concert-platform-mvp.poehali.dev"
+
+
+def send_verification_email(email: str, name: str, token: str) -> bool:
+    """Отправляет письмо с ссылкой подтверждения через Resend API."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        return False
+
+    verify_url = f"{APP_URL}?verify={token}"
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <!-- Header -->
+        <tr><td style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:32px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+          <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Концертная платформа</p>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:40px 32px;">
+          <h2 style="margin:0 0 16px;color:#fff;font-size:22px;">Привет, {name}! 👋</h2>
+          <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:15px;line-height:1.6;">
+            Спасибо за регистрацию на платформе GLOBAL LINK.<br>
+            Для завершения регистрации подтвердите ваш email-адрес.
+          </p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="{verify_url}"
+               style="display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#7c3aed,#06b6d4);
+                      color:#fff;text-decoration:none;border-radius:12px;font-size:16px;
+                      font-weight:700;letter-spacing:0.5px;">
+              ✉️ Подтвердить email
+            </a>
+          </div>
+          <p style="margin:24px 0 0;color:rgba(255,255,255,0.35);font-size:13px;text-align:center;">
+            Ссылка действительна 24 часа.<br>
+            Если вы не регистрировались на GLOBAL LINK — просто проигнорируйте это письмо.
+          </p>
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">© 2025 GLOBAL LINK · Концертная платформа</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    payload = json.dumps({
+        "from": "GLOBAL LINK <noreply@globalink.ru>",
+        "to": [email],
+        "subject": "Подтвердите ваш email — GLOBAL LINK",
+        "html": html,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        return True
+    except Exception:
+        return False
+
+
+def create_verification_token(conn, user_id: str, email: str) -> str:
+    """Создаёт токен подтверждения в БД и возвращает его."""
+    token = secrets.token_urlsafe(48)
+    cur = conn.cursor()
+    # Удаляем старые неиспользованные токены этого пользователя
+    cur.execute(
+        f"DELETE FROM {SCHEMA}.email_verifications WHERE user_id = %s AND used_at IS NULL",
+        (user_id,)
+    )
+    cur.execute(
+        f"""INSERT INTO {SCHEMA}.email_verifications (user_id, token, email)
+            VALUES (%s, %s, %s)""",
+        (user_id, token, email)
+    )
+    return token
+
+
 def notify_admins(conn, title: str, body: str):
     cur = conn.cursor()
     cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE is_admin = TRUE")
     admin_ids = [str(r[0]) for r in cur.fetchall()]
     for admin_id in admin_ids:
         try:
-            import urllib.request
             payload = json.dumps({
                 "userId": admin_id, "type": "system",
                 "title": title, "body": body, "linkPage": "admin",
@@ -174,7 +269,13 @@ def handler(event: dict, context) -> dict:
              company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone),
         )
         user_id = str(cur.fetchone()[0])
+
+        # Создаём токен подтверждения
+        token = create_verification_token(conn, user_id, email)
         conn.commit()
+
+        # Отправляем письмо подтверждения
+        email_sent = send_verification_email(email, name, token)
 
         role_label = "Организатор" if role == "organizer" else "Площадка"
         notify_admins(conn, "Новая заявка на регистрацию",
@@ -184,7 +285,8 @@ def handler(event: dict, context) -> dict:
         user_data = {
             "id": user_id, "name": name, "email": email,
             "role": role, "city": city, "verified": False,
-            "status": "pending", "avatar": avatar, "avatarColor": avatar_color,
+            "status": "pending", "emailConfirmed": False, "avatar": avatar,
+            "avatarColor": avatar_color,
             "companyType": company_type, "legalName": legal_name, "inn": inn,
             "kpp": kpp, "ogrn": ogrn, "legalAddress": legal_address,
             "actualAddress": actual_address, "phone": phone,
@@ -192,7 +294,12 @@ def handler(event: dict, context) -> dict:
         }
         session_id = secrets.token_hex(32)
         _sessions[session_id] = user_data
-        return ok({"sessionId": session_id, "user": user_data}, 201)
+        return ok({
+            "sessionId": session_id,
+            "user": user_data,
+            "emailSent": email_sent,
+            "requiresEmailConfirmation": True,
+        }, 201)
 
     # ── POST login ────────────────────────────────────────────────────────
     if method == "POST" and action == "login":
@@ -397,6 +504,73 @@ def handler(event: dict, context) -> dict:
         conn.commit()
         conn.close()
         return ok({"ok": True})
+
+    # ── GET verify_email — подтверждение email по токену ─────────────────
+    if action == "verify_email":
+        token = params.get("token", "")
+        if not token:
+            return err("Токен не указан")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, user_id, email, expires_at, used_at
+                FROM {SCHEMA}.email_verifications
+                WHERE token = %s""",
+            (token,)
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return err("Ссылка недействительна или уже использована", 400)
+        ver_id, user_id, email, expires_at, used_at = row
+        if used_at:
+            conn.close()
+            return err("Ссылка уже была использована", 400)
+
+        import datetime
+        if expires_at.replace(tzinfo=None) < datetime.datetime.utcnow():
+            conn.close()
+            return err("Ссылка устарела. Запросите новое письмо.", 400)
+
+        # Помечаем токен использованным и подтверждаем email
+        cur.execute(
+            f"UPDATE {SCHEMA}.email_verifications SET used_at = NOW() WHERE id = %s",
+            (str(ver_id),)
+        )
+        cur.execute(
+            f"UPDATE {SCHEMA}.users SET email_confirmed = TRUE WHERE id = %s RETURNING name",
+            (str(user_id),)
+        )
+        name_row = cur.fetchone()
+        conn.commit(); conn.close()
+
+        user_name = name_row[0] if name_row else ""
+        return ok({"confirmed": True, "userId": str(user_id), "name": user_name})
+
+    # ── POST resend_verification — повторно отправить письмо ──────────────
+    if method == "POST" and action == "resend_verification":
+        b = json.loads(event.get("body") or "{}")
+        email = (b.get("email") or "").strip().lower()
+        if not email:
+            return err("email required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT id, name, email_confirmed FROM {SCHEMA}.users WHERE email = %s",
+            (email,)
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return ok({"sent": False, "reason": "not_found"})
+        user_id, name, already_confirmed = str(row[0]), row[1], row[2]
+        if already_confirmed:
+            conn.close()
+            return ok({"sent": False, "reason": "already_confirmed"})
+
+        token = create_verification_token(conn, user_id, email)
+        conn.commit(); conn.close()
+
+        sent = send_verification_email(email, name, token)
+        return ok({"sent": sent})
 
     # ── GET status ────────────────────────────────────────────────────────
     if method == "GET" and action == "status":
