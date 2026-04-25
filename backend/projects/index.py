@@ -397,8 +397,11 @@ def handler(event: dict, context) -> dict:
         vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
         cur.execute(f"SELECT name, email FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
         orow = cur.fetchone(); org_name = orow[0] if orow else "Организатор"; org_email = orow[1] if orow else ""
-        cur.execute(f"SELECT email, name FROM {SCHEMA}.users WHERE id=%s", (venue_user_id,))
-        vurow = cur.fetchone(); venue_email = vurow[0] if vurow else ""; venue_user_name = vurow[1] if vurow else ""
+        cur.execute(f"SELECT email, name, email_notifications_enabled FROM {SCHEMA}.users WHERE id=%s", (venue_user_id,))
+        vurow = cur.fetchone()
+        venue_email = vurow[0] if vurow else ""
+        venue_user_name = vurow[1] if vurow else ""
+        venue_email_ok = bool(vurow[2]) if vurow else True
         conn.commit(); conn.close()
 
         # Уведомление площадке (в приложении)
@@ -445,7 +448,8 @@ def handler(event: dict, context) -> dict:
 </td></tr>
 </table></td></tr></table>
 </body></html>"""
-        send_booking_email(venue_email, f"Новый запрос на бронирование от {org_name} — {date_str}", html)
+        if venue_email_ok:
+            send_booking_email(venue_email, f"Новый запрос на бронирование от {org_name} — {date_str}", html)
 
         return ok({"bookingId": booking_id}, 201)
 
@@ -531,9 +535,9 @@ def handler(event: dict, context) -> dict:
 
             # Email организатору — подтверждение
             conn3 = get_conn(); cur3 = conn3.cursor()
-            cur3.execute(f"SELECT email, name FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
+            cur3.execute(f"SELECT email, name, email_notifications_enabled FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
             org_row = cur3.fetchone(); conn3.close()
-            if org_row:
+            if org_row and org_row[2]:
                 org_email, org_name = org_row[0], org_row[1]
                 date_str = edate + (f" в {event_time}" if event_time else "")
                 rent_str_html = f"<tr><td style='color:rgba(255,255,255,0.5);padding:4px 0'>Сумма аренды</td><td style='color:#4ade80;font-weight:700;padding:4px 0;padding-left:16px'>{int(rental_amount):,} ₽</td></tr>".replace(",", " ") if rental_amount else ""
@@ -576,9 +580,9 @@ def handler(event: dict, context) -> dict:
 
             # Email организатору — отклонение
             conn4 = get_conn(); cur4 = conn4.cursor()
-            cur4.execute(f"SELECT email, name FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
+            cur4.execute(f"SELECT email, name, email_notifications_enabled FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
             org_row2 = cur4.fetchone(); conn4.close()
-            if org_row2:
+            if org_row2 and org_row2[2]:
                 org_email2, org_name2 = org_row2[0], org_row2[1]
                 reason_html = f"<p style='color:rgba(255,255,255,0.5);font-size:14px;margin:16px 0 0'>Причина: {venue_conditions}</p>" if venue_conditions else ""
                 html_reject = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>

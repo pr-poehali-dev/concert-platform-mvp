@@ -26,6 +26,8 @@ export interface User {
   bankBik: string;
   logoUrl: string;
   phone: string;
+  // Настройки
+  emailNotificationsEnabled?: boolean;
   // Сотрудник
   isEmployee?: boolean;
   employeeId?: string;

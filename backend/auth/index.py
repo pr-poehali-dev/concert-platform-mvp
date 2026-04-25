@@ -74,7 +74,7 @@ def err(msg: str, status: int = 400) -> dict:
 def build_user(row) -> dict:
     """row: id,name,email,role,city,verified,avatar,avatar_color,status,
              company_type,legal_name,inn,kpp,ogrn,legal_address,actual_address,
-             bank_name,bank_account,bank_bik,logo_url,phone"""
+             bank_name,bank_account,bank_bik,logo_url,phone,email_notifications_enabled"""
     return {
         "id": str(row[0]), "name": row[1], "email": row[2],
         "role": row[3], "city": row[4], "verified": row[5],
@@ -92,13 +92,14 @@ def build_user(row) -> dict:
         "bankBik": row[18] or "",
         "logoUrl": row[19] or "",
         "phone": row[20] or "",
+        "emailNotificationsEnabled": row[21] if len(row) > 21 and row[21] is not None else True,
     }
 
 
 USER_SELECT = f"""
     SELECT id, name, email, role, city, verified, avatar, avatar_color, status,
            company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address,
-           bank_name, bank_account, bank_bik, logo_url, phone
+           bank_name, bank_account, bank_bik, logo_url, phone, email_notifications_enabled
     FROM {SCHEMA}.users
 """
 
@@ -401,6 +402,7 @@ def handler(event: dict, context) -> dict:
             "legalAddress": "legal_address", "actualAddress": "actual_address",
             "bankName": "bank_name", "bankAccount": "bank_account", "bankBik": "bank_bik",
             "logoUrl": "logo_url",
+            "emailNotificationsEnabled": "email_notifications_enabled",
         }
         fields = {col: b[fk] for fk, col in field_map.items() if fk in b}
         if not fields:

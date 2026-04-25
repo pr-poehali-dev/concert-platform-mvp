@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import type { User } from "@/context/AuthContext";
 import { CITIES, AUTH_URL, COMPANY_LABELS } from "./types";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props {
   user: User;
@@ -20,11 +21,22 @@ export default function ProfileSection({
   user, isVenue, editMode, saving, editForm,
   onEditFormChange, onEditToggle, onSave, onCancelEdit, onLogout,
 }: Props) {
+  const { updateProfile } = useAuth();
   const [pwModal, setPwModal] = useState(false);
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [pwError, setPwError] = useState("");
   const [pwSuccess, setPwSuccess] = useState(false);
   const [pwSaving, setPwSaving] = useState(false);
+  const [emailNotif, setEmailNotif] = useState(user.emailNotificationsEnabled ?? true);
+  const [emailNotifSaving, setEmailNotifSaving] = useState(false);
+
+  const toggleEmailNotif = async () => {
+    const newVal = !emailNotif;
+    setEmailNotif(newVal);
+    setEmailNotifSaving(true);
+    await updateProfile({ emailNotificationsEnabled: newVal });
+    setEmailNotifSaving(false);
+  };
 
   const closePwModal = () => {
     setPwModal(false);
@@ -126,6 +138,33 @@ export default function ProfileSection({
             <Icon name="Lock" size={14} />Изменить пароль
           </button>
         </div>
+        <div className="h-px bg-white/10" />
+
+        {/* Email-уведомления */}
+        <div>
+          <label className="text-xs text-white/40 uppercase tracking-wider mb-3 block">Уведомления на почту</label>
+          <div className="glass rounded-xl px-4 py-3 border border-white/8 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-white text-sm font-medium">Письма о бронированиях</p>
+              <p className="text-white/35 text-xs mt-0.5">
+                {emailNotif
+                  ? "Новые заявки и ответы дублируются на email"
+                  : "Письма на почту отключены, только уведомления в приложении"}
+              </p>
+            </div>
+            <button
+              onClick={toggleEmailNotif}
+              disabled={emailNotifSaving}
+              className={`w-11 h-6 rounded-full transition-all relative shrink-0 ${emailNotif ? "bg-neon-purple" : "bg-white/15"} disabled:opacity-50`}
+            >
+              {emailNotifSaving
+                ? <Icon name="Loader2" size={12} className="animate-spin text-white absolute top-1 left-2.5" />
+                : <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white transition-all ${emailNotif ? "left-5" : "left-0.5"}`} />
+              }
+            </button>
+          </div>
+        </div>
+
         <div className="h-px bg-white/10" />
         <div>
           <button onClick={onLogout} className="flex items-center gap-2 text-neon-pink hover:text-white text-sm transition-colors">
