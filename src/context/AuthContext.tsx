@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from "react";
 
 export type UserRole = "organizer" | "venue";
+export type CompanyType = "individual" | "ip" | "ooo" | "other";
 
 export interface User {
   id: string;
@@ -12,22 +13,49 @@ export interface User {
   status: "pending" | "approved" | "rejected";
   avatar: string;
   avatarColor: string;
+  // Реквизиты компании
+  companyType: CompanyType;
+  legalName: string;
+  inn: string;
+  kpp: string;
+  ogrn: string;
+  legalAddress: string;
+  actualAddress: string;
+  bankName: string;
+  bankAccount: string;
+  bankBik: string;
+  logoUrl: string;
+  phone: string;
+  // Сотрудник
+  isEmployee?: boolean;
+  employeeId?: string;
+  roleInCompany?: string;
+  companyName?: string;
+}
+
+export interface RegisterData {
+  name: string;
+  email: string;
+  password: string;
+  role: UserRole;
+  city: string;
+  companyType: CompanyType;
+  legalName: string;
+  inn: string;
+  kpp: string;
+  ogrn: string;
+  legalAddress: string;
+  actualAddress: string;
+  phone: string;
 }
 
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<string | null>;
   register: (data: RegisterData) => Promise<string | null>;
+  updateProfile: (fields: Partial<User>) => Promise<string | null>;
   logout: () => void;
   isLoading: boolean;
-}
-
-interface RegisterData {
-  name: string;
-  email: string;
-  password: string;
-  role: UserRole;
-  city: string;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -89,13 +117,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateProfile = async (fields: Partial<User>): Promise<string | null> => {
+    const sessionId = localStorage.getItem(SESSION_KEY);
+    if (!sessionId) return "Не авторизован";
+    try {
+      const res = await fetch(`${AUTH_URL}?action=update_profile`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+        body: JSON.stringify(fields),
+      });
+      const data = await res.json();
+      if (!res.ok) return data.error || "Ошибка сохранения";
+      if (data.user) setUser(data.user);
+      return null;
+    } catch {
+      return "Ошибка соединения";
+    }
+  };
+
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
     setUser(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, register, updateProfile, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

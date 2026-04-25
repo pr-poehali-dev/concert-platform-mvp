@@ -1,0 +1,29 @@
+{
+  "tests": [
+    {
+      "name": "List no company_user_id",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List empty",
+      "method": "GET",
+      "path": "/?action=list&company_user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 200,
+      "expectedBody": { "employees": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Add employee missing fields",
+      "method": "POST",
+      "path": "/?action=add",
+      "body": { "companyUserId": "00000000-0000-0000-0000-000000000001" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

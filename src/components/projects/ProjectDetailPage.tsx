@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { PROJECTS_URL, STATUS_CONFIG, TAX_OPTIONS, EXPENSE_CATEGORIES, fmt, type Project, type Expense, type IncomeLine } from "@/hooks/useProjects";
-import { exportCSV, exportExcel, exportPDF } from "@/lib/exportProject";
+import { exportCSV, exportExcel, exportPDF, companyInfoFromUser } from "@/lib/exportProject";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props { projectId: string; onBack: () => void; }
 
@@ -30,6 +31,7 @@ function EditCell({ value, onSave, prefix="", suffix="", type="text", className=
 
 export default function ProjectDetailPage({ projectId, onBack }: Props) {
   const [project, setProject] = useState<Project|null>(null);
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary">("budget");
   const [saving, setSaving] = useState<string|null>(null);
@@ -165,9 +167,9 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
                     <p className="text-white/40 text-xs uppercase tracking-wider">Скачать отчёт P&L</p>
                   </div>
                   {[
-                    { icon: "FileText", label: "PDF (для печати)", color: "text-neon-pink", action: () => { exportPDF(project); setExportOpen(false); } },
-                    { icon: "Table2", label: "Excel (.xls)", color: "text-neon-green", action: () => { exportExcel(project); setExportOpen(false); } },
-                    { icon: "FileSpreadsheet", label: "CSV (таблица)", color: "text-neon-cyan", action: () => { exportCSV(project); setExportOpen(false); } },
+                    { icon: "FileText", label: "PDF (для печати)", color: "text-neon-pink", action: () => { exportPDF(project, user ? companyInfoFromUser(user) : undefined); setExportOpen(false); } },
+                    { icon: "Table2", label: "Excel (.xls)", color: "text-neon-green", action: () => { exportExcel(project, user ? companyInfoFromUser(user) : undefined); setExportOpen(false); } },
+                    { icon: "FileSpreadsheet", label: "CSV (таблица)", color: "text-neon-cyan", action: () => { exportCSV(project, user ? companyInfoFromUser(user) : undefined); setExportOpen(false); } },
                   ].map((opt, i) => (
                     <button key={i} onClick={opt.action}
                       className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left">

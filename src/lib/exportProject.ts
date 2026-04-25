@@ -1,4 +1,16 @@
 import type { Project } from "@/hooks/useProjects";
+import type { User } from "@/context/AuthContext"; // used in companyInfoFromUser
+
+export interface ExportCompanyInfo {
+  name: string;
+  legalName?: string;
+  inn?: string;
+  ogrn?: string;
+  legalAddress?: string;
+  phone?: string;
+  logoUrl?: string;
+  companyType?: string;
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -32,7 +44,30 @@ function safeFilename(s: string) {
 
 // ─── CSV ─────────────────────────────────────────────────────────────────────
 
-export function exportCSV(project: Project) {
+export function companyInfoFromUser(user: User): ExportCompanyInfo {
+  return {
+    name: user.name,
+    legalName: user.legalName || "",
+    inn: user.inn || "",
+    ogrn: user.ogrn || "",
+    legalAddress: user.legalAddress || "",
+    phone: user.phone || "",
+    logoUrl: user.logoUrl || "",
+    companyType: user.companyType || "individual",
+  };
+}
+
+function companyBlock(info?: ExportCompanyInfo): string {
+  if (!info) return "GLOBAL LINK";
+  const parts: string[] = [info.legalName || info.name];
+  if (info.inn) parts.push(`ИНН: ${info.inn}`);
+  if (info.ogrn) parts.push(`ОГРН: ${info.ogrn}`);
+  if (info.legalAddress) parts.push(info.legalAddress);
+  if (info.phone) parts.push(info.phone);
+  return parts.join(" | ");
+}
+
+export function exportCSV(project: Project, company?: ExportCompanyInfo) {
   const rows: string[][] = [];
   const sep = ";";
 
@@ -40,6 +75,13 @@ export function exportCSV(project: Project) {
     rows.push(cols.map(c => `"${String(c).replace(/"/g, '""')}"`));
 
   row("GLOBAL LINK — Финансовый отчёт по проекту");
+  if (company) {
+    row("Организация:", company.legalName || company.name);
+    if (company.inn) row("ИНН:", company.inn);
+    if (company.ogrn) row("ОГРН:", company.ogrn);
+    if (company.legalAddress) row("Адрес:", company.legalAddress);
+    if (company.phone) row("Телефон:", company.phone);
+  }
   row("");
   row("Проект:", project.title);
   if (project.artist) row("Артист:", project.artist);
@@ -94,7 +136,7 @@ export function exportCSV(project: Project) {
 
 // ─── Excel (XML Spreadsheet) ─────────────────────────────────────────────────
 
-export function exportExcel(project: Project) {
+export function exportExcel(project: Project, company?: ExportCompanyInfo) {
   const f = project.finance;
 
   const xmlRows: string[] = [];
@@ -117,6 +159,14 @@ export function exportExcel(project: Project) {
 
   // Шапка
   addRow([{ v: "GLOBAL LINK — Финансовый отчёт", bold: true }]);
+  if (company) {
+    addRow([{ v: company.legalName || company.name, bold: true }]);
+    if (company.inn) addRow([{ v: `ИНН: ${company.inn}` }]);
+    if (company.ogrn) addRow([{ v: `ОГРН: ${company.ogrn}` }]);
+    if (company.legalAddress) addRow([{ v: company.legalAddress }]);
+    if (company.phone) addRow([{ v: company.phone }]);
+    empty();
+  }
   addRow([{ v: `Проект: ${project.title}`, bold: true }]);
   if (project.artist) addRow([{ v: `Артист: ${project.artist}` }]);
   addRow([{ v: `Тип: ${project.projectType === "single" ? "Одиночный концерт" : "Тур"}` }]);
@@ -207,7 +257,7 @@ export function exportExcel(project: Project) {
 
 // ─── PDF (print window) ───────────────────────────────────────────────────────
 
-export function exportPDF(project: Project) {
+export function exportPDF(project: Project, company?: ExportCompanyInfo) {
   const f = project.finance;
 
   const css = `
@@ -254,8 +304,18 @@ export function exportPDF(project: Project) {
 
   const margin = f.incomePlan > 0 ? `Маржинальность: <b>${(f.profitPlan / f.incomePlan * 100).toFixed(1)}%</b> (план)${f.incomeFact > 0 ? ` · <b>${(f.profitFact / f.incomeFact * 100).toFixed(1)}%</b> (факт)` : ""}` : "";
 
+  const companyHeader = company ? `
+  <div style="display:flex;align-items:center;gap:16px;margin-bottom:12px;padding-bottom:12px;border-bottom:2px solid #4f46e5;">
+    ${company.logoUrl ? `<img src="${company.logoUrl}" style="height:48px;width:auto;object-fit:contain;border-radius:6px;" alt="logo"/>` : ""}
+    <div>
+      <div style="font-size:14px;font-weight:700;color:#1a1a2e;">${company.legalName || company.name}</div>
+      <div style="font-size:10px;color:#555;margin-top:2px;">${[company.inn ? "ИНН: " + company.inn : "", company.ogrn ? "ОГРН: " + company.ogrn : "", company.legalAddress || "", company.phone || ""].filter(Boolean).join(" · ")}</div>
+    </div>
+  </div>` : "";
+
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>P&L — ${project.title}</title><style>${css}</style></head>
 <body>
+  ${companyHeader}
   <h1>GLOBAL LINK — Финансовый отчёт</h1>
   <div class="meta">
     Проект: <b>${project.title}</b>${project.artist ? ` · Артист: <b>${project.artist}</b>` : ""}

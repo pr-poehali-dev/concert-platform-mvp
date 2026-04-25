@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth, type User } from "@/context/AuthContext";
 import VenueSetupModal from "@/components/VenueSetupModal";
 import { useNotifications } from "@/context/NotificationsContext";
 import DashboardVenuesTab from "@/components/dashboard/DashboardVenuesTab";
@@ -23,7 +23,7 @@ interface DashboardPageProps {
 }
 
 export default function DashboardPage({ onNavigate }: DashboardPageProps) {
-  const { user, logout } = useAuth();
+  const { user, logout, updateProfile } = useAuth();
   const [tab, setTab] = useState(user?.role === "venue" ? "venues" : "tours");
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -194,6 +194,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             onSave={handleSave}
             onCancelEdit={() => setEditMode(false)}
             onLogout={logout}
+            onProfileUpdate={(fields: Partial<User>) => updateProfile(fields)}
           />
         )}
       </div>
