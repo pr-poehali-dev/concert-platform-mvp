@@ -1,9 +1,10 @@
 """
 API для управления концертными площадками GLOBAL LINK.
-GET  ?action=list          — список всех площадок (с фильтрами)
-GET  ?action=my&user_id=X  — площадки текущего пользователя
-POST ?action=create        — создать площадку (с фото и райдером base64)
-POST ?action=update        — обновить площадку
+GET  ?action=list           — список всех площадок (с фильтрами)
+GET  ?action=my&user_id=X   — площадки текущего пользователя
+POST ?action=create         — создать площадку (фото[], схема, райдер base64)
+POST ?action=update         — обновить площадку
+POST ?action=add_photos     — добавить фото к существующей площадке
 """
 import json
 import os
@@ -41,11 +42,13 @@ def cors():
 
 
 def ok(data, status=200):
-    return {"statusCode": status, "headers": {**cors(), "Content-Type": "application/json"}, "body": json.dumps(data, ensure_ascii=False, default=str)}
+    return {"statusCode": status, "headers": {**cors(), "Content-Type": "application/json"},
+            "body": json.dumps(data, ensure_ascii=False, default=str)}
 
 
 def err(msg, status=400):
-    return {"statusCode": status, "headers": {**cors(), "Content-Type": "application/json"}, "body": json.dumps({"error": msg}, ensure_ascii=False)}
+    return {"statusCode": status, "headers": {**cors(), "Content-Type": "application/json"},
+            "body": json.dumps({"error": msg}, ensure_ascii=False)}
 
 
 def row_to_venue(row) -> dict:
@@ -59,7 +62,7 @@ def row_to_venue(row) -> dict:
         "capacity": row[6],
         "priceFrom": row[7],
         "description": row[8],
-        "photoUrl": row[9],
+        "photoUrl": row[9],       # первое (главное) фото — обратная совместимость
         "riderUrl": row[10],
         "riderName": row[11],
         "tags": list(row[12]) if row[12] else [],
@@ -67,7 +70,17 @@ def row_to_venue(row) -> dict:
         "reviewsCount": row[14],
         "verified": row[15],
         "createdAt": str(row[16]),
+        "schemaUrl": row[17] if len(row) > 17 else "",
+        "schemaName": row[18] if len(row) > 18 else "",
     }
+
+
+def upload_file(s3, data_b64: str, mime: str, folder: str, ext: str) -> str:
+    """Декодирует base64, загружает в S3, возвращает CDN URL."""
+    raw = base64.b64decode(data_b64)
+    key = f"{folder}/{uuid.uuid4()}.{ext}"
+    s3.put_object(Bucket="files", Key=key, Body=raw, ContentType=mime)
+    return cdn_url(key)
 
 
 def handler(event: dict, context) -> dict:
@@ -78,7 +91,7 @@ def handler(event: dict, context) -> dict:
     params = event.get("queryStringParameters") or {}
     action = params.get("action", "list")
 
-    # GET ?action=list
+    # ── GET list ──────────────────────────────────────────────────────────
     if method == "GET" and action == "list":
         city = params.get("city", "")
         venue_type = params.get("type", "")
@@ -87,7 +100,8 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         query = f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
-                           description, photo_url, rider_url, rider_name, tags, rating, reviews_count, verified, created_at
+                           description, photo_url, rider_url, rider_name, tags, rating,
+                           reviews_count, verified, created_at, schema_url, schema_name
                     FROM {SCHEMA}.venues WHERE 1=1"""
         args = []
         if city:
@@ -99,10 +113,28 @@ def handler(event: dict, context) -> dict:
         query += " ORDER BY rating DESC, created_at DESC LIMIT 50"
         cur.execute(query, args)
         rows = cur.fetchall()
-        conn.close()
-        return ok({"venues": [row_to_venue(r) for r in rows]})
 
-    # GET ?action=my&user_id=X
+        # Подтягиваем все фото для этих площадок
+        venue_ids = [str(r[0]) for r in rows]
+        photos_map: dict = {}
+        if venue_ids:
+            placeholders = ",".join(["%s"] * len(venue_ids))
+            cur.execute(
+                f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
+                venue_ids,
+            )
+            for pr in cur.fetchall():
+                photos_map.setdefault(str(pr[0]), []).append(pr[1])
+        conn.close()
+
+        result = []
+        for r in rows:
+            v = row_to_venue(r)
+            v["photos"] = photos_map.get(v["id"], [v["photoUrl"]] if v["photoUrl"] else [])
+            result.append(v)
+        return ok({"venues": result})
+
+    # ── GET my ────────────────────────────────────────────────────────────
     if method == "GET" and action == "my":
         user_id = params.get("user_id", "")
         if not user_id:
@@ -111,34 +143,42 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         cur.execute(
             f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
-                       description, photo_url, rider_url, rider_name, tags, rating, reviews_count, verified, created_at
+                       description, photo_url, rider_url, rider_name, tags, rating,
+                       reviews_count, verified, created_at, schema_url, schema_name
                 FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
             (user_id,)
         )
         rows = cur.fetchall()
 
-        # busy dates
         venue_ids = [str(r[0]) for r in rows]
-        busy = {}
+        photos_map: dict = {}
+        busy_map: dict = {}
+
         if venue_ids:
             placeholders = ",".join(["%s"] * len(venue_ids))
             cur.execute(
+                f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
+                venue_ids,
+            )
+            for pr in cur.fetchall():
+                photos_map.setdefault(str(pr[0]), []).append(pr[1])
+            cur.execute(
                 f"SELECT venue_id, busy_date, note FROM {SCHEMA}.venue_busy_dates WHERE venue_id IN ({placeholders})",
-                venue_ids
+                venue_ids,
             )
             for bd in cur.fetchall():
-                vid = str(bd[0])
-                busy.setdefault(vid, []).append({"date": str(bd[1]), "note": bd[2]})
-        conn.close()
+                busy_map.setdefault(str(bd[0]), []).append({"date": str(bd[1]), "note": bd[2]})
 
+        conn.close()
         venues = []
         for r in rows:
             v = row_to_venue(r)
-            v["busyDates"] = busy.get(v["id"], [])
+            v["photos"] = photos_map.get(v["id"], [v["photoUrl"]] if v["photoUrl"] else [])
+            v["busyDates"] = busy_map.get(v["id"], [])
             venues.append(v)
         return ok({"venues": venues})
 
-    # POST ?action=create
+    # ── POST create ───────────────────────────────────────────────────────
     if method == "POST" and action == "create":
         body = json.loads(event.get("body") or "{}")
         user_id = body.get("userId", "")
@@ -156,44 +196,61 @@ def handler(event: dict, context) -> dict:
         if not city: return err("Укажите город")
         if not user_id: return err("userId required")
 
-        photo_url = ""
-        rider_url = ""
-        rider_name = ""
-
         s3 = get_s3()
 
-        # Upload photo
-        photo_b64 = body.get("photoBase64", "")
-        photo_mime = body.get("photoMime", "image/jpeg")
-        if photo_b64:
-            photo_data = base64.b64decode(photo_b64)
-            photo_key = f"venues/{uuid.uuid4()}.jpg"
-            s3.put_object(Bucket="files", Key=photo_key, Body=photo_data, ContentType=photo_mime)
-            photo_url = cdn_url(photo_key)
+        # ── Главное фото (первое из массива или отдельный ключ) ────────────
+        photo_url = ""
+        photos_b64 = body.get("photosBase64") or []  # [{data, mime}]
+        if not photos_b64 and body.get("photoBase64"):
+            photos_b64 = [{"data": body["photoBase64"], "mime": body.get("photoMime", "image/jpeg")}]
 
-        # Upload rider
-        rider_b64 = body.get("riderBase64", "")
-        rider_mime = body.get("riderMime", "application/pdf")
-        rider_orig_name = body.get("riderFileName", "rider.pdf")
-        if rider_b64:
-            rider_data = base64.b64decode(rider_b64)
-            ext = rider_orig_name.rsplit(".", 1)[-1] if "." in rider_orig_name else "pdf"
-            rider_key = f"riders/{uuid.uuid4()}.{ext}"
-            s3.put_object(Bucket="files", Key=rider_key, Body=rider_data, ContentType=rider_mime)
-            rider_url = cdn_url(rider_key)
-            rider_name = rider_orig_name
+        uploaded_photos = []
+        for ph in photos_b64:
+            if not ph.get("data"): continue
+            ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
+            url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
+            uploaded_photos.append(url)
+        if uploaded_photos:
+            photo_url = uploaded_photos[0]
+
+        # ── Технический райдер ─────────────────────────────────────────────
+        rider_url = ""
+        rider_name = ""
+        if body.get("riderBase64"):
+            rider_orig = body.get("riderFileName", "rider.pdf")
+            ext = rider_orig.rsplit(".", 1)[-1] if "." in rider_orig else "pdf"
+            rider_url = upload_file(s3, body["riderBase64"], body.get("riderMime", "application/pdf"), "riders", ext)
+            rider_name = rider_orig
+
+        # ── Схема площадки ─────────────────────────────────────────────────
+        schema_url = ""
+        schema_name = ""
+        if body.get("schemaBase64"):
+            schema_orig = body.get("schemaFileName", "schema.pdf")
+            ext = schema_orig.rsplit(".", 1)[-1] if "." in schema_orig else "pdf"
+            schema_url = upload_file(s3, body["schemaBase64"], body.get("schemaMime", "application/pdf"), "schemas", ext)
+            schema_name = schema_orig
 
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
             f"""INSERT INTO {SCHEMA}.venues
-                (user_id, name, city, address, venue_type, capacity, price_from, description, photo_url, rider_url, rider_name, tags)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (user_id, name, city, address, venue_type, capacity, price_from, description,
+                 photo_url, rider_url, rider_name, tags, schema_url, schema_name)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
             (user_id, name, city, address, venue_type, capacity, price_from, description,
-             photo_url, rider_url, rider_name, tags)
+             photo_url, rider_url, rider_name, tags, schema_url, schema_name)
         )
         venue_id = str(cur.fetchone()[0])
 
+        # Сохраняем все фото в venue_photos
+        for i, url in enumerate(uploaded_photos):
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
+                (venue_id, url, i)
+            )
+
+        # Занятые даты
         for bd in busy_dates:
             if bd.get("date"):
                 cur.execute(
@@ -204,7 +261,44 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"venueId": venue_id}, 201)
 
-    # POST ?action=update
+    # ── POST add_photos ───────────────────────────────────────────────────
+    if method == "POST" and action == "add_photos":
+        body = json.loads(event.get("body") or "{}")
+        venue_id = body.get("venueId", "")
+        user_id = body.get("userId", "")
+        photos_b64 = body.get("photosBase64") or []
+        if not venue_id or not user_id:
+            return err("venueId и userId обязательны")
+
+        s3 = get_s3()
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"SELECT MAX(sort_order) FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
+        row = cur.fetchone()
+        start_order = (row[0] or -1) + 1
+
+        urls = []
+        for i, ph in enumerate(photos_b64):
+            if not ph.get("data"): continue
+            ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
+            url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
+                (venue_id, url, start_order + i)
+            )
+            urls.append(url)
+
+        # Если у площадки нет главного фото — ставим первое
+        cur.execute(f"SELECT photo_url FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+        vrow = cur.fetchone()
+        if vrow and not vrow[0] and urls:
+            cur.execute(f"UPDATE {SCHEMA}.venues SET photo_url = %s WHERE id = %s", (urls[0], venue_id))
+
+        conn.commit()
+        conn.close()
+        return ok({"added": len(urls), "urls": urls})
+
+    # ── POST update ───────────────────────────────────────────────────────
     if method == "POST" and action == "update":
         body = json.loads(event.get("body") or "{}")
         venue_id = body.get("venueId", "")
@@ -217,13 +311,11 @@ def handler(event: dict, context) -> dict:
                          ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags")]:
             if key in body:
                 fields[col] = body[key]
-
         if not fields:
             return err("Нет данных для обновления")
 
         set_clause = ", ".join(f"{c} = %s" for c in fields)
         values = list(fields.values()) + [venue_id, user_id]
-
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(f"UPDATE {SCHEMA}.venues SET {set_clause} WHERE id = %s AND user_id = %s", values)
