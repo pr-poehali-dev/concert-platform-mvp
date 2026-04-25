@@ -4,9 +4,9 @@ import HomePage from "@/components/HomePage";
 import SearchPage from "@/components/SearchPage";
 import ToursPage from "@/components/ToursPage";
 import ChatPage from "@/components/ChatPage";
-import ProfilePage from "@/components/ProfilePage";
+import DashboardPage from "@/components/DashboardPage";
 
-type Page = "home" | "search" | "tours" | "chat" | "profile";
+type Page = "home" | "search" | "tours" | "chat" | "dashboard";
 
 export default function Index() {
   const [activePage, setActivePage] = useState<Page>("home");
@@ -24,7 +24,7 @@ export default function Index() {
         {activePage === "search" && <SearchPage />}
         {activePage === "tours" && <ToursPage />}
         {activePage === "chat" && <ChatPage />}
-        {activePage === "profile" && <ProfilePage />}
+        {activePage === "dashboard" && <DashboardPage />}
       </main>
     </div>
   );

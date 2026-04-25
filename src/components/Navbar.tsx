@@ -20,7 +20,6 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
     { id: "search", label: "Площадки", icon: "Search" },
     { id: "tours", label: "Туры", icon: "Route" },
     { id: "chat", label: "Сообщения", icon: "MessageCircle" },
-    { id: "profile", label: "Профиль", icon: "User" },
   ];
 
   const roleLabel = user?.role === "organizer" ? "Организатор" : "Площадка";
@@ -36,10 +35,10 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
               onClick={() => onNavigate("home")}
             >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center animate-glow-pulse">
-                <span className="text-white font-oswald font-bold text-sm">TL</span>
+                <span className="text-white font-oswald font-bold text-sm">GL</span>
               </div>
               <span className="font-oswald font-bold text-lg text-white hidden sm:block">
-                TOUR<span className="neon-text-cyan">LINK</span>
+                GLOBAL <span className="neon-text-cyan">LINK</span>
               </span>
             </div>
 
@@ -83,15 +82,11 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
                   {userMenuOpen && (
                     <div className="absolute right-0 top-full mt-2 w-48 glass-strong rounded-xl border border-white/10 overflow-hidden animate-scale-in">
                       <button
-                        onClick={() => { onNavigate("profile"); setUserMenuOpen(false); }}
+                        onClick={() => { onNavigate("dashboard"); setUserMenuOpen(false); }}
                         className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
                       >
-                        <Icon name="User" size={15} />
-                        Мой профиль
-                      </button>
-                      <button className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors">
-                        <Icon name="Settings" size={15} />
-                        Настройки
+                        <Icon name="LayoutDashboard" size={15} />
+                        Личный кабинет
                       </button>
                       <div className="h-px bg-white/10 mx-3" />
                       <button
@@ -160,6 +155,13 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
                       <p className={`text-xs ${roleColor}`}>{roleLabel}</p>
                     </div>
                   </div>
+                  <button
+                    onClick={() => { onNavigate("dashboard"); setMobileOpen(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2 text-sm text-white/70 hover:bg-white/5 rounded-lg transition-colors"
+                  >
+                    <Icon name="LayoutDashboard" size={16} />
+                    Личный кабинет
+                  </button>
                   <button
                     onClick={() => { logout(); setMobileOpen(false); }}
                     className="w-full flex items-center gap-3 px-4 py-2 text-sm text-neon-pink hover:bg-neon-pink/10 rounded-lg transition-colors"

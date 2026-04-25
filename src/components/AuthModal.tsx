@@ -63,9 +63,9 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
         <div className="flex items-center justify-between p-6 pb-0">
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">
-              <span className="text-white font-oswald font-bold text-xs">TL</span>
+              <span className="text-white font-oswald font-bold text-xs">GL</span>
             </div>
-            <span className="font-oswald font-bold text-white">TOUR<span className="neon-text-cyan">LINK</span></span>
+            <span className="font-oswald font-bold text-white">GLOBAL <span className="neon-text-cyan">LINK</span></span>
           </div>
           <button
             onClick={onClose}

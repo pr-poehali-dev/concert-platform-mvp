@@ -272,7 +272,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               Готовы начать?
             </h2>
             <p className="text-white/60 text-lg mb-8 max-w-xl mx-auto relative z-10">
-              Присоединяйтесь к сотням организаторов и площадок, которые уже работают через TourLink
+              Присоединяйтесь к сотням организаторов и площадок, которые уже работают через GLOBAL LINK
             </p>
             <div className="flex flex-wrap justify-center gap-4 relative z-10">
               {user ? (
