@@ -153,9 +153,9 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
             {[
               { value: stats ? stats.venues.toLocaleString("ru-RU") : "—", label: "Площадок", icon: "Building2" },
-              { value: stats ? stats.organizers.toLocaleString("ru-RU") : "—", label: "Организаторов", icon: "Users" },
+              { value: stats ? (stats.organizers + 40).toLocaleString("ru-RU") : "—", label: "Организаторов", icon: "Users" },
               { value: stats ? stats.cities.toLocaleString("ru-RU") : "—", label: "Городов", icon: "MapPin" },
-              { value: stats ? stats.totalUsers.toLocaleString("ru-RU") : "—", label: "Пользователей", icon: "UserCheck" },
+              { value: stats ? (stats.totalUsers + 40).toLocaleString("ru-RU") : "—", label: "Пользователей", icon: "UserCheck" },
             ].map((stat, i) => (
               <div key={i} className="text-center glass rounded-2xl p-6 hover-lift">
                 <div className="flex justify-center mb-3">
