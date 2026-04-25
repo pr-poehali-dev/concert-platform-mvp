@@ -76,14 +76,20 @@ def handler(event: dict, context) -> dict:
              b.get("dateStart") or None,b.get("dateEnd") or None,
              b.get("city",""),b.get("venueName",""),b.get("description",""),b.get("taxSystem","none")))
         pid = str(cur.fetchone()[0])
+        def to_float(v, default=0.0):
+            try: return float(v)
+            except (TypeError, ValueError): return default
+        def to_int(v, default=0):
+            try: return int(v)
+            except (TypeError, ValueError): return default
         for i,exp in enumerate(b.get("expenses") or []):
             cur.execute(
                 f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (pid,exp.get("category","Прочее"),exp.get("title",""),float(exp.get("amountPlan",0)),float(exp.get("amountFact",0)),exp.get("note",""),i))
+                (pid,exp.get("category","Прочее"),exp.get("title",""),to_float(exp.get("amountPlan")),to_float(exp.get("amountFact")),exp.get("note",""),i))
         for i,inc in enumerate(b.get("incomeLines") or []):
             cur.execute(
                 f"INSERT INTO {SCHEMA}.project_income_lines (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (pid,inc.get("category","Стандарт"),int(inc.get("ticketCount",0)),float(inc.get("ticketPrice",0)),int(inc.get("soldCount",0)),inc.get("note",""),i))
+                (pid,inc.get("category","Стандарт"),to_int(inc.get("ticketCount")),to_float(inc.get("ticketPrice")),to_int(inc.get("soldCount")),inc.get("note",""),i))
         recalc_totals(cur, pid); conn.commit(); conn.close()
         return ok({"projectId": pid}, 201)
 
@@ -124,9 +130,12 @@ def handler(event: dict, context) -> dict:
         conn = get_conn(); cur = conn.cursor()
         cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
         order = cur.fetchone()[0]
+        def _f(v):
+            try: return float(v)
+            except (TypeError, ValueError): return 0.0
         cur.execute(
             f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-            (pid,b.get("category","Прочее"),title,float(b.get("amountPlan",0)),float(b.get("amountFact",0)),b.get("note",""),order))
+            (pid,b.get("category","Прочее"),title,_f(b.get("amountPlan")),_f(b.get("amountFact")),b.get("note",""),order))
         eid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit(); conn.close()
         return ok({"id": eid}, 201)
 
