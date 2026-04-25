@@ -456,7 +456,13 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
 
         {/* ── VENUE ── */}
         {activeTab==="venue" && (
-          <ProjectVenueTab projectId={projectId} onOpenChat={onOpenChat} />
+          <ProjectVenueTab
+            projectId={projectId}
+            onOpenChat={onOpenChat}
+            projectCity={project.city}
+            projectDateStart={project.dateStart || ""}
+            projectArtist={project.artist || ""}
+          />
         )}
 
         {/* ── CRM ЗАДАЧИ ── */}
