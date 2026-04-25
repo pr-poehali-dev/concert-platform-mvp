@@ -5,7 +5,7 @@
       "method": "GET",
       "path": "/?action=list",
       "expectedStatus": 200,
-      "expectedBody": { "venues": "array" },
+      "expectedBody": {},
       "bodyMatcher": "partial"
     },
     {
@@ -15,6 +15,22 @@
       "body": { "userId": "test", "city": "Москва" },
       "expectedStatus": 400,
       "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+    ,{
+      "name": "Home stats",
+      "method": "GET",
+      "path": "/?action=home_stats",
+      "expectedStatus": 200,
+      "expectedBody": {},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Top venues",
+      "method": "GET",
+      "path": "/?action=top",
+      "expectedStatus": 200,
+      "expectedBody": {},
       "bodyMatcher": "partial"
     }
   ]

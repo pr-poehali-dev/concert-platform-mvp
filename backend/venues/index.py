@@ -323,4 +323,58 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"success": True})
 
+    # ── GET home_stats — реальная статистика для главной страницы ─────────
+    if method == "GET" and action == "home_stats":
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues")
+        total_venues = cur.fetchone()[0]
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE role = 'organizer'")
+        total_organizers = cur.fetchone()[0]
+        cur.execute(f"SELECT COUNT(DISTINCT city) FROM {SCHEMA}.venues WHERE city != ''")
+        total_cities = cur.fetchone()[0]
+        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users")
+        total_users = cur.fetchone()[0]
+        conn.close()
+        return ok({
+            "venues": total_venues,
+            "organizers": total_organizers,
+            "cities": total_cities,
+            "totalUsers": total_users,
+        })
+
+    # ── GET top — топ площадки для главной (реальные из БД) ───────────────
+    if method == "GET" and action == "top":
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, name, city, venue_type, capacity, price_from,
+                       photo_url, rating, tags
+                FROM {SCHEMA}.venues
+                ORDER BY rating DESC, created_at DESC LIMIT 3""",
+        )
+        rows = cur.fetchall()
+        # Фото из venue_photos
+        venue_ids = [str(r[0]) for r in rows]
+        photos_map: dict = {}
+        if venue_ids:
+            placeholders = ",".join(["%s"] * len(venue_ids))
+            cur.execute(
+                f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
+                venue_ids,
+            )
+            for pr in cur.fetchall():
+                photos_map.setdefault(str(pr[0]), []).append(pr[1])
+        conn.close()
+        venues = []
+        for r in rows:
+            vid = str(r[0])
+            photos = photos_map.get(vid, [r[6]] if r[6] else [])
+            venues.append({
+                "id": vid, "name": r[1], "city": r[2], "venueType": r[3],
+                "capacity": r[4], "priceFrom": float(r[5] or 0),
+                "photoUrl": photos[0] if photos else "",
+                "rating": float(r[7] or 0),
+                "tags": list(r[8]) if r[8] else [],
+            })
+        return ok({"venues": venues})
+
     return err("Not found", 404)

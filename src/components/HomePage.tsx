@@ -1,19 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import AuthModal from "@/components/AuthModal";
 import { useAuth } from "@/context/AuthContext";
 
 const HERO_IMAGE = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/e1d7542c-8ded-4ad1-8101-77b43e4b65bf.jpg";
-const VENUE_IMAGE = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/2d0113c6-c12e-42b6-9cd4-2141cf50ef4f.jpg";
-const CONCERT_IMAGE = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/69adfe90-676c-44a2-b9f1-8f6bf1c0f9b9.jpg";
+const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
-const stats = [
-  { value: "1 200+", label: "Площадок", icon: "Building2" },
-  { value: "340+", label: "Организаторов", icon: "Users" },
-  { value: "89", label: "Городов", icon: "MapPin" },
-  { value: "4.9", label: "Средний рейтинг", icon: "Star" },
-];
+interface VenueTop {
+  id: string; name: string; city: string; venueType: string;
+  capacity: number; photoUrl: string; rating: number; tags: string[];
+}
+
+interface HomeStats {
+  venues: number; organizers: number; cities: number; totalUsers: number;
+}
 
 const features = [
   {
@@ -54,12 +55,6 @@ const features = [
   },
 ];
 
-const venues = [
-  { name: "Volta", city: "Москва", capacity: "1 200", rating: 4.9, type: "Клуб", tags: ["Свет", "Звук", "Гримёрки"] },
-  { name: "Зал Ожидания", city: "СПб", capacity: "600", rating: 4.8, type: "Концертный зал", tags: ["Стоянка", "Бар", "Сцена"] },
-  { name: "Teleclub", city: "Екб", capacity: "2 500", rating: 4.7, type: "Клуб", tags: ["Свет", "Звук", "VIP"] },
-];
-
 interface HomePageProps {
   onNavigate: (page: string) => void;
 }
@@ -67,6 +62,13 @@ interface HomePageProps {
 export default function HomePage({ onNavigate }: HomePageProps) {
   const { user } = useAuth();
   const [authModal, setAuthModal] = useState<{ open: boolean; role: "organizer" | "venue" }>({ open: false, role: "organizer" });
+  const [topVenues, setTopVenues] = useState<VenueTop[]>([]);
+  const [stats, setStats] = useState<HomeStats | null>(null);
+
+  useEffect(() => {
+    fetch(`${VENUES_URL}?action=home_stats`).then(r => r.json()).then(d => setStats(d)).catch(() => {});
+    fetch(`${VENUES_URL}?action=top`).then(r => r.json()).then(d => setTopVenues(d.venues || [])).catch(() => {});
+  }, []);
 
   const colorMap: Record<string, string> = {
     "neon-purple": "text-neon-purple bg-neon-purple/10 border-neon-purple/20",
@@ -149,17 +151,21 @@ export default function HomePage({ onNavigate }: HomePageProps) {
       <section className="py-16 border-y border-white/5">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-            {stats.map((stat, i) => (
-              <div
-                key={i}
-                className="text-center glass rounded-2xl p-6 hover-lift"
-              >
+            {[
+              { value: stats ? stats.venues.toLocaleString("ru-RU") : "—", label: "Площадок", icon: "Building2" },
+              { value: stats ? stats.organizers.toLocaleString("ru-RU") : "—", label: "Организаторов", icon: "Users" },
+              { value: stats ? stats.cities.toLocaleString("ru-RU") : "—", label: "Городов", icon: "MapPin" },
+              { value: stats ? stats.totalUsers.toLocaleString("ru-RU") : "—", label: "Пользователей", icon: "UserCheck" },
+            ].map((stat, i) => (
+              <div key={i} className="text-center glass rounded-2xl p-6 hover-lift">
                 <div className="flex justify-center mb-3">
                   <div className="w-10 h-10 rounded-xl bg-neon-purple/15 flex items-center justify-center">
                     <Icon name={stat.icon} size={20} className="text-neon-purple" />
                   </div>
                 </div>
-                <div className="font-oswald font-bold text-3xl gradient-text mb-1">{stat.value}</div>
+                <div className="font-oswald font-bold text-3xl gradient-text mb-1">
+                  {stats ? stat.value : <span className="text-white/20 text-2xl animate-pulse">...</span>}
+                </div>
                 <div className="text-white/50 text-sm">{stat.label}</div>
               </div>
             ))}
@@ -217,46 +223,70 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {venues.map((venue, i) => (
-              <div key={i} className="glass rounded-2xl overflow-hidden hover-lift group cursor-pointer">
-                <div className="relative h-40 overflow-hidden">
-                  <img
-                    src={i === 0 ? HERO_IMAGE : i === 1 ? VENUE_IMAGE : CONCERT_IMAGE}
-                    alt={venue.name}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-                  <Badge className="absolute top-3 right-3 bg-background/60 backdrop-blur text-white border-white/20 text-xs">
-                    {venue.type}
-                  </Badge>
-                </div>
-                <div className="p-5">
-                  <div className="flex items-start justify-between mb-2">
-                    <h3 className="font-oswald font-bold text-xl text-white">{venue.name}</h3>
-                    <div className="flex items-center gap-1 text-neon-green">
-                      <Icon name="Star" size={14} className="fill-current" />
-                      <span className="text-sm font-medium">{venue.rating}</span>
+          {topVenues.length === 0 ? (
+            <div className="glass rounded-2xl p-12 text-center">
+              <Icon name="Building2" size={48} className="text-white/15 mx-auto mb-4" />
+              <p className="text-white/40 font-oswald text-lg">Площадки появятся здесь</p>
+              <p className="text-white/25 text-sm mt-1">Станьте первой площадкой на платформе</p>
+              <button
+                onClick={() => setAuthModal({ open: true, role: "venue" })}
+                className="mt-6 px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity"
+              >
+                Зарегистрировать площадку
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {topVenues.map((venue, i) => (
+                <div key={venue.id}
+                  onClick={() => onNavigate("search")}
+                  className="glass rounded-2xl overflow-hidden hover-lift group cursor-pointer">
+                  <div className="relative h-40 overflow-hidden">
+                    {venue.photoUrl ? (
+                      <img src={venue.photoUrl} alt={venue.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-neon-purple/20 to-neon-cyan/10 flex items-center justify-center">
+                        <Icon name="Building2" size={48} className="text-white/20" />
+                      </div>
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+                    <Badge className="absolute top-3 right-3 bg-background/60 backdrop-blur text-white border-white/20 text-xs">
+                      {venue.venueType}
+                    </Badge>
+                    {i === 0 && (
+                      <Badge className="absolute top-3 left-3 bg-neon-purple/80 text-white border-neon-purple/40 text-xs">
+                        ТОП
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="p-5">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-oswald font-bold text-xl text-white">{venue.name}</h3>
+                      {venue.rating > 0 && (
+                        <div className="flex items-center gap-1 text-neon-green shrink-0">
+                          <Icon name="Star" size={14} className="fill-current" />
+                          <span className="text-sm font-medium">{venue.rating.toFixed(1)}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 text-white/50 text-sm mb-3">
+                      <Icon name="MapPin" size={14} />
+                      {venue.city}
+                      <span className="mx-2">·</span>
+                      <Icon name="Users" size={14} />
+                      {venue.capacity.toLocaleString("ru-RU")} чел.
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {venue.tags.slice(0, 4).map((tag, j) => (
+                        <span key={j} className="text-xs px-2 py-0.5 rounded-md bg-white/5 text-white/50">{tag}</span>
+                      ))}
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 text-white/50 text-sm mb-3">
-                    <Icon name="MapPin" size={14} />
-                    {venue.city}
-                    <span className="mx-2">·</span>
-                    <Icon name="Users" size={14} />
-                    {venue.capacity} чел.
-                  </div>
-                  <div className="flex flex-wrap gap-1.5">
-                    {venue.tags.map((tag, j) => (
-                      <span key={j} className="text-xs px-2 py-0.5 rounded-md bg-white/5 text-white/50">
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 
