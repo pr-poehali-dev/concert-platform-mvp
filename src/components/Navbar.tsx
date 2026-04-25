@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
+import NotificationBell from "@/components/NotificationBell";
 
 interface NavbarProps {
   activePage: string;
@@ -63,6 +64,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
             </div>
 
             <div className="hidden md:flex items-center gap-3">
+              {user && <NotificationBell onNavigate={onNavigate} />}
               {user ? (
                 <div className="relative">
                   <button

@@ -1,6 +1,8 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationsContext";
 
 const conversations = [
   {
@@ -64,10 +66,32 @@ const messages = [
 ];
 
 export default function ChatPage() {
+  const { user } = useAuth();
+  const { sendNotification } = useNotifications();
   const [activeChat, setActiveChat] = useState(1);
   const [inputMessage, setInputMessage] = useState("");
+  const [chatMessages, setChatMessages] = useState(messages);
 
   const active = conversations.find((c) => c.id === activeChat) || conversations[0];
+
+  const handleSend = async () => {
+    const text = inputMessage.trim();
+    if (!text) return;
+    const now = new Date();
+    const time = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+    setChatMessages(prev => [...prev, { id: Date.now(), from: "me", text, time }]);
+    setInputMessage("");
+    // Уведомление собеседнику (demo: отправляем самому себе если нет реального user_id)
+    if (user) {
+      await sendNotification(
+        user.id,
+        "message",
+        `Новое сообщение — ${active.name}`,
+        text.slice(0, 80),
+        "chat"
+      );
+    }
+  };
 
   return (
     <div className="min-h-screen pt-20 pb-0">
@@ -170,7 +194,7 @@ export default function ChatPage() {
                 <span className="text-xs text-white/20 bg-white/5 px-3 py-1 rounded-full">Сегодня</span>
               </div>
 
-              {messages.map((msg) => (
+              {chatMessages.map((msg) => (
                 <div
                   key={msg.id}
                   className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
@@ -204,11 +228,13 @@ export default function ChatPage() {
                     placeholder="Написать сообщение..."
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
                     className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm"
                   />
                 </div>
 
                 <button
+                  onClick={handleSend}
                   className={`w-9 h-9 flex items-center justify-center rounded-xl shrink-0 transition-all ${
                     inputMessage.trim()
                       ? "bg-gradient-to-br from-neon-purple to-neon-cyan text-white hover:opacity-90"

@@ -1,0 +1,51 @@
+{
+  "tests": [
+    {
+      "name": "Unread count no user_id",
+      "method": "GET",
+      "path": "/?action=unread_count",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List no user_id",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create notification",
+      "method": "POST",
+      "path": "/?action=create",
+      "body": {
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "type": "message",
+        "title": "Новое сообщение от Volta",
+        "body": "Подтверждаем дату 15 сентября!",
+        "linkPage": "chat"
+      },
+      "expectedStatus": 201,
+      "expectedBody": { "id": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List for test user",
+      "method": "GET",
+      "path": "/?action=list&user_id=00000000-0000-0000-0000-000000000001",
+      "expectedStatus": 200,
+      "expectedBody": { "notifications": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Unread count for test user",
+      "method": "GET",
+      "path": "/?action=unread_count&user_id=00000000-0000-0000-0000-000000000001",
+      "expectedStatus": 200,
+      "expectedBody": { "count": 1 },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

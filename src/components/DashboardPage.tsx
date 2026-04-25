@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import VenueSetupModal from "@/components/VenueSetupModal";
+import { useNotifications } from "@/context/NotificationsContext";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/2d0113c6-c12e-42b6-9cd4-2141cf50ef4f.jpg";
@@ -47,6 +48,7 @@ export default function DashboardPage() {
   const [showVenueSetup, setShowVenueSetup] = useState(false);
   const [myVenues, setMyVenues] = useState<Venue[]>([]);
   const [venuesLoading, setVenuesLoading] = useState(false);
+  const { notifications, unreadCount, markRead, markAllRead } = useNotifications();
 
   const [editForm, setEditForm] = useState({
     name: user?.name || "",
@@ -72,8 +74,17 @@ export default function DashboardPage() {
 
   const isVenue = user.role === "venue";
   const tabs = isVenue
-    ? [{ id: "venues", label: "Мои площадки", icon: "Building2" }, { id: "profile", label: "Профиль", icon: "User" }]
-    : [{ id: "tours", label: "Мои туры", icon: "Route" }, { id: "history", label: "История", icon: "Clock" }, { id: "profile", label: "Профиль", icon: "User" }];
+    ? [
+        { id: "venues", label: "Мои площадки", icon: "Building2" },
+        { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
+        { id: "profile", label: "Профиль", icon: "User" },
+      ]
+    : [
+        { id: "tours", label: "Мои туры", icon: "Route" },
+        { id: "history", label: "История", icon: "Clock" },
+        { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
+        { id: "profile", label: "Профиль", icon: "User" },
+      ];
 
   const handleSave = async () => {
     setSaving(true);
@@ -126,11 +137,16 @@ export default function DashboardPage() {
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         {/* Tabs */}
-        <div className="flex gap-1 mb-8 glass rounded-xl p-1 w-fit">
+        <div className="flex flex-wrap gap-1 mb-8 glass rounded-xl p-1 w-fit">
           {tabs.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-oswald font-medium transition-all ${tab === t.id ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}>
               <Icon name={t.icon} size={15} />{t.label}
+              {"badge" in t && (t.badge as number) > 0 && (
+                <span className="w-4 h-4 bg-neon-pink rounded-full text-white text-[10px] font-bold flex items-center justify-center">
+                  {(t.badge as number) > 9 ? "9+" : t.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -289,6 +305,75 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* NOTIFICATIONS TAB */}
+        {tab === "notifications" && (
+          <div className="animate-fade-in max-w-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <h2 className="font-oswald font-bold text-2xl text-white">Уведомления</h2>
+                {unreadCount > 0 && (
+                  <span className="px-2 py-0.5 text-xs bg-neon-pink/20 text-neon-pink rounded-lg font-medium border border-neon-pink/20">
+                    {unreadCount} новых
+                  </span>
+                )}
+              </div>
+              {unreadCount > 0 && (
+                <button onClick={markAllRead}
+                  className="flex items-center gap-2 px-4 py-2 glass text-white/50 hover:text-neon-cyan rounded-xl border border-white/10 text-sm transition-colors">
+                  <Icon name="CheckCheck" size={14} />Прочитать все
+                </button>
+              )}
+            </div>
+
+            {notifications.length === 0 ? (
+              <div className="text-center py-20 glass rounded-2xl">
+                <Icon name="BellOff" size={48} className="text-white/20 mx-auto mb-4" />
+                <p className="text-white/40 text-lg font-oswald">Нет уведомлений</p>
+                <p className="text-white/25 text-sm mt-1">Здесь будут появляться сообщения и запросы</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {notifications.map(n => {
+                  const typeColor: Record<string, string> = {
+                    message: "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20",
+                    booking: "text-neon-purple bg-neon-purple/10 border-neon-purple/20",
+                    review: "text-neon-green bg-neon-green/10 border-neon-green/20",
+                    tour: "text-neon-pink bg-neon-pink/10 border-neon-pink/20",
+                    venue: "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20",
+                    system: "text-white/50 bg-white/5 border-white/10",
+                  };
+                  return (
+                    <div
+                      key={n.id}
+                      onClick={() => !n.isRead && markRead(n.id)}
+                      className={`flex items-start gap-4 glass rounded-2xl p-4 cursor-pointer hover:bg-white/5 transition-all ${!n.isRead ? "border border-neon-purple/20" : ""}`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${typeColor[n.type] || typeColor.system}`}>
+                        {n.icon}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className={`text-sm font-medium ${!n.isRead ? "text-white" : "text-white/70"}`}>{n.title}</p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs text-white/25">
+                              {new Date(n.createdAt).toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}
+                            </span>
+                            {!n.isRead && <span className="w-2 h-2 bg-neon-purple rounded-full" />}
+                          </div>
+                        </div>
+                        {n.body && <p className="text-xs text-white/40 mt-0.5">{n.body}</p>}
+                        <p className="text-xs text-white/20 mt-1">
+                          {new Date(n.createdAt).toLocaleDateString("ru", { day: "numeric", month: "long" })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         )}
 

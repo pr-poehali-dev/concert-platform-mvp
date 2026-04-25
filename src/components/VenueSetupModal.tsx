@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationsContext";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -26,6 +27,7 @@ function fileToBase64(file: File): Promise<string> {
 
 export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetupModalProps) {
   const { user } = useAuth();
+  const { sendNotification } = useNotifications();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -108,6 +110,16 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка");
+      // Уведомление владельцу о публикации площадки
+      if (user) {
+        await sendNotification(
+          user.id,
+          "venue",
+          `Площадка «${form.name}» опубликована!`,
+          `Ваша площадка в ${form.city} теперь отображается в поиске.`,
+          "search"
+        );
+      }
       onCreated();
       onClose();
     } catch (e: unknown) {
