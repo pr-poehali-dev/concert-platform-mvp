@@ -81,14 +81,15 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
   }, [user]);
 
   // Загрузка сообщений диалога
-  const loadMessages = useCallback(async (convId: string) => {
-    setLoadingMsgs(true);
+  // silent=true — фоновый polling, без показа лоадера (предотвращает мерцание)
+  const loadMessages = useCallback(async (convId: string, silent = false) => {
+    if (!silent) setLoadingMsgs(true);
     try {
       const res = await fetch(`${CHAT_URL}?action=messages&conversation_id=${convId}`);
       const data = await res.json();
       setMessages(data.messages || []);
     } catch { /* silent */ }
-    finally { setLoadingMsgs(false); }
+    finally { if (!silent) setLoadingMsgs(false); }
   }, []);
 
   useEffect(() => { loadConversations(); }, [loadConversations]);
@@ -108,9 +109,9 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
       c.id === activeConvId ? { ...c, unread: 0 } : c
     ));
 
-    // Polling сообщений каждые 5 сек
+    // Polling сообщений каждые 5 сек — тихо, без лоадера
     if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(() => loadMessages(activeConvId), 5000);
+    pollingRef.current = setInterval(() => loadMessages(activeConvId, true), 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [activeConvId, user, loadMessages]);
 
