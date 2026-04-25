@@ -157,4 +157,58 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"isActive": active})
 
+    # ── GET company_messages — сообщения внутреннего чата компании ─────────
+    if method == "GET" and action == "company_messages":
+        company_user_id = params.get("company_user_id", "")
+        if not company_user_id: return err("company_user_id required")
+        limit = int(params.get("limit", 100))
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, sender_id, sender_type, sender_name, sender_avatar,
+                       sender_color, text, created_at
+                FROM {SCHEMA}.company_messages
+                WHERE company_user_id = %s
+                ORDER BY created_at ASC LIMIT %s""",
+            (company_user_id, limit))
+        rows = cur.fetchall(); conn.close()
+        return ok({"messages": [
+            {"id": str(r[0]), "senderId": str(r[1]), "senderType": r[2],
+             "senderName": r[3], "senderAvatar": r[4], "senderColor": r[5],
+             "text": r[6], "createdAt": str(r[7])}
+            for r in rows
+        ]})
+
+    # ── POST company_send — отправить сообщение в чат компании ─────────────
+    if method == "POST" and action == "company_send":
+        b = json.loads(event.get("body") or "{}")
+        company_user_id = b.get("companyUserId", "")
+        sender_id       = b.get("senderId", "")
+        sender_type     = b.get("senderType", "user")   # "user" | "employee"
+        text            = (b.get("text") or "").strip()
+        if not company_user_id or not sender_id or not text:
+            return err("companyUserId, senderId, text обязательны")
+        # Получаем имя и аватар отправителя
+        conn = get_conn(); cur = conn.cursor()
+        sender_name = ""; sender_avatar = ""; sender_color = "from-neon-purple to-neon-cyan"
+        if sender_type == "employee":
+            cur.execute(f"SELECT name, avatar, avatar_color FROM {SCHEMA}.employees WHERE id=%s", (sender_id,))
+            row = cur.fetchone()
+            if row: sender_name, sender_avatar, sender_color = row[0], row[1], row[2]
+        else:
+            cur.execute(f"SELECT name, avatar, avatar_color FROM {SCHEMA}.users WHERE id=%s", (sender_id,))
+            row = cur.fetchone()
+            if row: sender_name, sender_avatar, sender_color = row[0], row[1], row[2]
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.company_messages
+                (company_user_id, sender_id, sender_type, sender_name, sender_avatar, sender_color, text)
+                VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id, created_at""",
+            (company_user_id, sender_id, sender_type, sender_name, sender_avatar, sender_color, text))
+        row = cur.fetchone()
+        conn.commit(); conn.close()
+        return ok({
+            "id": str(row[0]), "senderId": sender_id, "senderType": sender_type,
+            "senderName": sender_name, "senderAvatar": sender_avatar, "senderColor": sender_color,
+            "text": text, "createdAt": str(row[1]),
+        }, 201)
+
     return err("Not found", 404)

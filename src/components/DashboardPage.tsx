@@ -9,6 +9,7 @@ import DashboardToursTab from "@/components/dashboard/DashboardToursTab";
 import DashboardNotificationsTab from "@/components/dashboard/DashboardNotificationsTab";
 import DashboardProfileTab from "@/components/dashboard/DashboardProfileTab";
 import DashboardVenueProjectsTab from "@/components/dashboard/DashboardVenueProjectsTab";
+import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -66,6 +67,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     : [
         { id: "tours", label: "Мои туры", icon: "Route" },
         { id: "history", label: "История", icon: "Clock" },
+        { id: "company", label: "Компания", icon: "Users" },
         { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
         { id: "profile", label: "Профиль", icon: "User" },
       ];
@@ -179,6 +181,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             activeTab={tab as "tours" | "history"}
             onNavigate={onNavigate}
           />
+        )}
+
+        {tab === "company" && !isVenue && (
+          <DashboardCompanyTab />
         )}
 
         {tab === "notifications" && (

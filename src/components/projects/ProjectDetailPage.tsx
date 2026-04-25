@@ -5,6 +5,7 @@ import { PROJECTS_URL, STATUS_CONFIG, TAX_OPTIONS, EXPENSE_CATEGORIES, fmt, type
 import { exportCSV, exportExcel, exportPDF, companyInfoFromUser } from "@/lib/exportProject";
 import { useAuth } from "@/context/AuthContext";
 import ProjectVenueTab from "@/components/projects/ProjectVenueTab";
+import ProjectCrmTab from "@/components/projects/ProjectCrmTab";
 
 interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversationId: string) => void; }
 
@@ -34,7 +35,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const { user } = useAuth();
   const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue">("budget");
+  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm">("budget");
   const [saving, setSaving] = useState<string|null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -150,6 +151,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
     {id:"income",label:"Доходы",icon:"TrendingUp"},
     {id:"summary",label:"Итог / P&L",icon:"BarChart3"},
     {id:"venue",label:"Площадка",icon:"Building2"},
+    {id:"crm",label:"Задачи",icon:"ClipboardList"},
   ] as const;
 
   return (
@@ -455,6 +457,11 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
         {/* ── VENUE ── */}
         {activeTab==="venue" && (
           <ProjectVenueTab projectId={projectId} onOpenChat={onOpenChat} />
+        )}
+
+        {/* ── CRM ЗАДАЧИ ── */}
+        {activeTab==="crm" && (
+          <ProjectCrmTab projectId={projectId} />
         )}
 
         {saving && (

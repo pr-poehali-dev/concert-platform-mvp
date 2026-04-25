@@ -892,4 +892,130 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"success": True})
 
+    # ── CRM Задачи проекта ────────────────────────────────────────────────
+
+    # GET project_tasks_list — задачи проекта (для владельца) или только своей задачи (для сотрудника)
+    if method == "GET" and action == "project_tasks_list":
+        project_id     = params.get("project_id", "")
+        company_uid    = params.get("company_user_id", "")   # для владельца
+        employee_id    = params.get("employee_id", "")       # для сотрудника
+        if not project_id: return err("project_id required")
+        conn = get_conn(); cur = conn.cursor()
+        if employee_id:
+            # Сотрудник видит только свои задачи
+            cur.execute(
+                f"""SELECT t.id, t.project_id, t.company_user_id, t.assigned_to,
+                           t.created_by, t.title, t.description, t.status, t.priority,
+                           t.due_date, t.sort_order, t.created_at,
+                           COALESCE(e.name, u.name, 'Не назначено') as assignee_name,
+                           COALESCE(e2.name, u2.name, 'Неизвестно') as creator_name
+                    FROM {SCHEMA}.project_tasks t
+                    LEFT JOIN {SCHEMA}.employees e ON e.id = t.assigned_to
+                    LEFT JOIN {SCHEMA}.users u ON u.id = t.assigned_to
+                    LEFT JOIN {SCHEMA}.employees e2 ON e2.id = t.created_by
+                    LEFT JOIN {SCHEMA}.users u2 ON u2.id = t.created_by
+                    WHERE t.project_id=%s AND t.assigned_to=%s
+                    ORDER BY t.priority DESC, t.due_date ASC NULLS LAST, t.sort_order""",
+                (project_id, employee_id))
+        else:
+            # Владелец видит все задачи
+            cur.execute(
+                f"""SELECT t.id, t.project_id, t.company_user_id, t.assigned_to,
+                           t.created_by, t.title, t.description, t.status, t.priority,
+                           t.due_date, t.sort_order, t.created_at,
+                           COALESCE(e.name, u.name, 'Не назначено') as assignee_name,
+                           COALESCE(e2.name, u2.name, 'Неизвестно') as creator_name
+                    FROM {SCHEMA}.project_tasks t
+                    LEFT JOIN {SCHEMA}.employees e ON e.id = t.assigned_to
+                    LEFT JOIN {SCHEMA}.users u ON u.id = t.assigned_to
+                    LEFT JOIN {SCHEMA}.employees e2 ON e2.id = t.created_by
+                    LEFT JOIN {SCHEMA}.users u2 ON u2.id = t.created_by
+                    WHERE t.project_id=%s
+                    ORDER BY t.priority DESC, t.due_date ASC NULLS LAST, t.sort_order""",
+                (project_id,))
+        rows = cur.fetchall(); conn.close()
+        def task_row(r):
+            return {
+                "id": str(r[0]), "projectId": str(r[1]), "companyUserId": str(r[2]),
+                "assignedTo": str(r[3]) if r[3] else None,
+                "createdBy": str(r[4]), "title": r[5], "description": r[6],
+                "status": r[7], "priority": r[8],
+                "dueDate": str(r[9]) if r[9] else None,
+                "sortOrder": r[10], "createdAt": str(r[11]),
+                "assigneeName": r[12], "creatorName": r[13],
+            }
+        return ok({"tasks": [task_row(r) for r in rows]})
+
+    # POST project_task_create — создать задачу
+    if method == "POST" and action == "project_task_create":
+        b = json.loads(event.get("body") or "{}")
+        project_id   = b.get("projectId", "")
+        company_uid  = b.get("companyUserId", "")
+        created_by   = b.get("createdBy", "")
+        title        = (b.get("title") or "").strip()
+        description  = b.get("description", "")
+        assigned_to  = b.get("assignedTo") or None
+        priority     = b.get("priority", "medium")
+        due_date     = b.get("dueDate") or None
+        if not project_id or not company_uid or not created_by or not title:
+            return err("projectId, companyUserId, createdBy, title обязательны")
+        if priority not in ("low", "medium", "high", "urgent"):
+            priority = "medium"
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_tasks WHERE project_id=%s",
+            (project_id,))
+        order = cur.fetchone()[0]
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.project_tasks
+                (project_id, company_user_id, assigned_to, created_by, title, description,
+                 priority, due_date, sort_order)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (project_id, company_uid, assigned_to, created_by, title, description,
+             priority, due_date, order))
+        task_id = str(cur.fetchone()[0])
+        conn.commit(); conn.close()
+        # Уведомить сотрудника если назначен
+        if assigned_to:
+            # Получаем email сотрудника чтобы найти user_id — или шлём на employees напрямую
+            conn2 = get_conn(); cur2 = conn2.cursor()
+            cur2.execute(f"SELECT name FROM {SCHEMA}.employees WHERE id=%s", (assigned_to,))
+            emp = cur2.fetchone(); conn2.close()
+            if emp:
+                send_notification(company_uid, "booking",
+                    f"Новая задача: {title}",
+                    f"Назначена на {emp[0]}", "projects")
+        return ok({"taskId": task_id}, 201)
+
+    # POST project_task_update — обновить задачу
+    if method == "POST" and action == "project_task_update":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", "")
+        if not task_id: return err("taskId required")
+        fmap = {
+            "title": "title", "description": "description", "status": "status",
+            "priority": "priority", "dueDate": "due_date", "assignedTo": "assigned_to",
+        }
+        fields = {}
+        for fk, col in fmap.items():
+            if fk in b:
+                fields[col] = b[fk] if b[fk] != "" else None
+        if not fields: return err("Нет данных для обновления")
+        set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.project_tasks SET {set_clause} WHERE id=%s",
+                    list(fields.values()) + [task_id])
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
+    # POST project_task_delete — удалить задачу
+    if method == "POST" and action == "project_task_delete":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", "")
+        if not task_id: return err("taskId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"DELETE FROM {SCHEMA}.project_tasks WHERE id=%s", (task_id,))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
     return err("Not found", 404)
