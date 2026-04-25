@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "List projects no user_id",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List projects empty",
+      "method": "GET",
+      "path": "/?action=list&user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 200,
+      "expectedBody": { "projects": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create project",
+      "method": "POST",
+      "path": "/?action=create",
+      "body": {
+        "userId": "00000000-0000-0000-0000-000000000001",
+        "title": "Тестовый концерт",
+        "artist": "Тест Артист",
+        "projectType": "single",
+        "city": "Москва",
+        "taxSystem": "usn_6"
+      },
+      "expectedStatus": 201,
+      "expectedBody": { "projectId": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Detail not found",
+      "method": "GET",
+      "path": "/?action=detail&project_id=00000000-0000-0000-0000-000000000000",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

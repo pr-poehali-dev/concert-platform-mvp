@@ -40,7 +40,11 @@ interface Venue {
   busyDates?: { date: string; note: string }[];
 }
 
-export default function DashboardPage() {
+interface DashboardPageProps {
+  onNavigate?: (page: string) => void;
+}
+
+export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const { user, logout } = useAuth();
   const [tab, setTab] = useState(user?.role === "venue" ? "venues" : "tours");
   const [editMode, setEditMode] = useState(false);
@@ -240,10 +244,12 @@ export default function DashboardPage() {
         {/* TOURS TAB (for organizer role) */}
         {tab === "tours" && (
           <div className="animate-fade-in space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-oswald font-bold text-2xl text-white">Мои туры</h2>
-              <button className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
-                <Icon name="Plus" size={16} />Новый тур
+            <div className="flex items-center justify-between mb-2 flex-wrap gap-3">
+              <h2 className="font-oswald font-bold text-2xl text-white">Мои туры и проекты</h2>
+              <button
+                onClick={() => onNavigate?.("projects")}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
+                <Icon name="FolderOpen" size={16} />Перейти к проектам
               </button>
             </div>
 
