@@ -24,6 +24,7 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
     title: "", artist: "", projectType: "single" as "single"|"tour",
     status: "planning", dateStart: "", dateEnd: "", city: "Москва",
     venueName: "", description: "", taxSystem: "none",
+    ticketingFeePercent: 0,
   });
 
   const [expenses, setExpenses] = useState(DEFAULT_EXPENSES.map((e, i) => ({ ...e, id: String(i), amountFact: 0, note: "" })));
@@ -62,7 +63,16 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId: user!.id, ...form,
-          expenses: expenses.filter(e => e.title.trim()),
+          expenses: [
+            ...expenses.filter(e => e.title.trim()),
+            ...(form.ticketingFeePercent > 0 ? [{
+              category: "Билетный оператор",
+              title: `Вознаграждение билетного оператора (${form.ticketingFeePercent}%)`,
+              amountPlan: Math.round(totalIncPlan * form.ticketingFeePercent / 100),
+              amountFact: 0,
+              note: `${form.ticketingFeePercent}% от плановых продаж`,
+            }] : []),
+          ],
           incomeLines: incomeLines.filter(i => Number(i.ticketCount) > 0 || Number(i.ticketPrice) > 0),
         }),
       });
@@ -266,7 +276,7 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
           {/* STEP 4 — Налоги */}
           {step===4 && (
             <div className="space-y-4 animate-fade-in">
-              <p className="text-white/50 text-sm">Выберите систему налогообложения для расчёта чистой прибыли.</p>
+              <p className="text-white/50 text-sm">Выберите систему налогообложения и укажите комиссию билетного оператора.</p>
               <div className="space-y-2">
                 {TAX_OPTIONS.map(opt => (
                   <button key={opt.value} onClick={()=>set("taxSystem",opt.value)}
@@ -279,29 +289,63 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
                 ))}
               </div>
 
+              {/* Вознаграждение билетного оператора */}
+              <div className="glass rounded-2xl p-5 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-oswald font-semibold text-white text-sm flex items-center gap-2">
+                      <Icon name="Ticket" size={15} className="text-neon-cyan"/>Вознаграждение билетного оператора
+                    </h4>
+                    <p className="text-white/40 text-xs mt-0.5">Комиссия от суммы продаж билетов</p>
+                  </div>
+                  <span className="font-oswald font-bold text-xl text-neon-cyan">
+                    {form.ticketingFeePercent === 0 ? "Нет" : `${form.ticketingFeePercent}%`}
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    type="range" min={0} max={20} step={1}
+                    value={form.ticketingFeePercent}
+                    onChange={e => set("ticketingFeePercent", Number(e.target.value))}
+                    className="w-full h-2 rounded-full appearance-none cursor-pointer accent-neon-cyan bg-white/10"
+                  />
+                  <div className="flex justify-between text-xs text-white/25 mt-1 px-0.5">
+                    <span>0%</span><span>5%</span><span>10%</span><span>15%</span><span>20%</span>
+                  </div>
+                </div>
+                {form.ticketingFeePercent > 0 && totalIncPlan > 0 && (
+                  <p className="text-white/40 text-xs">
+                    ≈ {new Intl.NumberFormat("ru-RU").format(Math.round(totalIncPlan * form.ticketingFeePercent / 100))} ₽ от {new Intl.NumberFormat("ru-RU").format(totalIncPlan)} ₽ дохода
+                  </p>
+                )}
+              </div>
+
               {/* Итоговый расчёт */}
               {(() => {
                 const rate = form.taxSystem==="none"?0:form.taxSystem==="usn_6"?0.06:form.taxSystem==="usn_15"?0.15:form.taxSystem==="osn"?0.20:0.06;
-                const taxBase = form.taxSystem==="usn_15"?Math.max(0,totalIncPlan-totalExpPlan):totalIncPlan;
+                const ticketingFee = totalIncPlan * form.ticketingFeePercent / 100;
+                const totalExp = totalExpPlan + ticketingFee;
+                const taxBase = form.taxSystem==="usn_15"?Math.max(0,totalIncPlan-totalExp):totalIncPlan;
                 const tax = taxBase * rate;
-                const profit = totalIncPlan - totalExpPlan - tax;
+                const profit = totalIncPlan - totalExp - tax;
                 return (
                   <div className="glass rounded-2xl p-5 space-y-3">
                     <h3 className="font-oswald font-semibold text-white flex items-center gap-2"><Icon name="Calculator" size={16} className="text-neon-purple"/>Предварительный расчёт</h3>
                     {[
                       ["Доходы (план)", totalIncPlan, "text-neon-green"],
                       ["Расходы (план)", -totalExpPlan, "text-neon-pink"],
+                      ...(ticketingFee>0?[["Сбор билетного оператора (" + form.ticketingFeePercent + "%)", -ticketingFee, "text-neon-cyan"] as [string,number,string]]:[]),
                       ...(tax>0?[["Налог (" + (rate*100).toFixed(0) + "%)", -tax, "text-neon-cyan"] as [string,number,string]]:[]),
                     ].map(([label,val,cls],i)=>(
                       <div key={i} className="flex items-center justify-between">
                         <span className="text-white/50 text-sm">{label as string}</span>
-                        <span className={`font-oswald font-bold text-lg ${cls as string}`}>{(val as number)>=0?"+":""}{new Intl.NumberFormat("ru-RU").format(val as number)} ₽</span>
+                        <span className={`font-oswald font-bold text-lg ${cls as string}`}>{(val as number)>=0?"+":""}{new Intl.NumberFormat("ru-RU").format(Math.round(val as number))} ₽</span>
                       </div>
                     ))}
                     <div className="h-px bg-white/10"/>
                     <div className="flex items-center justify-between">
                       <span className="text-white font-medium">Чистая прибыль</span>
-                      <span className={`font-oswald font-bold text-2xl ${profit>=0?"gradient-text":"text-neon-pink"}`}>{profit>=0?"+":""}{new Intl.NumberFormat("ru-RU").format(profit)} ₽</span>
+                      <span className={`font-oswald font-bold text-2xl ${profit>=0?"gradient-text":"text-neon-pink"}`}>{profit>=0?"+":""}{new Intl.NumberFormat("ru-RU").format(Math.round(profit))} ₽</span>
                     </div>
                   </div>
                 );
