@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import VenueSetupModal from "@/components/VenueSetupModal";
+import StartChatModal from "@/components/StartChatModal";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/e1d7542c-8ded-4ad1-8101-77b43e4b65bf.jpg";
@@ -26,9 +27,14 @@ interface Venue {
   rating: number;
   reviewsCount: number;
   verified: boolean;
+  userId?: string;
 }
 
-export default function SearchPage() {
+interface SearchPageProps {
+  onNavigate?: (page: string) => void;
+}
+
+export default function SearchPage({ onNavigate }: SearchPageProps) {
   const { user } = useAuth();
   const [venues, setVenues] = useState<Venue[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +44,7 @@ export default function SearchPage() {
   const [selectedType, setSelectedType] = useState("Все типы");
   const [capacityMin, setCapacityMin] = useState(0);
   const [sortBy, setSortBy] = useState("rating");
+  const [chatModal, setChatModal] = useState<{ venueId: string; venueUserId: string; venueName: string } | null>(null);
 
   const loadVenues = async () => {
     setLoading(true);
@@ -233,9 +240,13 @@ export default function SearchPage() {
                               <Icon name="FileText" size={13} />Райдер
                             </a>
                           )}
-                          <button className="flex items-center gap-2 px-4 py-1.5 bg-neon-purple/20 text-neon-purple text-xs rounded-lg hover:bg-neon-purple/30 transition-colors border border-neon-purple/30">
-                            Написать<Icon name="MessageCircle" size={13} />
-                          </button>
+                          {user?.role === "organizer" && (
+                            <button
+                              onClick={e => { e.stopPropagation(); setChatModal({ venueId: venue.id, venueUserId: venue.userId ?? "", venueName: venue.name }); }}
+                              className="flex items-center gap-2 px-4 py-1.5 bg-neon-purple/20 text-neon-purple text-xs rounded-lg hover:bg-neon-purple/30 transition-colors border border-neon-purple/30">
+                              Написать<Icon name="MessageCircle" size={13} />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -248,6 +259,17 @@ export default function SearchPage() {
       </div>
 
       <VenueSetupModal open={showSetup} onClose={() => setShowSetup(false)} onCreated={loadVenues} />
+
+      {chatModal && (
+        <StartChatModal
+          open={!!chatModal}
+          venueName={chatModal.venueName}
+          venueId={chatModal.venueId}
+          venueUserId={chatModal.venueUserId}
+          onClose={() => setChatModal(null)}
+          onStarted={() => { setChatModal(null); onNavigate?.("chat"); }}
+        />
+      )}
     </div>
   );
 }

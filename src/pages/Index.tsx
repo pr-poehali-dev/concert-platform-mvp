@@ -27,7 +27,7 @@ export default function Index() {
       <Navbar activePage={activePage} onNavigate={handleNavigate} />
       <main>
         {activePage === "home" && <HomePage onNavigate={handleNavigate} />}
-        {activePage === "search" && <SearchPage />}
+        {activePage === "search" && <SearchPage onNavigate={handleNavigate} />}
         {activePage === "tours" && <ToursPage />}
         {activePage === "chat" && <ChatPage />}
         {activePage === "dashboard" && <DashboardPage />}

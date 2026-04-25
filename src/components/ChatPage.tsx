@@ -1,250 +1,352 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
-import { useNotifications } from "@/context/NotificationsContext";
 
-const conversations = [
-  {
-    id: 1,
-    name: "Volta",
-    type: "Площадка",
-    city: "Москва",
-    avatar: "V",
-    avatarColor: "from-neon-purple to-neon-pink",
-    lastMessage: "Отлично, подтверждаем дату 15 сентября!",
-    time: "10:32",
-    unread: 2,
-    online: true,
-  },
-  {
-    id: 2,
-    name: "Космонавт",
-    type: "Площадка",
-    city: "СПб",
-    avatar: "К",
-    avatarColor: "from-neon-cyan to-neon-green",
-    lastMessage: "Пришлите технический райдер для согласования",
-    time: "вчера",
-    unread: 1,
-    online: false,
-  },
-  {
-    id: 3,
-    name: "Иван Петров",
-    type: "Организатор",
-    city: "Москва",
-    avatar: "И",
-    avatarColor: "from-neon-green to-neon-cyan",
-    lastMessage: "Можем обсудить условия по телефону?",
-    time: "вчера",
-    unread: 0,
-    online: true,
-  },
-  {
-    id: 4,
-    name: "Teleclub",
-    type: "Площадка",
-    city: "Екб",
-    avatar: "T",
-    avatarColor: "from-neon-pink to-neon-purple",
-    lastMessage: "Да, всё оборудование в наличии.",
-    time: "Пн",
-    unread: 0,
-    online: false,
-  },
+const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
+
+const AVATAR_COLORS = [
+  "from-neon-purple to-neon-pink",
+  "from-neon-cyan to-neon-green",
+  "from-neon-pink to-neon-purple",
+  "from-neon-green to-neon-cyan",
 ];
 
-const messages = [
-  { id: 1, from: "them", text: "Добрый день! Получили ваш запрос на аренду площадки 15 сентября.", time: "10:00" },
-  { id: 2, from: "me", text: "Здравствуйте! Да, нас интересует площадка на 1200 мест. Есть ли свободная дата?", time: "10:05" },
-  { id: 3, from: "them", text: "Дата свободна. Какой у вас технический райдер? Нам нужно проверить соответствие нашего оборудования.", time: "10:12" },
-  { id: 4, from: "me", text: "Отправлю райдер сегодня. Там стандартный комплект: PA Funktion One, световая матрица, 3 мониторные линии.", time: "10:18" },
-  { id: 5, from: "them", text: "Всё есть в наличии. Стоимость аренды — 85 000 ₽ плюс технический персонал 15 000 ₽.", time: "10:25" },
-  { id: 6, from: "me", text: "Принято. Когда можем подписать договор?", time: "10:29" },
-  { id: 7, from: "them", text: "Отлично, подтверждаем дату 15 сентября! Договор пришлём завтра.", time: "10:32" },
-];
+function getAvatarColor(str: string) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) hash += str.charCodeAt(i);
+  return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+}
+
+function getInitial(name: string) {
+  return name.trim()[0]?.toUpperCase() || "?";
+}
+
+function formatTime(dateStr: string) {
+  const d = new Date(dateStr);
+  const now = new Date();
+  const isToday = d.toDateString() === now.toDateString();
+  if (isToday) return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (d.toDateString() === yesterday.toDateString()) return "вчера";
+  return d.toLocaleDateString("ru", { day: "numeric", month: "short" });
+}
+
+interface Conversation {
+  id: string;
+  organizerId: string;
+  venueId: string;
+  venueUserId: string;
+  venueName: string;
+  lastMessage: string;
+  lastMessageAt: string;
+  unread: number;
+  isOrganizer: boolean;
+}
+
+interface Message {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  text: string;
+  createdAt: string;
+}
 
 export default function ChatPage() {
   const { user } = useAuth();
-  const { sendNotification } = useNotifications();
-  const [activeChat, setActiveChat] = useState(1);
-  const [inputMessage, setInputMessage] = useState("");
-  const [chatMessages, setChatMessages] = useState(messages);
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputText, setInputText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loadingConvs, setLoadingConvs] = useState(true);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [search, setSearch] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const active = conversations.find((c) => c.id === activeChat) || conversations[0];
+  const activeConv = conversations.find(c => c.id === activeConvId) || null;
+
+  // Загрузка диалогов
+  const loadConversations = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${CHAT_URL}?action=conversations&user_id=${user.id}`);
+      const data = await res.json();
+      setConversations(data.conversations || []);
+    } catch { /* silent */ }
+    finally { setLoadingConvs(false); }
+  }, [user]);
+
+  // Загрузка сообщений диалога
+  const loadMessages = useCallback(async (convId: string) => {
+    setLoadingMsgs(true);
+    try {
+      const res = await fetch(`${CHAT_URL}?action=messages&conversation_id=${convId}`);
+      const data = await res.json();
+      setMessages(data.messages || []);
+    } catch { /* silent */ }
+    finally { setLoadingMsgs(false); }
+  }, []);
+
+  useEffect(() => { loadConversations(); }, [loadConversations]);
+
+  // При смене активного диалога — грузим сообщения и отмечаем прочитанными
+  useEffect(() => {
+    if (!activeConvId || !user) return;
+    loadMessages(activeConvId);
+
+    // Сбрасываем unread
+    fetch(`${CHAT_URL}?action=read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId: activeConvId, userId: user.id }),
+    });
+    setConversations(prev => prev.map(c =>
+      c.id === activeConvId ? { ...c, unread: 0 } : c
+    ));
+
+    // Polling сообщений каждые 5 сек
+    if (pollingRef.current) clearInterval(pollingRef.current);
+    pollingRef.current = setInterval(() => loadMessages(activeConvId), 5000);
+    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+  }, [activeConvId, user, loadMessages]);
+
+  // Скролл вниз при новых сообщениях
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   const handleSend = async () => {
-    const text = inputMessage.trim();
-    if (!text) return;
-    const now = new Date();
-    const time = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-    setChatMessages(prev => [...prev, { id: Date.now(), from: "me", text, time }]);
-    setInputMessage("");
-    // Уведомление собеседнику (demo: отправляем самому себе если нет реального user_id)
-    if (user) {
-      await sendNotification(
-        user.id,
-        "message",
-        `Новое сообщение — ${active.name}`,
-        text.slice(0, 80),
-        "chat"
-      );
-    }
+    const text = inputText.trim();
+    if (!text || !activeConvId || !user || sending) return;
+    setSending(true);
+    setInputText("");
+
+    // Оптимистичное добавление
+    const optimistic: Message = {
+      id: `opt-${Date.now()}`,
+      conversationId: activeConvId,
+      senderId: user.id,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, optimistic]);
+
+    try {
+      const res = await fetch(`${CHAT_URL}?action=send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId: activeConvId,
+          senderId: user.id,
+          text,
+          senderName: user.name,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        // Заменяем оптимистичное на реальное
+        setMessages(prev => prev.map(m => m.id === optimistic.id ? data : m));
+        setConversations(prev => prev.map(c =>
+          c.id === activeConvId ? { ...c, lastMessage: text, lastMessageAt: data.createdAt } : c
+        ));
+      }
+    } catch { /* silent */ }
+    finally { setSending(false); }
   };
+
+  const filteredConvs = conversations.filter(c =>
+    !search || c.venueName.toLowerCase().includes(search.toLowerCase())
+  );
+
+  const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
+
+  // Группировка сообщений по дате
+  let lastDate = "";
 
   return (
     <div className="min-h-screen pt-20 pb-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-[calc(100vh-5rem)]">
-        <div className="flex gap-6 h-full">
-          {/* Sidebar */}
-          <aside className="w-80 shrink-0 flex flex-col glass rounded-2xl overflow-hidden">
-            <div className="p-4 border-b border-white/10">
-              <h2 className="font-oswald font-bold text-xl text-white mb-3">Сообщения</h2>
+        <div className="flex gap-4 h-full">
+
+          {/* ── Sidebar ── */}
+          <aside className="w-72 shrink-0 flex flex-col glass rounded-2xl overflow-hidden">
+            <div className="p-4 border-b border-white/10 shrink-0">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-oswald font-bold text-xl text-white">Сообщения</h2>
+                {totalUnread > 0 && (
+                  <Badge className="bg-neon-purple text-white text-xs">{totalUnread}</Badge>
+                )}
+              </div>
               <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
-                <Icon name="Search" size={16} className="text-white/30" />
-                <input
-                  type="text"
-                  placeholder="Поиск..."
-                  className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm"
-                />
+                <Icon name="Search" size={14} className="text-white/30 shrink-0" />
+                <input type="text" placeholder="Поиск диалогов..."
+                  value={search} onChange={e => setSearch(e.target.value)}
+                  className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm" />
               </div>
             </div>
 
             <div className="flex-1 overflow-y-auto scrollbar-thin">
-              {conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => setActiveChat(conv.id)}
-                  className={`flex items-center gap-3 p-4 cursor-pointer transition-colors hover:bg-white/5 border-b border-white/5 ${
-                    activeChat === conv.id ? "bg-neon-purple/10 border-l-2 border-l-neon-purple" : ""
-                  }`}
-                >
-                  <div className="relative shrink-0">
-                    <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${conv.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm`}>
-                      {conv.avatar}
+              {loadingConvs ? (
+                <div className="p-4 space-y-3">
+                  {[1,2,3].map(i => (
+                    <div key={i} className="flex gap-3 items-center">
+                      <div className="w-10 h-10 rounded-full bg-white/5 animate-pulse shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3 bg-white/5 rounded animate-pulse w-2/3" />
+                        <div className="h-3 bg-white/5 rounded animate-pulse w-1/2" />
+                      </div>
                     </div>
-                    {conv.online && (
-                      <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-neon-green rounded-full border-2 border-background" />
-                    )}
-                  </div>
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between mb-0.5">
-                      <span className="font-medium text-white text-sm truncate">{conv.name}</span>
-                      <span className="text-white/30 text-xs shrink-0 ml-2">{conv.time}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-white/40 text-xs truncate">{conv.lastMessage}</span>
-                      {conv.unread > 0 && (
-                        <Badge className="bg-neon-purple text-white text-xs px-1.5 py-0 h-4 min-w-4 ml-2 shrink-0">
-                          {conv.unread}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
+                  ))}
                 </div>
-              ))}
+              ) : filteredConvs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-full py-10 gap-3 px-4 text-center">
+                  <Icon name="MessageCircleOff" size={32} className="text-white/20" />
+                  <p className="text-white/30 text-sm">Нет диалогов</p>
+                  {user?.role === "organizer" && (
+                    <p className="text-white/20 text-xs">Нажмите «Написать» на карточке площадки</p>
+                  )}
+                </div>
+              ) : (
+                filteredConvs.map(conv => {
+                  const name = conv.isOrganizer ? conv.venueName : "Организатор";
+                  const color = getAvatarColor(name);
+                  const initial = getInitial(name);
+                  const isActive = conv.id === activeConvId;
+                  return (
+                    <div key={conv.id} onClick={() => setActiveConvId(conv.id)}
+                      className={`flex items-center gap-3 p-4 cursor-pointer transition-all hover:bg-white/5 border-b border-white/5 ${isActive ? "bg-neon-purple/10 border-l-2 border-l-neon-purple" : ""}`}>
+                      <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${color} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
+                        {initial}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="font-medium text-white text-sm truncate">{name}</span>
+                          <span className="text-white/30 text-xs shrink-0 ml-2">{formatTime(conv.lastMessageAt)}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-white/40 text-xs truncate">{conv.lastMessage}</span>
+                          {conv.unread > 0 && (
+                            <Badge className="bg-neon-purple text-white text-xs px-1.5 py-0 h-4 min-w-4 ml-2 shrink-0">{conv.unread}</Badge>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </aside>
 
-          {/* Chat window */}
+          {/* ── Chat window ── */}
           <div className="flex-1 flex flex-col glass rounded-2xl overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center gap-4 p-4 border-b border-white/10">
-              <div className="relative">
-                <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${active.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm`}>
-                  {active.avatar}
+            {!activeConv ? (
+              <div className="flex flex-col items-center justify-center h-full gap-4">
+                <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 flex items-center justify-center">
+                  <Icon name="MessageCircle" size={28} className="text-neon-purple/60" />
                 </div>
-                {active.online && (
-                  <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-neon-green rounded-full border-2 border-background" />
-                )}
-              </div>
-              <div>
-                <h3 className="font-oswald font-semibold text-white">{active.name}</h3>
-                <div className="flex items-center gap-2 text-xs text-white/40">
-                  <Badge className="bg-white/10 text-white/50 border-white/10 text-xs py-0">{active.type}</Badge>
-                  <span>·</span>
-                  <span className="flex items-center gap-1">
-                    <Icon name="MapPin" size={10} />
-                    {active.city}
-                  </span>
-                  {active.online && (
-                    <>
-                      <span>·</span>
-                      <span className="text-neon-green">онлайн</span>
-                    </>
+                <div className="text-center">
+                  <p className="text-white/50 font-oswald text-lg">Выберите диалог</p>
+                  {user?.role === "organizer" && (
+                    <p className="text-white/25 text-sm mt-1">или найдите площадку и нажмите «Написать»</p>
                   )}
                 </div>
               </div>
-
-              <div className="ml-auto flex items-center gap-2">
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white">
-                  <Icon name="FileText" size={16} />
-                </button>
-                <button className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white">
-                  <Icon name="MoreVertical" size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Messages */}
-            <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-4">
-              <div className="text-center">
-                <span className="text-xs text-white/20 bg-white/5 px-3 py-1 rounded-full">Сегодня</span>
-              </div>
-
-              {chatMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex ${msg.from === "me" ? "justify-end" : "justify-start"}`}
-                >
-                  <div
-                    className={`max-w-xs sm:max-w-md px-4 py-3 rounded-2xl text-sm ${
-                      msg.from === "me"
-                        ? "bg-gradient-to-br from-neon-purple/40 to-neon-cyan/20 text-white rounded-br-sm border border-neon-purple/30"
-                        : "glass text-white/90 rounded-bl-sm"
-                    }`}
-                  >
-                    <p className="leading-relaxed">{msg.text}</p>
-                    <p className={`text-xs mt-1 ${msg.from === "me" ? "text-white/40 text-right" : "text-white/30"}`}>
-                      {msg.time}
+            ) : (
+              <>
+                {/* Header */}
+                <div className="flex items-center gap-3 p-4 border-b border-white/10 shrink-0">
+                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(activeConv.isOrganizer ? activeConv.venueName : "Организатор")} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
+                    {getInitial(activeConv.isOrganizer ? activeConv.venueName : "Организатор")}
+                  </div>
+                  <div>
+                    <h3 className="font-oswald font-semibold text-white">
+                      {activeConv.isOrganizer ? activeConv.venueName : "Организатор"}
+                    </h3>
+                    <p className="text-xs text-white/40">
+                      {activeConv.isOrganizer ? "Концертная площадка" : "Организатор тура"}
                     </p>
                   </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Input */}
-            <div className="p-4 border-t border-white/10">
-              <div className="flex items-end gap-3">
-                <button className="w-9 h-9 flex items-center justify-center rounded-xl bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white shrink-0">
-                  <Icon name="Paperclip" size={16} />
-                </button>
-
-                <div className="flex-1 flex items-center glass-strong rounded-xl px-4 py-2.5">
-                  <input
-                    type="text"
-                    placeholder="Написать сообщение..."
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-                    className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm"
-                  />
+                  <div className="ml-auto flex items-center gap-2">
+                    <button onClick={() => loadMessages(activeConvId!)}
+                      className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/50 hover:text-white">
+                      <Icon name="RefreshCw" size={14} />
+                    </button>
+                  </div>
                 </div>
 
-                <button
-                  onClick={handleSend}
-                  className={`w-9 h-9 flex items-center justify-center rounded-xl shrink-0 transition-all ${
-                    inputMessage.trim()
-                      ? "bg-gradient-to-br from-neon-purple to-neon-cyan text-white hover:opacity-90"
-                      : "bg-white/5 text-white/30"
-                  }`}
-                >
-                  <Icon name="Send" size={16} />
-                </button>
-              </div>
-            </div>
+                {/* Messages */}
+                <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-3">
+                  {loadingMsgs ? (
+                    <div className="flex justify-center pt-8">
+                      <Icon name="Loader2" size={24} className="text-white/30 animate-spin" />
+                    </div>
+                  ) : messages.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center h-full gap-2">
+                      <Icon name="MessageCircle" size={28} className="text-white/20" />
+                      <p className="text-white/30 text-sm">Нет сообщений. Напишите первым!</p>
+                    </div>
+                  ) : (
+                    messages.map(msg => {
+                      const isMe = msg.senderId === user!.id;
+                      const msgDate = new Date(msg.createdAt).toDateString();
+                      const showDate = msgDate !== lastDate;
+                      if (showDate) lastDate = msgDate;
+                      const dateLabel = new Date(msg.createdAt).toLocaleDateString("ru", { day: "numeric", month: "long" });
+                      return (
+                        <div key={msg.id}>
+                          {showDate && (
+                            <div className="flex justify-center my-3">
+                              <span className="text-xs text-white/20 bg-white/5 px-3 py-1 rounded-full">{dateLabel}</span>
+                            </div>
+                          )}
+                          <div className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                            <div className={`max-w-xs sm:max-w-md px-4 py-3 rounded-2xl text-sm ${
+                              isMe
+                                ? "bg-gradient-to-br from-neon-purple/40 to-neon-cyan/20 text-white rounded-br-sm border border-neon-purple/30"
+                                : "glass text-white/90 rounded-bl-sm border border-white/10"
+                            } ${msg.id.startsWith("opt-") ? "opacity-60" : ""}`}>
+                              <p className="leading-relaxed break-words">{msg.text}</p>
+                              <p className={`text-xs mt-1 ${isMe ? "text-white/40 text-right" : "text-white/30"}`}>
+                                {formatTime(msg.createdAt)}
+                                {msg.id.startsWith("opt-") && " · отправка..."}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                  <div ref={messagesEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="p-4 border-t border-white/10 shrink-0">
+                  <div className="flex items-end gap-3">
+                    <div className="flex-1 flex items-center glass-strong rounded-xl px-4 py-3 border border-white/10 focus-within:border-neon-purple/40 transition-colors">
+                      <input type="text"
+                        placeholder="Написать сообщение..."
+                        value={inputText}
+                        onChange={e => setInputText(e.target.value)}
+                        onKeyDown={e => e.key === "Enter" && !e.shiftKey && handleSend()}
+                        className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm" />
+                    </div>
+                    <button onClick={handleSend} disabled={!inputText.trim() || sending}
+                      className={`w-10 h-10 flex items-center justify-center rounded-xl shrink-0 transition-all ${
+                        inputText.trim() && !sending
+                          ? "bg-gradient-to-br from-neon-purple to-neon-cyan text-white hover:opacity-90 shadow-lg shadow-neon-purple/20"
+                          : "bg-white/5 text-white/30 cursor-not-allowed"
+                      }`}>
+                      {sending
+                        ? <Icon name="Loader2" size={16} className="animate-spin" />
+                        : <Icon name="Send" size={16} />}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

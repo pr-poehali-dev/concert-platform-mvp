@@ -1,0 +1,44 @@
+{
+  "tests": [
+    {
+      "name": "Conversations no user_id",
+      "method": "GET",
+      "path": "/?action=conversations",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Conversations empty list",
+      "method": "GET",
+      "path": "/?action=conversations&user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 200,
+      "expectedBody": { "conversations": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Start conversation",
+      "method": "POST",
+      "path": "/?action=start",
+      "body": {
+        "organizerId": "00000000-0000-0000-0000-000000000001",
+        "venueId": "00000000-0000-0000-0000-000000000002",
+        "venueUserId": "00000000-0000-0000-0000-000000000003",
+        "venueName": "Volta",
+        "message": "Здравствуйте! Хотим забронировать площадку на 15 сентября.",
+        "organizerName": "Тест Организатор"
+      },
+      "expectedStatus": 201,
+      "expectedBody": { "conversationId": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Conversations for organizer",
+      "method": "GET",
+      "path": "/?action=conversations&user_id=00000000-0000-0000-0000-000000000001",
+      "expectedStatus": 200,
+      "expectedBody": { "conversations": [] },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
