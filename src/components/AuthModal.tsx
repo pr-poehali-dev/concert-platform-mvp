@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { useAuth, UserRole, CompanyType, type RegisterData, AUTH_URL } from "@/context/AuthContext";
+import { useAuth, UserRole, CompanyType, type RegisterData } from "@/context/AuthContext";
 
 interface AuthModalProps {
   open: boolean;
@@ -30,11 +30,8 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
   const [tab, setTab]         = useState<"login" | "register">(defaultTab);
   const [regStep, setRegStep] = useState<RegStep>("main");
   const [error, setError]     = useState("");
-  const [registered, setRegistered]       = useState(false);
+  const [registered, setRegistered]         = useState(false);
   const [registeredName, setRegisteredName] = useState("");
-  const [registeredEmail, setRegisteredEmail] = useState("");
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendSent, setResendSent]       = useState(false);
 
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [regData, setRegData]     = useState<RegisterData>(EMPTY_REG);
@@ -74,26 +71,13 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
     const msg = await register(regData);
     if (!msg) {
       setRegisteredName(regData.name.trim().split(" ")[0]);
-      setRegisteredEmail(regData.email.trim().toLowerCase());
       setRegistered(true);
     } else {
       setError(msg);
     }
   };
 
-  const handleResend = async () => {
-    if (!registeredEmail || resendLoading) return;
-    setResendLoading(true);
-    await fetch(`${AUTH_URL}?action=resend_verification`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: registeredEmail }),
-    });
-    setResendLoading(false);
-    setResendSent(true);
-    setTimeout(() => setResendSent(false), 5000);
-  };
-
-  // ── Экран «Подтвердите почту» ─────────────────────────────────────────
+  // ── Экран «Заявка отправлена» ─────────────────────────────────────────
   if (registered) {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -101,51 +85,32 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
         <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl overflow-hidden animate-scale-in text-center p-8">
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan to-transparent" />
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center mx-auto mb-6 animate-glow-pulse">
-            <Icon name="Mail" size={36} className="text-white" />
+            <Icon name="ClipboardCheck" size={36} className="text-white" />
           </div>
-          <h2 className="font-oswald font-bold text-2xl text-white mb-2">Проверьте почту!</h2>
-          <p className="text-white/60 mb-2">
-            {registeredName}, мы отправили письмо на
+          <h2 className="font-oswald font-bold text-2xl text-white mb-2">Заявка отправлена!</h2>
+          <p className="text-white/60 mb-6">
+            {registeredName}, ваша заявка принята.<br />
+            Мы проверим данные и <span className="text-neon-cyan">уведомим вас</span> о результате.
           </p>
-          <p className="text-neon-cyan font-medium mb-6">{registeredEmail}</p>
-
-          <div className="glass rounded-xl p-4 mb-6 text-left space-y-3">
+          <div className="glass rounded-xl p-4 mb-6 text-left space-y-2">
             {[
-              { icon: "Send",         color: "text-neon-cyan",   bg: "bg-neon-cyan/15",   title: "Письмо отправлено",   desc: "Найдите письмо от GLOBAL LINK" },
-              { icon: "MousePointer", color: "text-neon-purple", bg: "bg-neon-purple/15", title: "Нажмите ссылку",       desc: "Кликните «Подтвердить email» в письме" },
-              { icon: "ClipboardCheck", color: "text-neon-green", bg: "bg-neon-green/15", title: "Заявка на проверке",   desc: "Администратор рассмотрит вашу заявку" },
-            ].map(({ icon, color, bg, title, desc }, i) => (
+              ["Заявка получена", "Данные отправлены на проверку"],
+              ["Проверка", "Администратор рассмотрит заявку"],
+              ["Уведомление", "Вы получите уведомление об одобрении"],
+            ].map(([title, desc], i) => (
               <div key={i} className="flex items-start gap-3">
-                <div className={`w-8 h-8 rounded-lg ${bg} flex items-center justify-center shrink-0`}>
-                  <Icon name={icon} size={15} className={color} />
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${i === 0 ? "bg-neon-green/20 text-neon-green" : "bg-white/10 text-white/30"}`}>
+                  {i === 0 ? <Icon name="Check" size={12} /> : i + 1}
                 </div>
                 <div>
-                  <p className="text-sm font-medium text-white">{title}</p>
-                  <p className="text-xs text-white/40">{desc}</p>
+                  <p className={`text-sm font-medium ${i === 0 ? "text-white" : "text-white/40"}`}>{title}</p>
+                  <p className="text-xs text-white/30">{desc}</p>
                 </div>
               </div>
             ))}
           </div>
-
-          <p className="text-white/30 text-xs mb-4">
-            Не пришло письмо? Проверьте папку «Спам».
-          </p>
-
-          {resendSent ? (
-            <div className="flex items-center justify-center gap-2 text-neon-green text-sm mb-4">
-              <Icon name="CheckCircle2" size={16} />Письмо отправлено повторно
-            </div>
-          ) : (
-            <button onClick={handleResend} disabled={resendLoading}
-              className="w-full py-2.5 glass text-white/50 hover:text-white rounded-xl border border-white/10 text-sm mb-3 transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-              {resendLoading ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="RefreshCw" size={14} />}
-              Отправить повторно
-            </button>
-          )}
-
-          <button onClick={onClose}
-            className="w-full py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity">
-            Понятно, жду письмо
+          <button onClick={onClose} className="w-full py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity">
+            Понятно, буду ждать
           </button>
         </div>
       </div>

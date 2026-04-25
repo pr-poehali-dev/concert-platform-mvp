@@ -275,13 +275,7 @@ def handler(event: dict, context) -> dict:
              company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone),
         )
         user_id = str(cur.fetchone()[0])
-
-        # Создаём токен подтверждения
-        token = create_verification_token(conn, user_id, email)
         conn.commit()
-
-        # Отправляем письмо подтверждения
-        email_sent = send_verification_email(email, name, token)
 
         role_label = "Организатор" if role == "organizer" else "Площадка"
         notify_admins(conn, "Новая заявка на регистрацию",
@@ -291,7 +285,7 @@ def handler(event: dict, context) -> dict:
         user_data = {
             "id": user_id, "name": name, "email": email,
             "role": role, "city": city, "verified": False,
-            "status": "pending", "emailConfirmed": False, "avatar": avatar,
+            "status": "pending", "avatar": avatar,
             "avatarColor": avatar_color,
             "companyType": company_type, "legalName": legal_name, "inn": inn,
             "kpp": kpp, "ogrn": ogrn, "legalAddress": legal_address,
@@ -300,12 +294,7 @@ def handler(event: dict, context) -> dict:
         }
         session_id = secrets.token_hex(32)
         _sessions[session_id] = user_data
-        return ok({
-            "sessionId": session_id,
-            "user": user_data,
-            "emailSent": email_sent,
-            "requiresEmailConfirmation": True,
-        }, 201)
+        return ok({"sessionId": session_id, "user": user_data}, 201)
 
     # ── POST login ────────────────────────────────────────────────────────
     if method == "POST" and action == "login":
