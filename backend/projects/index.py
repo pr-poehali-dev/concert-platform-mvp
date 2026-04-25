@@ -1,10 +1,25 @@
 """Финансовый учёт проектов GLOBAL LINK."""
 import json
+import os
+import base64
+import uuid
 import urllib.request
+import boto3
 from helpers import (
     get_conn, cors, serial, recalc_totals, row_to_project,
     SCHEMA, DEFAULT_EXPENSE_CATEGORIES
 )
+
+def get_s3():
+    return boto3.client(
+        "s3",
+        endpoint_url="https://bucket.poehali.dev",
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
+
+def cdn_url(key: str) -> str:
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826"
 CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5"
@@ -821,5 +836,60 @@ def handler(event: dict, context) -> dict:
                 (conversation_id, booking_id))
             conn2.commit(); conn2.close()
         return ok({"conversationId": conversation_id})
+
+    # POST upload_booking_file — загрузить документ к бронированию
+    if method == "POST" and action == "upload_booking_file":
+        b = json.loads(event.get("body") or "{}")
+        booking_id  = b.get("bookingId", "")
+        uploaded_by = b.get("uploadedBy", "")
+        step_key    = b.get("stepKey", "")
+        file_name   = b.get("fileName", "file")
+        file_data   = b.get("fileData", "")   # base64
+        mime_type   = b.get("mimeType", "application/octet-stream")
+        if not booking_id or not uploaded_by or not file_data:
+            return err("bookingId, uploadedBy, fileData обязательны")
+        raw = base64.b64decode(file_data)
+        file_size = len(raw)
+        ext = file_name.rsplit(".", 1)[-1] if "." in file_name else "bin"
+        key = f"booking-docs/{booking_id}/{uuid.uuid4()}.{ext}"
+        s3 = get_s3()
+        s3.put_object(Bucket="files", Key=key, Body=raw, ContentType=mime_type)
+        url = cdn_url(key)
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"INSERT INTO {SCHEMA}.booking_files (booking_id, uploaded_by, step_key, file_name, file_url, file_size, mime_type) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+            (booking_id, uploaded_by, step_key, file_name, url, file_size, mime_type))
+        file_id = str(cur.fetchone()[0])
+        conn.commit(); conn.close()
+        return ok({"id": file_id, "fileUrl": url, "fileName": file_name}, 201)
+
+    # GET booking_files — список документов бронирования
+    if method == "GET" and action == "booking_files":
+        booking_id = params.get("booking_id", "")
+        if not booking_id: return err("booking_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT f.id, f.step_key, f.file_name, f.file_url, f.file_size, f.mime_type, f.created_at,
+                       COALESCE(u.name, 'Пользователь')
+                FROM {SCHEMA}.booking_files f
+                LEFT JOIN {SCHEMA}.users u ON u.id = f.uploaded_by
+                WHERE f.booking_id = %s ORDER BY f.created_at DESC""",
+            (booking_id,))
+        rows = cur.fetchall(); conn.close()
+        return ok({"files": [
+            {"id": str(r[0]), "stepKey": r[1], "fileName": r[2], "fileUrl": r[3],
+             "fileSize": r[4], "mimeType": r[5], "createdAt": str(r[6]), "uploadedBy": r[7]}
+            for r in rows
+        ]})
+
+    # POST delete_booking_file — удалить документ
+    if method == "POST" and action == "delete_booking_file":
+        b = json.loads(event.get("body") or "{}")
+        file_id = b.get("fileId", "")
+        if not file_id: return err("fileId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"DELETE FROM {SCHEMA}.booking_files WHERE id=%s", (file_id,))
+        conn.commit(); conn.close()
+        return ok({"success": True})
 
     return err("Not found", 404)

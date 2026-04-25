@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import SearchPage from "@/components/SearchPage";
@@ -9,29 +9,46 @@ import ProjectsPage from "@/components/projects/ProjectsPage";
 import { useAuth } from "@/context/AuthContext";
 
 type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects";
+const PROTECTED: Page[] = ["chat", "dashboard", "projects"];
+const PAGE_KEY = "gl_active_page";
+const CONV_KEY = "gl_chat_conv";
 
 export default function Index() {
   const { user } = useAuth();
   const [activePage, setActivePage] = useState<Page>("home");
   const [openChatConvId, setOpenChatConvId] = useState<string | null>(null);
 
+  // Восстанавливаем страницу из localStorage после загрузки
+  useEffect(() => {
+    const saved = localStorage.getItem(PAGE_KEY) as Page | null;
+    const savedConv = localStorage.getItem(CONV_KEY);
+    if (saved && saved !== "home") {
+      if (PROTECTED.includes(saved) && !user) return;
+      setActivePage(saved);
+      if (saved === "chat" && savedConv) setOpenChatConvId(savedConv);
+    }
+  }, [user]);
+
   const handleNavigate = (page: string) => {
-    // Поддержка "chat:conversationId" для прямого открытия диалога
     if (page.startsWith("chat:")) {
       const convId = page.slice(5);
-      setOpenChatConvId(convId);
-      const protected_pages = ["chat"];
       if (!user) { setActivePage("home"); return; }
+      setOpenChatConvId(convId);
       setActivePage("chat");
+      localStorage.setItem(PAGE_KEY, "chat");
+      localStorage.setItem(CONV_KEY, convId);
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
     setOpenChatConvId(null);
-    const protected_pages = ["chat", "dashboard", "projects"];
-    if (protected_pages.includes(page) && !user) {
+    localStorage.removeItem(CONV_KEY);
+    const p = page as Page;
+    if (PROTECTED.includes(p) && !user) {
       setActivePage("home");
+      localStorage.setItem(PAGE_KEY, "home");
     } else {
-      setActivePage(page as Page);
+      setActivePage(p);
+      localStorage.setItem(PAGE_KEY, p);
     }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
