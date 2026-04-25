@@ -21,7 +21,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
 
   // Бронирования
   const [bookings, setBookings] = useState<BookingInfo[]>([]);
-  const [allBookings, setAllBookings] = useState<{ id: string; status: string; venueName: string; eventDate: string; conversationId?: string }[]>([]);
+  const [allBookings, setAllBookings] = useState<{ id: string; status: string; venueName: string; eventDate: string; eventTime?: string; rentalAmount?: number | null; venueConditions?: string; conversationId?: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
   const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
@@ -43,6 +43,10 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
   const [bookError, setBookError] = useState("");
   const [bookSending, setBookSending] = useState(false);
   const [bookSuccess, setBookSuccess] = useState(false);
+
+  // Модалка «Принять условия» площадки
+  const [acceptModal, setAcceptModal] = useState<{ id: string; venueName: string; eventDate: string; eventTime: string; rentalAmount: number | null; venueConditions: string } | null>(null);
+  const [acceptSaving, setAcceptSaving] = useState<"accepted" | "cancelled" | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -158,6 +162,17 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
     finally { setBookSending(false); }
   };
 
+  const handleOrganizerRespond = async (bookingId: string, response: "accepted" | "cancelled") => {
+    setAcceptSaving(response);
+    await fetch(`${PROJECTS_URL}?action=organizer_respond`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bookingId, response, organizerName: user?.name || "Организатор" }),
+    });
+    setAcceptSaving(null);
+    setAcceptModal(null);
+    load();
+  };
+
   const updateTask = async (taskId: string, status: "pending" | "in_progress" | "done") => {
     setUpdatingTask(taskId);
     await fetch(`${PROJECTS_URL}?action=update_task`, {
@@ -227,10 +242,43 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
         </div>
       )}
 
-      {/* Все запросы (pending/rejected) */}
+      {/* Бронирования, ожидающие принятия условий организатором */}
+      {allBookings.filter(b => b.status === "confirmed").length > 0 && (
+        <div className="space-y-2">
+          <p className="text-white/40 text-xs uppercase tracking-wider flex items-center gap-2">
+            <Icon name="Bell" size={12} className="text-neon-green" />
+            Ожидают вашего решения
+          </p>
+          {allBookings.filter(b => b.status === "confirmed").map(b => (
+            <div key={b.id} className="glass rounded-xl p-4 border border-neon-green/30 bg-neon-green/5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-white text-sm font-medium">{b.venueName}</p>
+                <p className="text-white/40 text-xs">{b.eventDate}{b.eventDate && " · "}<span className="text-neon-green">Площадка подтвердила дату</span></p>
+              </div>
+              <button
+                onClick={() => {
+                  setAcceptModal({
+                    id: b.id,
+                    venueName: b.venueName,
+                    eventDate: b.eventDate,
+                    eventTime: b.eventTime || "",
+                    rentalAmount: b.rentalAmount ?? null,
+                    venueConditions: b.venueConditions || "",
+                  });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-green/20 text-neon-green border border-neon-green/30 rounded-lg text-xs font-semibold hover:bg-neon-green/30 transition-colors shrink-0"
+              >
+                <Icon name="CheckCircle" size={13} />Рассмотреть условия
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Все остальные запросы (pending/rejected/cancelled) */}
       {allBookings.filter(b => !["accepted", "confirmed"].includes(b.status)).length > 0 && (
         <div className="space-y-2">
-          <p className="text-white/40 text-xs uppercase tracking-wider">Активные запросы</p>
+          <p className="text-white/40 text-xs uppercase tracking-wider">Запросы</p>
           {allBookings.filter(b => !["accepted", "confirmed"].includes(b.status)).map(b => {
             const st = BOOKING_STATUS[b.status] || { label: b.status, cls: "text-white/40 bg-white/5 border-white/10" };
             return (
@@ -243,6 +291,50 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Модалка принятия условий */}
+      {acceptModal && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setAcceptModal(null)} />
+          <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl p-6 border border-neon-green/20 animate-scale-in">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-green to-transparent rounded-t-2xl" />
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-oswald font-bold text-white text-lg flex items-center gap-2">
+                <Icon name="CalendarCheck" size={18} className="text-neon-green" />Площадка подтвердила дату
+              </h3>
+              <button onClick={() => setAcceptModal(null)} className="text-white/30 hover:text-white transition-colors">
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+            <div className="glass rounded-xl p-4 space-y-2 mb-4 text-sm">
+              <div className="flex justify-between"><span className="text-white/50">Площадка</span><span className="text-white font-medium">{acceptModal.venueName}</span></div>
+              <div className="flex justify-between"><span className="text-white/50">Дата</span><span className="text-neon-cyan font-medium">{acceptModal.eventDate}{acceptModal.eventTime ? ` ${acceptModal.eventTime}` : ""}</span></div>
+              {acceptModal.rentalAmount !== null && (
+                <div className="flex justify-between"><span className="text-white/50">Сумма аренды</span><span className="text-neon-green font-oswald font-bold text-base">{acceptModal.rentalAmount?.toLocaleString("ru-RU")} ₽</span></div>
+              )}
+              {acceptModal.venueConditions && (
+                <div><span className="text-white/50 block mb-1">Условия</span><span className="text-white/80">{acceptModal.venueConditions}</span></div>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleOrganizerRespond(acceptModal.id, "cancelled")}
+                disabled={acceptSaving !== null}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-pink/10 text-neon-pink border border-neon-pink/20 rounded-xl hover:bg-neon-pink/20 text-sm disabled:opacity-50 transition-colors"
+              >
+                {acceptSaving === "cancelled" ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="XCircle" size={14} />}Отменить
+              </button>
+              <button
+                onClick={() => handleOrganizerRespond(acceptModal.id, "accepted")}
+                disabled={acceptSaving !== null}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-green/20 text-neon-green border border-neon-green/30 rounded-xl hover:bg-neon-green/30 text-sm font-oswald font-semibold disabled:opacity-50 transition-colors"
+              >
+                {acceptSaving === "accepted" ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Check" size={14} />}Принять условия
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
