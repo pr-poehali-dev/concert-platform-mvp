@@ -187,6 +187,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             unreadCount={unreadCount}
             markRead={markRead}
             markAllRead={markAllRead}
+            onNavigate={onNavigate}
           />
         )}
 

@@ -572,7 +572,7 @@ def handler(event: dict, context) -> dict:
             f"""SELECT b.id, b.venue_id, v.name, b.project_id, p.title,
                        b.event_date, b.event_time, b.artist, b.age_limit,
                        b.expected_guests, b.status, b.rental_amount, b.venue_conditions,
-                       b.organizer_id, '' as org_name
+                       b.organizer_id, b.conversation_id
                 FROM {SCHEMA}.venue_bookings b
                 JOIN {SCHEMA}.venues v ON v.id=b.venue_id
                 JOIN {SCHEMA}.projects p ON p.id=b.project_id
@@ -584,7 +584,8 @@ def handler(event: dict, context) -> dict:
              "eventDate": str(r[5]), "eventTime": r[6], "artist": r[7],
              "ageLimit": r[8], "expectedGuests": r[9], "status": r[10],
              "rentalAmount": float(r[11]) if r[11] else None,
-             "venueConditions": r[12], "organizerId": str(r[13])}
+             "venueConditions": r[12], "organizerId": str(r[13]),
+             "conversationId": str(r[14]) if r[14] else ""}
             for r in rows
         ]})
 
@@ -597,7 +598,7 @@ def handler(event: dict, context) -> dict:
             f"""SELECT b.id, b.venue_id, v.name, b.project_id, p.title,
                        b.event_date, b.event_time, b.artist, b.age_limit,
                        b.expected_guests, b.status, b.rental_amount, b.venue_conditions,
-                       b.organizer_id, u.name
+                       b.organizer_id, u.name, b.conversation_id
                 FROM {SCHEMA}.venue_bookings b
                 JOIN {SCHEMA}.venues v ON v.id=b.venue_id
                 JOIN {SCHEMA}.projects p ON p.id=b.project_id
@@ -610,7 +611,8 @@ def handler(event: dict, context) -> dict:
              "eventDate": str(r[5]), "eventTime": r[6], "artist": r[7],
              "ageLimit": r[8], "expectedGuests": r[9], "status": r[10],
              "rentalAmount": float(r[11]) if r[11] else None,
-             "venueConditions": r[12], "organizerId": str(r[13]), "organizerName": r[14]}
+             "venueConditions": r[12], "organizerId": str(r[13]), "organizerName": r[14],
+             "conversationId": str(r[15]) if r[15] else ""}
             for r in rows
         ]})
 

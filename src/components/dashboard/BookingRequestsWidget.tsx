@@ -18,6 +18,7 @@ interface Booking {
   rentalAmount: number | null;
   venueConditions: string;
   organizerName?: string;
+  conversationId?: string;
 }
 
 interface VenueRespondModalProps {
@@ -145,7 +146,7 @@ function OrganizerRespondModal({ booking, onClose, onSubmit }: OrganizerRespondM
   );
 }
 
-export default function BookingRequestsWidget() {
+export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -233,14 +234,23 @@ export default function BookingRequestsWidget() {
         {b.rentalAmount !== null && (
           <p className="text-neon-green text-xs font-medium">Аренда: {b.rentalAmount.toLocaleString("ru-RU")} ₽{b.venueConditions ? ` · ${b.venueConditions}` : ""}</p>
         )}
-        {action && (
-          <button
-            onClick={()=>{ setActiveBooking(b); setModalType(isVenue ? "venue" : "organizer"); }}
-            className="mt-3 flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl text-xs font-oswald font-semibold hover:opacity-90 transition-opacity">
-            <Icon name="ArrowRight" size={13}/>
-            {isVenue ? "Ответить на запрос" : "Рассмотреть условия"}
-          </button>
-        )}
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          {action && (
+            <button
+              onClick={()=>{ setActiveBooking(b); setModalType(isVenue ? "venue" : "organizer"); }}
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl text-xs font-oswald font-semibold hover:opacity-90 transition-opacity">
+              <Icon name="ArrowRight" size={13}/>
+              {isVenue ? "Ответить на запрос" : "Рассмотреть условия"}
+            </button>
+          )}
+          {b.conversationId && onNavigate && (
+            <button
+              onClick={() => onNavigate(`chat:${b.conversationId}`)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-xl text-xs font-medium hover:bg-neon-cyan/20 transition-colors">
+              <Icon name="MessageCircle" size={13}/>Открыть чат
+            </button>
+          )}
+        </div>
       </div>
     );
   };

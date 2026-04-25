@@ -7,6 +7,7 @@ interface DashboardNotificationsTabProps {
   unreadCount: number;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  onNavigate?: (page: string) => void;
 }
 
 const TYPE_COLOR: Record<string, string> = {
@@ -23,10 +24,11 @@ export default function DashboardNotificationsTab({
   unreadCount,
   markRead,
   markAllRead,
+  onNavigate,
 }: DashboardNotificationsTabProps) {
   return (
     <div className="animate-fade-in max-w-2xl">
-      <BookingRequestsWidget />
+      <BookingRequestsWidget onNavigate={onNavigate} />
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h2 className="font-oswald font-bold text-2xl text-white">Уведомления</h2>
