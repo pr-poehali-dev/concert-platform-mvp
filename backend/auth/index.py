@@ -173,9 +173,15 @@ def send_verification_email(email: str, name: str, token: str) -> bool:
         method="POST",
     )
     try:
-        urllib.request.urlopen(req, timeout=10)
+        resp = urllib.request.urlopen(req, timeout=10)
+        print(f"[Resend] OK status={resp.status} email={email}")
         return True
-    except Exception:
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        print(f"[Resend] HTTPError {e.code}: {body}")
+        return False
+    except Exception as ex:
+        print(f"[Resend] Exception: {ex}")
         return False
 
 
