@@ -167,12 +167,12 @@ export default function ChatPage() {
   let lastDate = "";
 
   return (
-    <div className="min-h-screen pt-20 pb-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 h-[calc(100vh-5rem)]">
+    <div className="min-h-screen pt-16 pb-0">
+      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 sm:py-8 h-[calc(100vh-4rem)]">
         <div className="flex gap-4 h-full">
 
           {/* ── Sidebar ── */}
-          <aside className="w-72 shrink-0 flex flex-col glass rounded-2xl overflow-hidden">
+          <aside className={`shrink-0 flex flex-col glass sm:rounded-2xl overflow-hidden w-full sm:w-72 ${activeConvId ? "hidden sm:flex" : "flex"}`}>
             <div className="p-4 border-b border-white/10 shrink-0">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-oswald font-bold text-xl text-white">Сообщения</h2>
@@ -241,7 +241,7 @@ export default function ChatPage() {
           </aside>
 
           {/* ── Chat window ── */}
-          <div className="flex-1 flex flex-col glass rounded-2xl overflow-hidden">
+          <div className={`flex-1 flex flex-col glass sm:rounded-2xl overflow-hidden ${activeConvId ? "flex" : "hidden sm:flex"}`}>
             {!activeConv ? (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 flex items-center justify-center">
@@ -258,6 +258,10 @@ export default function ChatPage() {
               <>
                 {/* Header */}
                 <div className="flex items-center gap-3 p-4 border-b border-white/10 shrink-0">
+                  <button onClick={() => setActiveConvId(null)}
+                    className="sm:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 hover:text-white shrink-0">
+                    <Icon name="ArrowLeft" size={16} />
+                  </button>
                   <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(activeConv.isOrganizer ? activeConv.venueName : "Организатор")} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
                     {getInitial(activeConv.isOrganizer ? activeConv.venueName : "Организатор")}
                   </div>
