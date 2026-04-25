@@ -157,7 +157,7 @@ def send_verification_email(email: str, name: str, token: str) -> bool:
 </html>"""
 
     payload = json.dumps({
-        "from": "GLOBAL LINK <noreply@globalink.ru>",
+        "from": "GLOBAL LINK <onboarding@resend.dev>",
         "to": [email],
         "subject": "Подтвердите ваш email — GLOBAL LINK",
         "html": html,
