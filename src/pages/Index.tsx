@@ -8,6 +8,7 @@ import DashboardPage from "@/components/DashboardPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
 import SupportChat from "@/components/SupportChat";
 import { useAuth } from "@/context/AuthContext";
+import EmailVerifyBanner from "@/components/EmailVerifyBanner";
 
 type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects";
 const PROTECTED: Page[] = ["chat", "dashboard", "projects"];
@@ -57,6 +58,7 @@ export default function Index() {
   return (
     <div className="min-h-screen bg-background">
       <Navbar activePage={activePage} onNavigate={handleNavigate} />
+      <EmailVerifyBanner />
       <main>
         {activePage === "home" && <HomePage onNavigate={handleNavigate} />}
         {activePage === "search" && <SearchPage onNavigate={handleNavigate} />}
