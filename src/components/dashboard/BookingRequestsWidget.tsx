@@ -177,7 +177,7 @@ export default function BookingRequestsWidget() {
   const venueRespond = async (bookingId: string, response: "confirmed" | "rejected", rentalAmount: number | null, conditions: string) => {
     await fetch(`${PROJECTS_URL}?action=venue_respond`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bookingId, response, rentalAmount, venueConditions: conditions }),
+      body: JSON.stringify({ bookingId, response, rentalAmount, venueConditions: conditions, venueUserName: user?.name || "Площадка" }),
     });
     setActiveBooking(null); setModalType(null);
     load();

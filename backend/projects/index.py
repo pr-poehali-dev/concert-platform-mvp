@@ -370,10 +370,11 @@ def handler(event: dict, context) -> dict:
     # POST venue_respond — площадка отвечает на запрос
     if method == "POST" and action == "venue_respond":
         b = json.loads(event.get("body") or "{}")
-        booking_id     = b.get("bookingId", "")
-        response       = b.get("response", "")  # "confirmed" / "rejected"
-        rental_amount  = b.get("rentalAmount")
+        booking_id       = b.get("bookingId", "")
+        response         = b.get("response", "")  # "confirmed" / "rejected"
+        rental_amount    = b.get("rentalAmount")
         venue_conditions = b.get("venueConditions", "")
+        venue_user_name  = b.get("venueUserName", "Площадка")
         if not booking_id or response not in ("confirmed", "rejected"):
             return err("Некорректные данные")
         conn = get_conn(); cur = conn.cursor()
@@ -381,25 +382,76 @@ def handler(event: dict, context) -> dict:
             f"""UPDATE {SCHEMA}.venue_bookings
                 SET status=%s, rental_amount=%s, venue_conditions=%s, updated_at=NOW()
                 WHERE id=%s
-                RETURNING organizer_id, venue_id, event_date, artist""",
+                RETURNING organizer_id, venue_id, venue_user_id, event_date, event_time,
+                          artist, project_id""",
             (response, rental_amount, venue_conditions, booking_id))
         row = cur.fetchone()
         if not row: conn.close(); return err("Бронирование не найдено", 404)
-        organizer_id, vid, edate, artist = str(row[0]), str(row[1]), str(row[2]), row[3]
+        organizer_id  = str(row[0])
+        vid           = str(row[1])
+        venue_user_id = str(row[2])
+        edate         = str(row[3])
+        event_time    = row[4] or ""
+        artist        = row[5] or ""
+        project_id    = str(row[6])
         cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (vid,))
         vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
-        conn.commit(); conn.close()
+
+        conversation_id = ""
         if response == "confirmed":
-            rent_str = f" | Аренда: {int(rental_amount):,} ₽".replace(",", " ") if rental_amount else ""
+            # Создаём задачи для организатора
+            cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
+            if not cur.fetchone():
+                for i, (key, title, desc) in enumerate(BOOKING_TASKS):
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.booking_tasks (booking_id, project_id, title, description, sort_order) VALUES (%s,%s,%s,%s,%s)",
+                        (booking_id, project_id, title, desc, i))
+
+            # Создаём чеклист для площадки
+            cur.execute(f"SELECT id FROM {SCHEMA}.booking_checklist WHERE booking_id=%s", (booking_id,))
+            if not cur.fetchone():
+                for i, (step_key, step_title) in enumerate(VENUE_CHECKLIST):
+                    is_done = step_key == "date_confirmed"
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.booking_checklist (booking_id, venue_id, step_key, step_title, is_done, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (booking_id, vid, step_key, step_title, is_done, i))
+
+            conn.commit()
+            conn.close()
+
+            # Создаём чат с условиями бронирования
+            rent_str = f"{int(rental_amount):,} ₽".replace(",", " ") if rental_amount else "не указана"
+            chat_text = (
+                f"Бронирование подтверждено площадкой!\n\n"
+                f"Площадка: {venue_name}\n"
+                f"Дата: {edate}" + (f" {event_time}" if event_time else "") + "\n"
+                + (f"Артист: {artist}\n" if artist else "")
+                + f"Аренда: {rent_str}\n"
+                + (f"Условия: {venue_conditions}\n" if venue_conditions else "")
+                + "\nПо всем вопросам пишите в этот чат."
+            )
+            conversation_id = start_chat(
+                organizer_id, vid, venue_user_id, venue_name,
+                chat_text, "Система"
+            )
+            if conversation_id:
+                conn2 = get_conn(); cur2 = conn2.cursor()
+                cur2.execute(
+                    f"UPDATE {SCHEMA}.venue_bookings SET conversation_id=%s WHERE id=%s",
+                    (conversation_id, booking_id))
+                conn2.commit(); conn2.close()
+
+            rent_str_notif = f" | Аренда: {int(rental_amount):,} ₽".replace(",", " ") if rental_amount else ""
             cond_str = f" | Условия: {venue_conditions}" if venue_conditions else ""
             send_notification(organizer_id, "booking",
                               f"Площадка «{venue_name}» подтвердила бронирование",
-                              f"Дата: {edate}" + rent_str + cond_str, "notifications")
+                              f"Дата: {edate}" + rent_str_notif + cond_str + " — создан чат и задачи.", "chat")
         else:
+            conn.commit(); conn.close()
             send_notification(organizer_id, "booking",
                               f"Площадка «{venue_name}» отклонила запрос",
                               f"Дата: {edate}" + (f" | {venue_conditions}" if venue_conditions else ""), "notifications")
-        return ok({"success": True})
+        return ok({"success": True, "conversationId": conversation_id})
 
     # POST organizer_respond — организатор принимает/отклоняет условия
     if method == "POST" and action == "organizer_respond":
