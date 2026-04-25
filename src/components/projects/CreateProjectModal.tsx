@@ -18,6 +18,7 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [titleTouched, setTitleTouched] = useState(false);
 
   const [form, setForm] = useState({
     title: "", artist: "", projectType: "single" as "single"|"tour",
@@ -49,6 +50,9 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
   const totalExpPlan = expenses.reduce((s, e) => s + Number(e.amountPlan), 0);
   const totalIncPlan = incomeLines.reduce((s, i) => s + Number(i.ticketCount) * Number(i.ticketPrice), 0);
   const profitPreview = totalIncPlan - totalExpPlan;
+
+  const step1Valid = form.title.trim().length > 0;
+  const canNext = step === 1 ? step1Valid : true;
 
   const handleSubmit = async () => {
     if (!form.title.trim()) { setError("Введите название проекта"); return; }
@@ -117,8 +121,11 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
               </div>
               <div>
                 <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Название проекта *</label>
-                <input value={form.title} onChange={e=>set("title",e.target.value)} placeholder="Например: Концерт в Москве, Осенний тур 2025"
-                  className="w-full glass rounded-xl px-4 py-3 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
+                <input value={form.title} onChange={e=>{set("title",e.target.value);setTitleTouched(true);}} onBlur={()=>setTitleTouched(true)} placeholder="Например: Концерт в Москве, Осенний тур 2025"
+                  className={`w-full glass rounded-xl px-4 py-3 text-white placeholder:text-white/25 outline-none border text-sm transition-colors ${titleTouched&&!form.title.trim()?"border-neon-pink/60 focus:border-neon-pink":"border-white/10 focus:border-neon-purple/50"}`} />
+                {titleTouched && !form.title.trim() && (
+                  <p className="text-neon-pink text-xs mt-1.5 flex items-center gap-1"><Icon name="AlertCircle" size={12}/>Обязательное поле</p>
+                )}
               </div>
               <div>
                 <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Артист / группа</label>
@@ -315,13 +322,14 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
             <Icon name="ChevronLeft" size={16}/>{step===1?"Отмена":"Назад"}
           </button>
           {step<STEPS.length?(
-            <button onClick={()=>{setError("");setStep(s=>s+1);}}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 text-sm">
+            <button onClick={()=>{if(!canNext){setTitleTouched(true);return;}setError("");setStep(s=>s+1);}}
+              disabled={!canNext}
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-opacity">
               Далее<Icon name="ChevronRight" size={16}/>
             </button>
           ):(
-            <button onClick={handleSubmit} disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 text-sm">
+            <button onClick={handleSubmit} disabled={loading||!step1Valid}
+              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-opacity">
               {loading?<><Icon name="Loader2" size={16} className="animate-spin"/>Создаём...</>:<><Icon name="Check" size={16}/>Создать проект</>}
             </button>
           )}
