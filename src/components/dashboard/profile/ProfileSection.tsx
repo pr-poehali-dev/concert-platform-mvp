@@ -39,7 +39,7 @@ export default function ProfileSection({
     if (pwForm.next.length < 6) { setPwError("Новый пароль минимум 6 символов"); return; }
     if (pwForm.next !== pwForm.confirm) { setPwError("Пароли не совпадают"); return; }
     setPwSaving(true);
-    const sessionId = localStorage.getItem("sessionId") || "";
+    const sessionId = localStorage.getItem("tourlink_session") || "";
     const res = await fetch(`${AUTH_URL}?action=change_password`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
