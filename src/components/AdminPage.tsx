@@ -5,6 +5,7 @@ import AdminOverviewTab from "./admin/AdminOverviewTab";
 import AdminPendingTab from "./admin/AdminPendingTab";
 import AdminUsersTab from "./admin/AdminUsersTab";
 import AdminVenuesTab from "./admin/AdminVenuesTab";
+import AdminSupportTab from "./admin/AdminSupportTab";
 
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
@@ -78,7 +79,8 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
 
 export default function AdminPage() {
   const [token, setToken] = useState(() => localStorage.getItem("gl_admin_token") || "");
-  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues">("overview");
+  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support">("overview");
+  const [supportUnread, setSupportUnread] = useState(0);
 
   const [stats, setStats] = useState<Stats | null>(null);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -152,6 +154,21 @@ export default function AdminPage() {
   useEffect(() => { if (token && tab === "users") loadUsers(); }, [token, tab, loadUsers]);
   useEffect(() => { if (token && tab === "venues") loadVenues(); }, [token, tab, loadVenues]);
 
+  // Polling непрочитанных сообщений поддержки
+  useEffect(() => {
+    if (!token) return;
+    const loadSupportUnread = async () => {
+      try {
+        const data = await apiFetch("/?action=support_dialogs");
+        const total = (data.dialogs || []).reduce((s: number, d: { unread: number }) => s + (d.unread || 0), 0);
+        setSupportUnread(total);
+      } catch { /* silent */ }
+    };
+    loadSupportUnread();
+    const t = setInterval(loadSupportUnread, 15000);
+    return () => clearInterval(t);
+  }, [token, apiFetch]);
+
   const approveUser = async (id: string) => {
     await apiFetch("/?action=approve", { method: "POST", body: JSON.stringify({ id }) });
     setPending(prev => prev.filter(u => u.id !== id));
@@ -200,6 +217,7 @@ export default function AdminPage() {
     { id: "pending", label: "Заявки", icon: "ClipboardList", badge: pendingCount },
     { id: "users", label: "Пользователи", icon: "Users", badge: 0 },
     { id: "venues", label: "Площадки", icon: "Building2", badge: 0 },
+    { id: "support", label: "Поддержка", icon: "Headphones", badge: supportUnread },
   ] as const;
 
   return (
@@ -287,6 +305,10 @@ export default function AdminPage() {
             onToggleVerify={toggleVerifyVenue}
             onDelete={deleteVenue}
           />
+        )}
+
+        {tab === "support" && (
+          <AdminSupportTab token={token} />
         )}
       </div>
     </div>

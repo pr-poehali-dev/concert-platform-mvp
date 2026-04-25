@@ -42,6 +42,22 @@
       "expectedStatus": 403,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Support unread count no user",
+      "method": "GET",
+      "path": "/?action=support_unread_count",
+      "expectedStatus": 200,
+      "expectedBody": { "count": 0 },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Support dialogs without token",
+      "method": "GET",
+      "path": "/?action=support_dialogs",
+      "expectedStatus": 403,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

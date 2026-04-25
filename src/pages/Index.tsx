@@ -6,6 +6,7 @@ import ToursPage from "@/components/ToursPage";
 import ChatPage from "@/components/ChatPage";
 import DashboardPage from "@/components/DashboardPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
+import SupportChat from "@/components/SupportChat";
 import { useAuth } from "@/context/AuthContext";
 
 type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects";
@@ -64,6 +65,7 @@ export default function Index() {
         {activePage === "dashboard" && <DashboardPage onNavigate={handleNavigate} />}
         {activePage === "projects" && <ProjectsPage onNavigate={handleNavigate} />}
       </main>
+      <SupportChat />
     </div>
   );
 }

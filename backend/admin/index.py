@@ -55,6 +55,23 @@ def check_token(headers: dict) -> bool:
     return bool(secret) and token == secret
 
 
+def ok_no_auth(data, status=200):
+    """Ответ без проверки авторизации — для публичных endpoints поддержки."""
+    return {
+        "statusCode": status,
+        "headers": {**cors(), "Content-Type": "application/json"},
+        "body": json.dumps(data, ensure_ascii=False, default=str),
+    }
+
+
+def check_auth(event: dict):
+    """Возвращает 403 если токен неверный, иначе None."""
+    headers = event.get("headers") or {}
+    if not check_token(headers):
+        return ok_no_auth({"error": "Forbidden"}, 403)
+    return None
+
+
 def send_notification(user_id: str, notif_type: str, title: str, body: str, link_page: str = ""):
     payload = json.dumps({
         "userId": user_id, "type": notif_type,
@@ -89,8 +106,12 @@ def handler(event: dict, context) -> dict:
             return err("Неверный пароль", 401)
         return ok({"token": secret})
 
-    # ── Все остальные требуют токена ──────────────────────────────────────
-    if not check_token(headers):
+    # ── Публичные endpoints поддержки (без токена) ────────────────────────
+    PUBLIC_SUPPORT = {"support_send", "support_history", "support_unread_count"}
+    if action in PUBLIC_SUPPORT:
+        pass  # продолжаем — обработаны ниже перед return err("Not found")
+    elif not check_token(headers):
+        # ── Все остальные требуют токена ──────────────────────────────────
         return err("Нет доступа", 403)
 
     # ── GET stats ─────────────────────────────────────────────────────────
@@ -436,5 +457,106 @@ def handler(event: dict, context) -> dict:
         conn.commit()
         conn.close()
         return ok({"deleted": True})
+
+    # ── POST support_send — пользователь или админ отправляет сообщение ────
+    if action == "support_send":
+        body = json.loads(event.get("body") or "{}")
+        user_id = body.get("userId", "")
+        text    = (body.get("text") or "").strip()
+        sender  = body.get("sender", "user")   # "user" | "admin"
+        if not user_id or not text:
+            return ok_no_auth({"error": "userId и text обязательны"}, 400)
+        conn = get_conn(); cur = conn.cursor()
+        is_read_by_admin = sender == "admin"
+        is_read_by_user  = sender == "user"
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.support_messages
+                (user_id, sender, text, is_read_by_admin, is_read_by_user)
+                VALUES (%s,%s,%s,%s,%s) RETURNING id, created_at""",
+            (user_id, sender, text, is_read_by_admin, is_read_by_user))
+        row = cur.fetchone()
+        conn.commit(); conn.close()
+        return ok_no_auth({"id": str(row[0]), "createdAt": str(row[1])}, 201)
+
+    # ── GET support_history — история диалога пользователя ─────────────────
+    if method == "GET" and action == "support_history":
+        user_id = params.get("user_id", "")
+        if not user_id:
+            return ok_no_auth({"error": "user_id required"}, 400)
+        conn = get_conn(); cur = conn.cursor()
+        # Помечаем сообщения от пользователя прочитанными (если запрашивает пользователь)
+        cur.execute(
+            f"UPDATE {SCHEMA}.support_messages SET is_read_by_user=true WHERE user_id=%s AND sender='admin'",
+            (user_id,))
+        cur.execute(
+            f"""SELECT id, sender, text, is_read_by_admin, created_at
+                FROM {SCHEMA}.support_messages WHERE user_id=%s ORDER BY created_at ASC""",
+            (user_id,))
+        rows = cur.fetchall()
+        conn.commit(); conn.close()
+        return ok_no_auth({"messages": [
+            {"id": str(r[0]), "sender": r[1], "text": r[2],
+             "isReadByAdmin": r[3], "createdAt": str(r[4])}
+            for r in rows
+        ]})
+
+    # ── GET support_unread_count — кол-во непрочитанных (для пользователя) ─
+    if method == "GET" and action == "support_unread_count":
+        user_id = params.get("user_id", "")
+        if not user_id:
+            return ok_no_auth({"count": 0})
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT COUNT(*) FROM {SCHEMA}.support_messages WHERE user_id=%s AND sender='admin' AND is_read_by_user=false",
+            (user_id,))
+        count = cur.fetchone()[0]
+        conn.close()
+        return ok_no_auth({"count": count})
+
+    # ── Ниже — только для авторизованных ───────────────────────────────────
+    # ── GET support_dialogs — список всех диалогов для админа ──────────────
+    if method == "GET" and action == "support_dialogs":
+        auth_result = check_auth(event)
+        if auth_result: return auth_result
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT sm.user_id, u.name, u.email, u.role,
+                       MAX(sm.created_at) as last_at,
+                       SUM(CASE WHEN sm.sender='user' AND sm.is_read_by_admin=false THEN 1 ELSE 0 END) as unread,
+                       (SELECT text FROM {SCHEMA}.support_messages
+                        WHERE user_id=sm.user_id ORDER BY created_at DESC LIMIT 1) as last_msg
+                FROM {SCHEMA}.support_messages sm
+                LEFT JOIN {SCHEMA}.users u ON u.id=sm.user_id
+                GROUP BY sm.user_id, u.name, u.email, u.role
+                ORDER BY last_at DESC""")
+        rows = cur.fetchall(); conn.close()
+        return ok({"dialogs": [
+            {"userId": str(r[0]), "userName": r[1] or "Неизвестный", "userEmail": r[2] or "",
+             "userRole": r[3] or "", "lastAt": str(r[4]), "unread": int(r[5]), "lastMessage": r[6] or ""}
+            for r in rows
+        ]})
+
+    # ── GET support_dialog — сообщения конкретного пользователя для админа ─
+    if method == "GET" and action == "support_dialog":
+        auth_result = check_auth(event)
+        if auth_result: return auth_result
+        user_id = params.get("user_id", "")
+        if not user_id: return err("user_id required")
+        conn = get_conn(); cur = conn.cursor()
+        # Помечаем как прочитанные админом
+        cur.execute(
+            f"UPDATE {SCHEMA}.support_messages SET is_read_by_admin=true WHERE user_id=%s AND sender='user'",
+            (user_id,))
+        cur.execute(
+            f"""SELECT id, sender, text, is_read_by_admin, is_read_by_user, created_at
+                FROM {SCHEMA}.support_messages WHERE user_id=%s ORDER BY created_at ASC""",
+            (user_id,))
+        rows = cur.fetchall()
+        conn.commit(); conn.close()
+        return ok({"messages": [
+            {"id": str(r[0]), "sender": r[1], "text": r[2],
+             "isReadByAdmin": r[3], "isReadByUser": r[4], "createdAt": str(r[5])}
+            for r in rows
+        ]})
 
     return err("Not found", 404)
