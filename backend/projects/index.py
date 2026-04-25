@@ -103,6 +103,32 @@ def send_notification(user_id: str, notif_type: str, title: str, body: str, link
         pass
 
 
+APP_URL = "https://concert-platform-mvp.poehali.dev"
+
+
+def send_booking_email(to_email: str, subject: str, html: str):
+    """Отправляет email через Resend. Молча пропускает если ключ не задан."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key or not to_email:
+        return
+    payload = json.dumps({
+        "from": "GLOBAL LINK <noreply@globallink.art>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as ex:
+        print(f"[Email] {subject} → {to_email}: {ex}")
+
+
 def ok(data, status=200):
     return {"statusCode": status, "headers": {**cors(), "Content-Type": "application/json"},
             "body": json.dumps(data, ensure_ascii=False, default=serial)}
@@ -366,13 +392,16 @@ def handler(event: dict, context) -> dict:
                 VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id""",
             (project_id, venue_id, organizer_id, venue_user_id, event_date, event_time, artist, age_limit, expected_guests))
         booking_id = str(cur.fetchone()[0])
-        # Получаем название площадки и имя организатора
+        # Получаем название площадки, имя и email организатора и площадки
         cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (venue_id,))
         vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
-        cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
-        orow = cur.fetchone(); org_name = orow[0] if orow else "Организатор"
+        cur.execute(f"SELECT name, email FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
+        orow = cur.fetchone(); org_name = orow[0] if orow else "Организатор"; org_email = orow[1] if orow else ""
+        cur.execute(f"SELECT email, name FROM {SCHEMA}.users WHERE id=%s", (venue_user_id,))
+        vurow = cur.fetchone(); venue_email = vurow[0] if vurow else ""; venue_user_name = vurow[1] if vurow else ""
         conn.commit(); conn.close()
-        # Уведомление площадке
+
+        # Уведомление площадке (в приложении)
         body_text = (f"Дата: {event_date}" + (f" {event_time}" if event_time else "") +
                      (f" | Артист: {artist}" if artist else "") +
                      (f" | Возраст: {age_limit}+" if age_limit else "") +
@@ -380,6 +409,44 @@ def handler(event: dict, context) -> dict:
                      f" | Организатор: {org_name}")
         send_notification(venue_user_id, "booking",
                           f"Запрос на бронирование от {org_name}", body_text, "notifications")
+
+        # Email площадке
+        date_str = event_date + (f" в {event_time}" if event_time else "")
+        details_rows = ""
+        if artist:         details_rows += f"<tr><td style='color:rgba(255,255,255,0.5);padding:4px 0'>Артист</td><td style='color:#fff;padding:4px 0;padding-left:16px'>{artist}</td></tr>"
+        if age_limit:      details_rows += f"<tr><td style='color:rgba(255,255,255,0.5);padding:4px 0'>Возраст</td><td style='color:#fff;padding:4px 0;padding-left:16px'>{age_limit}+</td></tr>"
+        if expected_guests:details_rows += f"<tr><td style='color:rgba(255,255,255,0.5);padding:4px 0'>Гостей</td><td style='color:#fff;padding:4px 0;padding-left:16px'>{expected_guests}</td></tr>"
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+<tr><td style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:28px 32px;">
+  <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+  <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Новый запрос на бронирование</p>
+</td></tr>
+<tr><td style="padding:32px;">
+  <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Привет, {venue_user_name}!</h2>
+  <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:15px;">Организатор <b style="color:#fff">{org_name}</b> хочет забронировать вашу площадку <b style="color:#fff">{venue_name}</b>.</p>
+  <div style="background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;margin-bottom:24px;">
+    <table cellpadding="0" cellspacing="0" style="width:100%">
+      <tr><td style="color:rgba(255,255,255,0.5);padding:4px 0">Дата</td><td style="color:#06b6d4;font-weight:700;padding:4px 0;padding-left:16px">{date_str}</td></tr>
+      <tr><td style="color:rgba(255,255,255,0.5);padding:4px 0">Организатор</td><td style="color:#fff;padding:4px 0;padding-left:16px">{org_name}</td></tr>
+      {details_rows}
+    </table>
+  </div>
+  <div style="text-align:center;">
+    <a href="{APP_URL}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;">Открыть и ответить</a>
+  </div>
+  <p style="margin:20px 0 0;color:rgba(255,255,255,0.3);font-size:12px;text-align:center;">Войдите в личный кабинет чтобы подтвердить или отклонить заявку.</p>
+</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+  <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">© 2025 GLOBAL LINK</p>
+</td></tr>
+</table></td></tr></table>
+</body></html>"""
+        send_booking_email(venue_email, f"Новый запрос на бронирование от {org_name} — {date_str}", html)
+
         return ok({"bookingId": booking_id}, 201)
 
     # POST venue_respond — площадка отвечает на запрос
@@ -461,11 +528,82 @@ def handler(event: dict, context) -> dict:
             send_notification(organizer_id, "booking",
                               f"Площадка «{venue_name}» подтвердила бронирование",
                               f"Дата: {edate}" + rent_str_notif + cond_str + " — создан чат и задачи.", "chat")
+
+            # Email организатору — подтверждение
+            conn3 = get_conn(); cur3 = conn3.cursor()
+            cur3.execute(f"SELECT email, name FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
+            org_row = cur3.fetchone(); conn3.close()
+            if org_row:
+                org_email, org_name = org_row[0], org_row[1]
+                date_str = edate + (f" в {event_time}" if event_time else "")
+                rent_str_html = f"<tr><td style='color:rgba(255,255,255,0.5);padding:4px 0'>Сумма аренды</td><td style='color:#4ade80;font-weight:700;padding:4px 0;padding-left:16px'>{int(rental_amount):,} ₽</td></tr>".replace(",", " ") if rental_amount else ""
+                cond_str_html = f"<tr><td style='color:rgba(255,255,255,0.5);padding:4px 0;vertical-align:top'>Условия</td><td style='color:#fff;padding:4px 0;padding-left:16px'>{venue_conditions}</td></tr>" if venue_conditions else ""
+                html_confirm = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+<tr><td style="background:linear-gradient(135deg,#059669,#06b6d4);padding:28px 32px;">
+  <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+  <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">✅ Бронирование подтверждено</p>
+</td></tr>
+<tr><td style="padding:32px;">
+  <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Привет, {org_name}!</h2>
+  <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:15px;">Площадка <b style="color:#fff">{venue_name}</b> подтвердила вашу заявку на бронирование.</p>
+  <div style="background:rgba(255,255,255,0.05);border-radius:12px;padding:20px;margin-bottom:24px;">
+    <table cellpadding="0" cellspacing="0" style="width:100%">
+      <tr><td style="color:rgba(255,255,255,0.5);padding:4px 0">Площадка</td><td style="color:#fff;font-weight:700;padding:4px 0;padding-left:16px">{venue_name}</td></tr>
+      <tr><td style="color:rgba(255,255,255,0.5);padding:4px 0">Дата</td><td style="color:#06b6d4;font-weight:700;padding:4px 0;padding-left:16px">{date_str}</td></tr>
+      {rent_str_html}{cond_str_html}
+    </table>
+  </div>
+  <div style="text-align:center;">
+    <a href="{APP_URL}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#059669,#06b6d4);color:#fff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;">Открыть проект</a>
+  </div>
+  <p style="margin:20px 0 0;color:rgba(255,255,255,0.3);font-size:12px;text-align:center;">Войдите в личный кабинет, чтобы принять условия и продолжить работу.</p>
+</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+  <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">© 2025 GLOBAL LINK</p>
+</td></tr>
+</table></td></tr></table>
+</body></html>"""
+                send_booking_email(org_email, f"Площадка «{venue_name}» подтвердила бронирование на {date_str}", html_confirm)
         else:
             conn.commit(); conn.close()
             send_notification(organizer_id, "booking",
                               f"Площадка «{venue_name}» отклонила запрос",
                               f"Дата: {edate}" + (f" | {venue_conditions}" if venue_conditions else ""), "notifications")
+
+            # Email организатору — отклонение
+            conn4 = get_conn(); cur4 = conn4.cursor()
+            cur4.execute(f"SELECT email, name FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
+            org_row2 = cur4.fetchone(); conn4.close()
+            if org_row2:
+                org_email2, org_name2 = org_row2[0], org_row2[1]
+                reason_html = f"<p style='color:rgba(255,255,255,0.5);font-size:14px;margin:16px 0 0'>Причина: {venue_conditions}</p>" if venue_conditions else ""
+                html_reject = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+<tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+<tr><td style="background:linear-gradient(135deg,#be123c,#7c3aed);padding:28px 32px;">
+  <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+  <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">❌ Запрос на бронирование отклонён</p>
+</td></tr>
+<tr><td style="padding:32px;">
+  <h2 style="margin:0 0 8px;color:#fff;font-size:20px;">Привет, {org_name2}!</h2>
+  <p style="margin:0 0 8px;color:rgba(255,255,255,0.6);font-size:15px;">К сожалению, площадка <b style="color:#fff">{venue_name}</b> отклонила ваш запрос на <b style="color:#06b6d4">{edate}</b>.</p>
+  {reason_html}
+  <div style="text-align:center;margin-top:28px;">
+    <a href="{APP_URL}" style="display:inline-block;padding:14px 36px;background:linear-gradient(135deg,#7c3aed,#06b6d4);color:#fff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:700;">Найти другую площадку</a>
+  </div>
+</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+  <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">© 2025 GLOBAL LINK</p>
+</td></tr>
+</table></td></tr></table>
+</body></html>"""
+                send_booking_email(org_email2, f"Площадка «{venue_name}» отклонила запрос на {edate}", html_reject)
         return ok({"success": True, "conversationId": conversation_id})
 
     # POST organizer_respond — организатор принимает/отклоняет условия
