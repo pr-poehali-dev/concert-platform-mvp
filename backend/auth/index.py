@@ -6,8 +6,9 @@ POST ?action=update_profile — обновить профиль/реквизит
 GET  ?action=me             — данные по session_id
 GET  ?action=status         — проверить статус верификации
 """
-import json, os, hashlib, secrets, random
+import json, os, hashlib, secrets, random, base64, uuid
 import psycopg2
+import boto3
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826"
@@ -24,6 +25,19 @@ _sessions: dict = {}
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def get_s3():
+    return boto3.client(
+        "s3",
+        endpoint_url="https://bucket.poehali.dev",
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
+
+
+def cdn_url(key: str) -> str:
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
 def hash_pw(pw: str) -> str:
@@ -307,6 +321,42 @@ def handler(event: dict, context) -> dict:
             _sessions[session_id] = fresh
             return ok({"user": fresh})
         return ok({"user": user})
+
+    # ── POST upload_logo ──────────────────────────────────────────────────
+    if method == "POST" and action == "upload_logo":
+        session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
+        if not session_id or session_id not in _sessions:
+            return err("Не авторизован", 401)
+        b = json.loads(event.get("body") or "{}")
+        logo_b64  = b.get("logoBase64", "")
+        logo_mime = b.get("logoMime", "image/png")
+        if not logo_b64:
+            return err("logoBase64 required")
+
+        # Определяем расширение по mime
+        ext_map = {"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg",
+                   "image/webp": "webp", "image/svg+xml": "svg"}
+        ext = ext_map.get(logo_mime, "png")
+
+        # Загружаем в S3
+        raw = base64.b64decode(logo_b64)
+        key = f"logos/{uuid.uuid4()}.{ext}"
+        s3 = get_s3()
+        s3.put_object(Bucket="files", Key=key, Body=raw, ContentType=logo_mime)
+        logo_url = cdn_url(key)
+
+        # Сохраняем в БД
+        user = _sessions[session_id]
+        uid  = user["id"]
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.users SET logo_url = %s WHERE id = %s", (logo_url, uid))
+        conn.commit()
+        conn.close()
+
+        # Обновляем сессию
+        user["logoUrl"] = logo_url
+        _sessions[session_id] = user
+        return ok({"logoUrl": logo_url})
 
     # ── GET status ────────────────────────────────────────────────────────
     if method == "GET" and action == "status":

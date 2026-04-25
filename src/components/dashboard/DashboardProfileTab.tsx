@@ -98,29 +98,33 @@ export default function DashboardProfileTab({
   const saveLogo = async () => {
     if (!logoFile || !onProfileUpdate) return;
     setLogoSaving(true);
-    // Конвертируем в base64 и загружаем через auth update_profile
-    // Для упрощения — используем data-URL (CDN upload нужен отдельный endpoint)
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64 = (reader.result as string);
-      // Загружаем через специальный endpoint логотипа
+    try {
+      const reader = new FileReader();
+      const base64: string = await new Promise((resolve, reject) => {
+        reader.onload = () => resolve((reader.result as string).split(",")[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(logoFile);
+      });
+
       const sessionId = localStorage.getItem("tourlink_session");
       const res = await fetch(`${AUTH_URL}?action=upload_logo`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId || "" },
-        body: JSON.stringify({ logoBase64: base64.split(",")[1], logoMime: logoFile.type }),
+        body: JSON.stringify({ logoBase64: base64, logoMime: logoFile.type }),
       });
       const data = await res.json();
-      if (data.logoUrl) {
-        await onProfileUpdate({ logoUrl: data.logoUrl });
-      } else {
-        // Fallback: сохраняем data-url локально (при отсутствии endpoint)
-        await onProfileUpdate({ logoUrl: base64 });
-      }
-      setLogoSaving(false);
+
+      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+
+      // Обновляем локальный user через контекст (CDN URL уже в data.logoUrl)
+      await onProfileUpdate({ logoUrl: data.logoUrl });
+      setLogoPreview(data.logoUrl);
       setLogoFile(null);
-    };
-    reader.readAsDataURL(logoFile);
+    } catch (e) {
+      console.error("Logo upload error:", e);
+    } finally {
+      setLogoSaving(false);
+    }
   };
 
   const saveRequisites = async () => {
