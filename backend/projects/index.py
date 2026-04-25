@@ -769,4 +769,48 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"booking": booking})
 
+    # POST create_missing_chat — создать чат для бронирования если его нет
+    if method == "POST" and action == "create_missing_chat":
+        b = json.loads(event.get("body") or "{}")
+        booking_id = b.get("bookingId", "")
+        if not booking_id: return err("bookingId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT b.organizer_id, b.venue_id, b.venue_user_id, b.event_date, b.event_time,
+                       b.artist, b.rental_amount, b.venue_conditions, b.conversation_id,
+                       v.name, b.project_id
+                FROM {SCHEMA}.venue_bookings b
+                JOIN {SCHEMA}.venues v ON v.id = b.venue_id
+                WHERE b.id=%s AND b.status IN ('confirmed','accepted')""", (booking_id,))
+        row = cur.fetchone()
+        if not row: conn.close(); return err("Не найдено", 404)
+        organizer_id, vid, venue_user_id = str(row[0]), str(row[1]), str(row[2])
+        edate, event_time, artist = str(row[3]), row[4] or "", row[5] or ""
+        rental_amount, venue_conditions = row[6], row[7] or ""
+        existing_conv = row[8]
+        venue_name = row[9]
+        conn.close()
+
+        if existing_conv:
+            return ok({"conversationId": str(existing_conv)})
+
+        rent_str = f"{int(rental_amount):,} ₽".replace(",", " ") if rental_amount else "не указана"
+        chat_text = (
+            f"Бронирование подтверждено!\n\n"
+            f"Площадка: {venue_name}\n"
+            f"Дата: {edate}" + (f" {event_time}" if event_time else "") + "\n"
+            + (f"Артист: {artist}\n" if artist else "")
+            + f"Аренда: {rent_str}\n"
+            + (f"Условия: {venue_conditions}\n" if venue_conditions else "")
+            + "\nПо всем вопросам пишите в этот чат."
+        )
+        conversation_id = start_chat(organizer_id, vid, venue_user_id, venue_name, chat_text, "Система")
+        if conversation_id:
+            conn2 = get_conn(); cur2 = conn2.cursor()
+            cur2.execute(
+                f"UPDATE {SCHEMA}.venue_bookings SET conversation_id=%s WHERE id=%s",
+                (conversation_id, booking_id))
+            conn2.commit(); conn2.close()
+        return ok({"conversationId": conversation_id})
+
     return err("Not found", 404)

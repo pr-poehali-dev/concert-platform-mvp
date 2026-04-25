@@ -48,12 +48,23 @@ export default function ProjectVenueTab({ projectId, onOpenChat }: { projectId: 
     try {
       const bookRes = await fetch(`${PROJECTS_URL}?action=booking_by_project&project_id=${projectId}`);
       const bookData = await bookRes.json();
-      const acceptedBookings = (bookData.bookings || []).filter((b: { status: string }) => b.status === "accepted");
+      const confirmedBookings = (bookData.bookings || []).filter(
+        (b: { status: string }) => b.status === "accepted" || b.status === "confirmed"
+      );
 
       const detailed = await Promise.all(
-        acceptedBookings.map(async (b: { id: string }) => {
+        confirmedBookings.map(async (b: { id: string }) => {
           const det = await fetch(`${PROJECTS_URL}?action=booking_detail&booking_id=${b.id}`).then(r => r.json());
-          return det.booking || null;
+          const booking = det.booking || null;
+          // Если чата ещё нет — создаём автоматически
+          if (booking && !booking.conversationId) {
+            const chatRes = await fetch(`${PROJECTS_URL}?action=create_missing_chat`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ bookingId: booking.id }),
+            }).then(r => r.json());
+            if (chatRes.conversationId) booking.conversationId = chatRes.conversationId;
+          }
+          return booking;
         })
       );
       setBookings(detailed.filter(Boolean));
