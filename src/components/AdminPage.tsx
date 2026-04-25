@@ -179,6 +179,18 @@ export default function AdminPage() {
     setUsers(prev => prev.map(u => u.id === id ? { ...u, isAdmin: data.isAdmin } : u));
   };
 
+  const deleteUser = async (id: string) => {
+    await apiFetch("/?action=delete_user", { method: "POST", body: JSON.stringify({ id }) });
+    setUsers(prev => prev.filter(u => u.id !== id));
+    setUsersTotal(prev => Math.max(0, prev - 1));
+  };
+
+  const deleteVenue = async (id: string) => {
+    await apiFetch("/?action=delete_venue", { method: "POST", body: JSON.stringify({ id }) });
+    setVenues(prev => prev.filter(v => v.id !== id));
+    setVenuesTotal(prev => Math.max(0, prev - 1));
+  };
+
   if (!token) return <AdminLogin onLogin={setToken} />;
 
   const pendingCount = stats?.pendingCount ?? pending.length;
@@ -257,6 +269,7 @@ export default function AdminPage() {
             onRefresh={loadUsers}
             onToggleVerify={toggleVerifyUser}
             onToggleAdmin={toggleAdmin}
+            onDelete={deleteUser}
           />
         )}
 
@@ -272,6 +285,7 @@ export default function AdminPage() {
             onPageChange={setVenuesPage}
             onRefresh={loadVenues}
             onToggleVerify={toggleVerifyVenue}
+            onDelete={deleteVenue}
           />
         )}
       </div>

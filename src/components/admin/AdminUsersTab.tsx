@@ -1,3 +1,4 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { type AdminUser, formatDate } from "./types";
@@ -16,14 +17,17 @@ interface Props {
   onRefresh: () => void;
   onToggleVerify: (id: string) => void;
   onToggleAdmin: (id: string) => void;
+  onDelete: (id: string) => void;
 }
 
 export default function AdminUsersTab({
   users, usersTotal, usersPage, usersPages,
   usersSearch, usersRole, usersLoading,
   onSearchChange, onRoleChange, onPageChange,
-  onRefresh, onToggleVerify, onToggleAdmin,
+  onRefresh, onToggleVerify, onToggleAdmin, onDelete,
 }: Props) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const confirmUser = users.find(u => u.id === confirmId);
   return (
     <div className="animate-fade-in space-y-5">
       <div className="flex flex-wrap gap-3 items-center">
@@ -112,6 +116,12 @@ export default function AdminUsersTab({
                       className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${u.isAdmin ? "bg-neon-purple/20 text-neon-purple hover:bg-neon-purple/30" : "bg-white/5 text-white/30 hover:bg-white/10 hover:text-neon-purple"}`}>
                       <Icon name="ShieldCheck" size={13} />
                     </button>
+                    <button
+                      onClick={() => setConfirmId(u.id)}
+                      title="Удалить пользователя"
+                      className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors bg-white/5 text-white/30 hover:bg-neon-pink/20 hover:text-neon-pink">
+                      <Icon name="Trash2" size={13} />
+                    </button>
                   </div>
                 </td>
               </tr>
@@ -138,6 +148,32 @@ export default function AdminUsersTab({
               className="w-8 h-8 glass rounded-lg flex items-center justify-center text-white/50 hover:text-white disabled:opacity-30 border border-white/10">
               <Icon name="ChevronRight" size={15} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {confirmId && confirmUser && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setConfirmId(null)} />
+          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-pink/20 animate-scale-in">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-neon-pink/20 flex items-center justify-center shrink-0">
+                <Icon name="Trash2" size={18} className="text-neon-pink" />
+              </div>
+              <h3 className="font-oswald font-bold text-white text-lg">Удалить пользователя?</h3>
+            </div>
+            <p className="text-white/50 text-sm mb-1"><span className="text-white font-medium">{confirmUser.name}</span></p>
+            <p className="text-white/40 text-xs mb-5">{confirmUser.email} · Это действие необратимо.</p>
+            <div className="flex gap-3">
+              <button onClick={() => setConfirmId(null)}
+                className="flex-1 py-2.5 glass text-white/60 hover:text-white rounded-xl border border-white/10 text-sm transition-colors">
+                Отмена
+              </button>
+              <button onClick={() => { onDelete(confirmId); setConfirmId(null); }}
+                className="flex-1 py-2.5 bg-neon-pink/90 hover:bg-neon-pink text-white font-oswald font-semibold rounded-xl text-sm transition-colors">
+                Удалить
+              </button>
+            </div>
           </div>
         </div>
       )}

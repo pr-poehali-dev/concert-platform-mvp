@@ -355,4 +355,43 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"isAdmin": row[0] if row else False})
 
+    # ── POST delete_user ──────────────────────────────────────────────────
+    if method == "POST" and action == "delete_user":
+        body = json.loads(event.get("body") or "{}")
+        uid = body.get("id", "")
+        if not uid:
+            return err("id required")
+        conn = get_conn()
+        cur = conn.cursor()
+        # Удаляем связанные данные, затем пользователя
+        cur.execute(f"UPDATE {SCHEMA}.venues SET user_id = NULL WHERE user_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.conversations SET organizer_id = NULL WHERE organizer_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.conversations SET venue_user_id = NULL WHERE venue_user_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.messages SET sender_id = NULL WHERE sender_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.notifications SET user_id = NULL WHERE user_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.employees SET company_user_id = NULL WHERE company_user_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.employees SET user_id = NULL WHERE user_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.venue_bookings SET organizer_id = NULL WHERE organizer_id = %s", (uid,))
+        cur.execute(f"UPDATE {SCHEMA}.venue_bookings SET venue_user_id = NULL WHERE venue_user_id = %s", (uid,))
+        cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = %s", (uid,))
+        conn.commit()
+        conn.close()
+        return ok({"deleted": True})
+
+    # ── POST delete_venue ─────────────────────────────────────────────────
+    if method == "POST" and action == "delete_venue":
+        body = json.loads(event.get("body") or "{}")
+        vid = body.get("id", "")
+        if not vid:
+            return err("id required")
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.venue_bookings SET venue_id = NULL WHERE venue_id = %s", (vid,))
+        cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (vid,))
+        cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (vid,))
+        cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (vid,))
+        conn.commit()
+        conn.close()
+        return ok({"deleted": True})
+
     return err("Not found", 404)

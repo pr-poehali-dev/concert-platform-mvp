@@ -24,6 +24,24 @@
       "expectedStatus": 403,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Delete user without token",
+      "method": "POST",
+      "path": "/?action=delete_user",
+      "body": { "id": "00000000-0000-0000-0000-000000000000" },
+      "expectedStatus": 403,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Delete venue without token",
+      "method": "POST",
+      "path": "/?action=delete_venue",
+      "body": { "id": "00000000-0000-0000-0000-000000000000" },
+      "expectedStatus": 403,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }
