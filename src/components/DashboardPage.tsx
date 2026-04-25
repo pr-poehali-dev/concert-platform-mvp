@@ -61,6 +61,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     ? [
         { id: "venues", label: "Мои площадки", icon: "Building2" },
         { id: "projects", label: "Проекты", icon: "FolderOpen" },
+        { id: "company", label: "Компания", icon: "Users" },
         { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
         { id: "profile", label: "Профиль", icon: "User" },
       ]
@@ -183,7 +184,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           />
         )}
 
-        {tab === "company" && !isVenue && (
+        {tab === "company" && (
           <DashboardCompanyTab />
         )}
 

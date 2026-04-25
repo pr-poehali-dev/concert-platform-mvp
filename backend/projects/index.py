@@ -1018,4 +1018,103 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"success": True})
 
+    # ── CRM Задачи бронирования площадки ─────────────────────────────────
+
+    def vbt_row(r) -> dict:
+        return {
+            "id": str(r[0]), "bookingId": str(r[1]), "venueUserId": str(r[2]),
+            "assignedTo": str(r[3]) if r[3] else None,
+            "createdBy": str(r[4]), "title": r[5], "description": r[6],
+            "status": r[7], "priority": r[8],
+            "dueDate": str(r[9]) if r[9] else None,
+            "sortOrder": r[10], "createdAt": str(r[11]),
+            "assigneeName": r[12], "creatorName": r[13],
+        }
+
+    # GET venue_booking_tasks_list
+    if method == "GET" and action == "venue_booking_tasks_list":
+        booking_id  = params.get("booking_id", "")
+        employee_id = params.get("employee_id", "")
+        if not booking_id: return err("booking_id required")
+        conn = get_conn(); cur = conn.cursor()
+        where_extra = "AND t.assigned_to=%s" if employee_id else ""
+        args = [booking_id] + ([employee_id] if employee_id else [])
+        cur.execute(
+            f"""SELECT t.id, t.booking_id, t.venue_user_id, t.assigned_to,
+                       t.created_by, t.title, t.description, t.status, t.priority,
+                       t.due_date, t.sort_order, t.created_at,
+                       COALESCE(e.name, u.name, 'Не назначено') as assignee_name,
+                       COALESCE(e2.name, u2.name, 'Неизвестно') as creator_name
+                FROM {SCHEMA}.venue_booking_tasks t
+                LEFT JOIN {SCHEMA}.employees e ON e.id = t.assigned_to
+                LEFT JOIN {SCHEMA}.users u ON u.id = t.assigned_to
+                LEFT JOIN {SCHEMA}.employees e2 ON e2.id = t.created_by
+                LEFT JOIN {SCHEMA}.users u2 ON u2.id = t.created_by
+                WHERE t.booking_id=%s {where_extra}
+                ORDER BY t.priority DESC, t.due_date ASC NULLS LAST, t.sort_order""",
+            args)
+        rows = cur.fetchall(); conn.close()
+        return ok({"tasks": [vbt_row(r) for r in rows]})
+
+    # POST venue_booking_task_create
+    if method == "POST" and action == "venue_booking_task_create":
+        b = json.loads(event.get("body") or "{}")
+        booking_id   = b.get("bookingId", "")
+        venue_uid    = b.get("venueUserId", "")
+        created_by   = b.get("createdBy", "")
+        title        = (b.get("title") or "").strip()
+        description  = b.get("description", "")
+        assigned_to  = b.get("assignedTo") or None
+        priority     = b.get("priority", "medium")
+        due_date     = b.get("dueDate") or None
+        if not booking_id or not venue_uid or not created_by or not title:
+            return err("bookingId, venueUserId, createdBy, title обязательны")
+        if priority not in ("low", "medium", "high", "urgent"): priority = "medium"
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.venue_booking_tasks WHERE booking_id=%s",
+            (booking_id,))
+        order = cur.fetchone()[0]
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.venue_booking_tasks
+                (booking_id, venue_user_id, assigned_to, created_by, title, description,
+                 priority, due_date, sort_order)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (booking_id, venue_uid, assigned_to, created_by, title, description,
+             priority, due_date, order))
+        task_id = str(cur.fetchone()[0])
+        conn.commit(); conn.close()
+        return ok({"taskId": task_id}, 201)
+
+    # POST venue_booking_task_update
+    if method == "POST" and action == "venue_booking_task_update":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", "")
+        if not task_id: return err("taskId required")
+        fmap = {
+            "title": "title", "description": "description", "status": "status",
+            "priority": "priority", "dueDate": "due_date", "assignedTo": "assigned_to",
+        }
+        fields = {}
+        for fk, col in fmap.items():
+            if fk in b:
+                fields[col] = b[fk] if b[fk] != "" else None
+        if not fields: return err("Нет данных для обновления")
+        set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.venue_booking_tasks SET {set_clause} WHERE id=%s",
+                    list(fields.values()) + [task_id])
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
+    # POST venue_booking_task_delete
+    if method == "POST" and action == "venue_booking_task_delete":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", "")
+        if not task_id: return err("taskId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"DELETE FROM {SCHEMA}.venue_booking_tasks WHERE id=%s", (task_id,))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
     return err("Not found", 404)

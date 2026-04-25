@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL, fmt } from "@/hooks/useProjects";
+import VenueBookingCrmTab from "./VenueBookingCrmTab";
+import DashboardCompanyTab from "./DashboardCompanyTab";
 
 const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
 
@@ -68,6 +70,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
   const [noteText, setNoteText] = useState("");
   const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
   const [openId, setOpenId] = useState<string | null>(null);
+  const [openTab, setOpenTab] = useState<Record<string, "checklist" | "crm" | "company">>({});
   const [search, setSearch] = useState("");
   const [showArchive, setShowArchive] = useState(false);
   const [filesMap, setFilesMap] = useState<Record<string, BookingFile[]>>({});
@@ -260,6 +263,9 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
         const isOpen = openId === proj.bookingId;
         const projFiles = filesMap[proj.bookingId] || [];
         const unread = unreadMap[proj.conversationId] || 0;
+        const activeInnerTab = openTab[proj.bookingId] || "checklist";
+        const setInnerTab = (t: "checklist" | "crm" | "company") =>
+          setOpenTab(prev => ({ ...prev, [proj.bookingId]: t }));
 
         return (
           <div key={proj.bookingId}
@@ -332,14 +338,26 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                   </div>
                 )}
 
-                {/* Кнопки действий */}
-                <div className="px-5 py-3 flex gap-2 flex-wrap border-b border-white/5">
+                {/* Внутренние вкладки + кнопка чата */}
+                <div className="px-5 py-3 flex items-center justify-between gap-3 border-b border-white/5 flex-wrap">
+                  <div className="flex gap-1 glass rounded-xl p-1">
+                    {([
+                      { id: "checklist" as const, label: "Чеклист", icon: "CheckSquare" },
+                      { id: "crm" as const,       label: "Задачи",  icon: "ClipboardList" },
+                      { id: "company" as const,   label: "Компания",icon: "Users" },
+                    ]).map(t => (
+                      <button key={t.id} onClick={() => setInnerTab(t.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeInnerTab === t.id ? "bg-neon-purple text-white" : "text-white/40 hover:text-white"}`}>
+                        <Icon name={t.icon} size={12} />{t.label}
+                      </button>
+                    ))}
+                  </div>
                   {proj.conversationId && onOpenChat && (
                     <button
                       onClick={() => onOpenChat(proj.conversationId)}
                       className="relative flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-lg text-xs hover:bg-neon-cyan/20 transition-colors"
                     >
-                      <Icon name="MessageCircle" size={13} />Открыть чат
+                      <Icon name="MessageCircle" size={13} />Чат с организатором
                       {unread > 0 && (
                         <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neon-pink rounded-full text-white text-[9px] font-bold flex items-center justify-center">
                           {unread > 9 ? "9+" : unread}
@@ -349,8 +367,22 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                   )}
                 </div>
 
+                {/* CRM Задачи */}
+                {activeInnerTab === "crm" && (
+                  <div className="p-5">
+                    <VenueBookingCrmTab bookingId={proj.bookingId} />
+                  </div>
+                )}
+
+                {/* Компания (чат + сотрудники) */}
+                {activeInnerTab === "company" && (
+                  <div className="p-5">
+                    <DashboardCompanyTab />
+                  </div>
+                )}
+
                 {/* Чеклист */}
-                <div className="divide-y divide-white/5">
+                {activeInnerTab === "checklist" && <div className="divide-y divide-white/5">
                   {proj.checklist.map(item => {
                     const needsFile = FILE_STEPS.includes(item.stepKey);
                     const stepFiles = projFiles.filter(f => f.stepKey === item.stepKey);
@@ -430,7 +462,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                       </div>
                     );
                   })}
-                </div>
+                </div>}
               </div>
             )}
           </div>
