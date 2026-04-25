@@ -95,6 +95,30 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen pt-20">
+      {/* Pending / Rejected banner */}
+      {user.status === "pending" && (
+        <div className="bg-gradient-to-r from-neon-purple/20 to-neon-cyan/10 border-b border-neon-purple/20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-neon-purple/20 flex items-center justify-center shrink-0">
+              <Icon name="ClipboardList" size={16} className="text-neon-purple" />
+            </div>
+            <div className="flex-1">
+              <span className="text-white font-medium text-sm">Аккаунт на проверке</span>
+              <span className="text-white/50 text-sm ml-2">— администратор рассматривает вашу заявку. Мы уведомим вас о результате.</span>
+            </div>
+            <span className="text-neon-purple text-xs px-2 py-1 bg-neon-purple/10 rounded-lg border border-neon-purple/20 shrink-0">Ожидание</span>
+          </div>
+        </div>
+      )}
+      {user.status === "rejected" && (
+        <div className="bg-gradient-to-r from-neon-pink/20 to-neon-pink/5 border-b border-neon-pink/20">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center gap-3">
+            <Icon name="XCircle" size={18} className="text-neon-pink shrink-0" />
+            <span className="text-white font-medium text-sm">Заявка отклонена</span>
+            <span className="text-white/50 text-sm">— свяжитесь с поддержкой для уточнения причины.</span>
+          </div>
+        </div>
+      )}
       {/* Hero */}
       <div className="relative py-12 overflow-hidden">
         <div className="absolute inset-0 gradient-bg-purple opacity-30" />

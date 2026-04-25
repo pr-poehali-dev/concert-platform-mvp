@@ -14,6 +14,8 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
   const { login, register, isLoading } = useAuth();
   const [tab, setTab] = useState<"login" | "register">(defaultTab);
   const [error, setError] = useState("");
+  const [registered, setRegistered] = useState(false);
+  const [registeredName, setRegisteredName] = useState("");
 
   const [loginData, setLoginData] = useState({ email: "", password: "" });
   const [regData, setRegData] = useState({
@@ -44,9 +46,54 @@ export default function AuthModal({ open, onClose, defaultTab = "login" }: AuthM
     if (!regData.email.includes("@")) return setError("Введите корректный email");
     if (regData.password.length < 6) return setError("Пароль минимум 6 символов");
     const errMsg = await register(regData);
-    if (!errMsg) onClose();
-    else setError(errMsg);
+    if (!errMsg) {
+      setRegisteredName(regData.name.trim().split(" ")[0]);
+      setRegistered(true);
+    } else {
+      setError(errMsg);
+    }
   };
+
+  // ── Экран "Заявка отправлена" ────────────────────────────────────────
+  if (registered) {
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+        <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl overflow-hidden animate-scale-in text-center p-8">
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan to-transparent" />
+          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center mx-auto mb-6 animate-glow-pulse">
+            <Icon name="ClipboardCheck" size={36} className="text-white" />
+          </div>
+          <h2 className="font-oswald font-bold text-2xl text-white mb-2">Заявка отправлена!</h2>
+          <p className="text-white/60 mb-6">
+            {registeredName}, ваша заявка принята.<br />
+            Мы проверим данные и <span className="text-neon-cyan">уведомим вас</span> о результате в личном кабинете.
+          </p>
+          <div className="glass rounded-xl p-4 mb-6 text-left space-y-2">
+            {[
+              ["Заявка получена", "Ваши данные отправлены на проверку"],
+              ["Проверка", "Администратор рассмотрит заявку"],
+              ["Уведомление", "Вы получите уведомление об одобрении"],
+            ].map(([title, desc], i) => (
+              <div key={i} className="flex items-start gap-3">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 mt-0.5 ${i === 0 ? "bg-neon-green/20 text-neon-green" : "bg-white/10 text-white/30"}`}>
+                  {i === 0 ? <Icon name="Check" size={12} /> : i + 1}
+                </div>
+                <div>
+                  <p className={`text-sm font-medium ${i === 0 ? "text-white" : "text-white/40"}`}>{title}</p>
+                  <p className="text-xs text-white/30">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <button onClick={onClose}
+            className="w-full py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity">
+            Понятно, буду ждать
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

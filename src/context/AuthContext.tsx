@@ -9,6 +9,7 @@ export interface User {
   role: UserRole;
   city: string;
   verified: boolean;
+  status: "pending" | "approved" | "rejected";
   avatar: string;
   avatarColor: string;
 }
