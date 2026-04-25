@@ -433,8 +433,7 @@ def handler(event: dict, context) -> dict:
 
         conversation_id = ""
         if response == "accepted":
-            # Создаём задачи для организатора
-            existing = cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
+            # Создаём задачи для организатора (если ещё нет)
             cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
             if not cur.fetchone():
                 for i, (key, title, desc) in enumerate(BOOKING_TASKS):
@@ -442,7 +441,7 @@ def handler(event: dict, context) -> dict:
                         f"INSERT INTO {SCHEMA}.booking_tasks (booking_id, project_id, title, description, sort_order) VALUES (%s,%s,%s,%s,%s)",
                         (booking_id, project_id, title, desc, i))
 
-            # Создаём чеклист для площадки
+            # Создаём чеклист для площадки (если ещё нет)
             cur.execute(f"SELECT id FROM {SCHEMA}.booking_checklist WHERE booking_id=%s", (booking_id,))
             if not cur.fetchone():
                 for i, (step_key, step_title) in enumerate(VENUE_CHECKLIST):
@@ -452,6 +451,7 @@ def handler(event: dict, context) -> dict:
                         (booking_id, vid, step_key, step_title, is_done, i))
 
             conn.commit()
+            conn.close()
 
             # Создаём автоматический чат и дублируем условия
             rent_str = f"{int(rental_amount):,} ₽".replace(",", " ") if rental_amount else "не указана"
@@ -468,11 +468,8 @@ def handler(event: dict, context) -> dict:
                 organizer_id, vid, venue_user_id, venue_name,
                 chat_text, organizer_name
             )
+            # Сохраняем conversation_id в бронировании
             if conversation_id:
-                cur2 = get_conn().cursor()
-                cur2.connection.autocommit = False
-                get_conn().close()
-                # Сохраняем conversation_id в бронировании
                 conn2 = get_conn(); cur2 = conn2.cursor()
                 cur2.execute(
                     f"UPDATE {SCHEMA}.venue_bookings SET conversation_id=%s WHERE id=%s",
@@ -481,7 +478,7 @@ def handler(event: dict, context) -> dict:
 
             send_notification(venue_user_id, "booking",
                               "Организатор принял условия бронирования",
-                              f"Дата {edate} — бронирование подтверждено с обеих сторон. Создан общий чат.", "chat")
+                              f"Дата {edate} — бронирование подтверждено. Создан общий чат.", "chat")
             send_notification(organizer_id, "booking",
                               f"Площадка «{venue_name}» — бронирование активно!",
                               f"Дата {edate} подтверждена. Задачи по организации добавлены в проект.", "projects")
@@ -594,8 +591,24 @@ def handler(event: dict, context) -> dict:
         if not task_id or status not in ("pending", "in_progress", "done"):
             return err("taskId и status (pending/in_progress/done) обязательны")
         conn = get_conn(); cur = conn.cursor()
+        # Получаем данные задачи для уведомления
+        cur.execute(
+            f"""SELECT t.title, t.booking_id, b.venue_user_id, b.event_date, v.name
+                FROM {SCHEMA}.booking_tasks t
+                JOIN {SCHEMA}.venue_bookings b ON b.id = t.booking_id
+                JOIN {SCHEMA}.venues v ON v.id = b.venue_id
+                WHERE t.id=%s""", (task_id,))
+        task_row = cur.fetchone()
         cur.execute(f"UPDATE {SCHEMA}.booking_tasks SET status=%s, updated_at=NOW() WHERE id=%s", (status, task_id))
         conn.commit(); conn.close()
+        if task_row and status == "done":
+            venue_user_id = str(task_row[2])
+            task_title = task_row[0]
+            edate = str(task_row[3])
+            venue_name = task_row[4]
+            send_notification(venue_user_id, "booking",
+                              f"Организатор выполнил задачу: {task_title}",
+                              f"Проект на {edate} в {venue_name} — шаг завершён.", "notifications")
         return ok({"success": True})
 
     # GET booking_checklist — чеклист площадки по бронированию

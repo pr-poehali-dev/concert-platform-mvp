@@ -2,8 +2,6 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL, fmt } from "@/hooks/useProjects";
 
-const CHAT_URL_PAGE = "chat";
-
 interface BookingTask {
   id: string;
   bookingId: string;
@@ -48,15 +46,10 @@ export default function ProjectVenueTab({ projectId, onOpenChat }: { projectId: 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=bookings_for_organizer&organizer_id=none&project_id_filter=${projectId}`);
-      // Загружаем booking_by_project + tasks отдельно
-      const [bookRes] = await Promise.all([
-        fetch(`${PROJECTS_URL}?action=booking_by_project&project_id=${projectId}`),
-      ]);
+      const bookRes = await fetch(`${PROJECTS_URL}?action=booking_by_project&project_id=${projectId}`);
       const bookData = await bookRes.json();
       const acceptedBookings = (bookData.bookings || []).filter((b: { status: string }) => b.status === "accepted");
 
-      // Для каждого accepted бронирования подгружаем детали с задачами
       const detailed = await Promise.all(
         acceptedBookings.map(async (b: { id: string }) => {
           const det = await fetch(`${PROJECTS_URL}?action=booking_detail&booking_id=${b.id}`).then(r => r.json());
