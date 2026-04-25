@@ -224,7 +224,8 @@ def handler(event: dict, context) -> dict:
                        u.verified, u.status, u.logo_url, u.city,
                        u.company_type, u.legal_name, u.inn, u.kpp, u.ogrn,
                        u.legal_address, u.actual_address, u.bank_name,
-                       u.bank_account, u.bank_bik, u.phone
+                       u.bank_account, u.bank_bik, u.phone,
+                       e.access_permissions
                 FROM {SCHEMA}.employees e
                 JOIN {SCHEMA}.users u ON u.id = e.company_user_id
                 WHERE e.email = %s AND e.password_hash = %s AND e.is_active = TRUE""",
@@ -235,6 +236,18 @@ def handler(event: dict, context) -> dict:
 
         if not emp:
             return err("Неверный email или пароль", 401)
+
+        # Парсим access_permissions
+        raw_perms = emp[24]
+        if isinstance(raw_perms, dict):
+            access_permissions = raw_perms
+        elif isinstance(raw_perms, str):
+            try:
+                access_permissions = json.loads(raw_perms)
+            except Exception:
+                access_permissions = {"canViewExpenses": True, "canViewIncome": True, "canViewSummary": True, "canEditExpenses": True, "canEditIncome": True}
+        else:
+            access_permissions = {"canViewExpenses": True, "canViewIncome": True, "canViewSummary": True, "canEditExpenses": True, "canEditIncome": True}
 
         user = {
             "id": str(emp[4]),  # company_user_id — работаем от имени компании
@@ -249,6 +262,7 @@ def handler(event: dict, context) -> dict:
             "companyName": emp[7],
             "logoUrl": emp[11] or "",
             "isEmployee": True,
+            "accessPermissions": access_permissions,
             "companyType": emp[13] or "individual",
             "legalName": emp[14] or "", "inn": emp[15] or "", "kpp": emp[16] or "",
             "ogrn": emp[17] or "", "legalAddress": emp[18] or "", "actualAddress": emp[19] or "",

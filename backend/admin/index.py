@@ -429,6 +429,17 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"deleted": True})
 
+    # ── POST send_notification ────────────────────────────────────────────
+    if method == "POST" and action == "send_notification":
+        body = json.loads(event.get("body") or "{}")
+        uid   = body.get("userId", "")
+        title = (body.get("title") or "").strip()
+        text  = (body.get("body") or "").strip()
+        if not uid or not title or not text:
+            return err("userId, title и body обязательны")
+        send_notification(uid, "system", title, text, "")
+        return ok({"sent": True})
+
     # ── GET user_details ──────────────────────────────────────────────────
     if method == "GET" and action == "user_details":
         uid = params.get("id", "")

@@ -6,9 +6,9 @@ interface Props {
   project: Project;
   expPlan: number;
   expFact: number;
-  onAddExpense: () => void;
-  onUpdateExpense: (id: string, fields: Partial<Expense>) => void;
-  onDeleteExpense: (id: string) => void;
+  onAddExpense?: () => void;
+  onUpdateExpense?: (id: string, fields: Partial<Expense>) => void;
+  onDeleteExpense?: (id: string) => void;
 }
 
 export default function ProjectBudgetTab({ project, expPlan, expFact, onAddExpense, onUpdateExpense, onDeleteExpense }: Props) {
@@ -17,9 +17,11 @@ export default function ProjectBudgetTab({ project, expPlan, expFact, onAddExpen
       <div className="glass rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
           <span className="font-oswald font-semibold text-white">Статьи расходов</span>
-          <button onClick={onAddExpense} className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-lg text-xs hover:bg-neon-purple/30 transition-colors">
-            <Icon name="Plus" size={13}/>Добавить строку
-          </button>
+          {onAddExpense && (
+            <button onClick={onAddExpense} className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-lg text-xs hover:bg-neon-purple/30 transition-colors">
+              <Icon name="Plus" size={13}/>Добавить строку
+            </button>
+          )}
         </div>
         <table className="w-full">
           <thead>
@@ -37,19 +39,27 @@ export default function ProjectBudgetTab({ project, expPlan, expFact, onAddExpen
               return (
                 <tr key={exp.id} className={`hover:bg-white/3 transition-colors ${i<(project.expenses||[]).length-1?"border-b border-white/5":""}`}>
                   <td className="px-4 py-3">
-                    <select value={exp.category} onChange={e=>onUpdateExpense(exp.id,{category:e.target.value})}
-                      className="glass rounded-lg px-2 py-1.5 text-white/60 outline-none border border-white/10 text-xs appearance-none bg-transparent max-w-[140px]">
-                      {EXPENSE_CATEGORIES.map(c=><option key={c} value={c} className="bg-gray-900">{c}</option>)}
-                    </select>
+                    {onUpdateExpense ? (
+                      <select value={exp.category} onChange={e=>onUpdateExpense(exp.id,{category:e.target.value})}
+                        className="glass rounded-lg px-2 py-1.5 text-white/60 outline-none border border-white/10 text-xs appearance-none bg-transparent max-w-[140px]">
+                        {EXPENSE_CATEGORIES.map(c=><option key={c} value={c} className="bg-gray-900">{c}</option>)}
+                      </select>
+                    ) : <span className="text-white/50 text-xs">{exp.category}</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <EditCell value={exp.title} onSave={v=>onUpdateExpense(exp.id,{title:v})} className="text-white text-sm" />
+                    {onUpdateExpense ? (
+                      <EditCell value={exp.title} onSave={v=>onUpdateExpense(exp.id,{title:v})} className="text-white text-sm" />
+                    ) : <span className="text-white text-sm">{exp.title}</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <EditCell value={exp.amountPlan} onSave={v=>onUpdateExpense(exp.id,{amountPlan:Number(v)})} type="number" suffix=" ₽" className="text-neon-cyan text-sm font-medium" />
+                    {onUpdateExpense ? (
+                      <EditCell value={exp.amountPlan} onSave={v=>onUpdateExpense(exp.id,{amountPlan:Number(v)})} type="number" suffix=" ₽" className="text-neon-cyan text-sm font-medium" />
+                    ) : <span className="text-neon-cyan text-sm font-medium">{fmt(exp.amountPlan)} ₽</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <EditCell value={exp.amountFact} onSave={v=>onUpdateExpense(exp.id,{amountFact:Number(v)})} type="number" suffix=" ₽" className="text-neon-green text-sm font-medium" />
+                    {onUpdateExpense ? (
+                      <EditCell value={exp.amountFact} onSave={v=>onUpdateExpense(exp.id,{amountFact:Number(v)})} type="number" suffix=" ₽" className="text-neon-green text-sm font-medium" />
+                    ) : <span className="text-neon-green text-sm font-medium">{fmt(exp.amountFact)} ₽</span>}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-sm font-medium ${delta>0?"text-neon-pink":delta<0?"text-neon-green":"text-white/30"}`}>
@@ -57,7 +67,7 @@ export default function ProjectBudgetTab({ project, expPlan, expFact, onAddExpen
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button onClick={()=>onDeleteExpense(exp.id)} className="text-white/20 hover:text-neon-pink transition-colors"><Icon name="Trash2" size={14}/></button>
+                    {onDeleteExpense && <button onClick={()=>onDeleteExpense(exp.id)} className="text-white/20 hover:text-neon-pink transition-colors"><Icon name="Trash2" size={14}/></button>}
                   </td>
                 </tr>
               );

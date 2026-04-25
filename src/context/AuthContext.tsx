@@ -31,6 +31,13 @@ export interface User {
   employeeId?: string;
   roleInCompany?: string;
   companyName?: string;
+  accessPermissions?: {
+    canViewExpenses: boolean;
+    canViewIncome: boolean;
+    canViewSummary: boolean;
+    canEditExpenses: boolean;
+    canEditIncome: boolean;
+  };
 }
 
 export interface RegisterData {

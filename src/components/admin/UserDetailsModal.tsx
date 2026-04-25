@@ -63,6 +63,28 @@ export default function UserDetailsModal({ user: userRow, token, onClose }: Prop
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<"overview" | "projects" | "employees" | "venues">("overview");
 
+  // Уведомление
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifTitle, setNotifTitle] = useState("");
+  const [notifText, setNotifText] = useState("");
+  const [notifSending, setNotifSending] = useState(false);
+  const [notifSent, setNotifSent] = useState(false);
+
+  const sendNotification = async () => {
+    if (!notifTitle.trim() || !notifText.trim()) return;
+    setNotifSending(true);
+    await fetch(`${ADMIN_URL}?action=send_notification`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+      body: JSON.stringify({ userId: userRow.id, title: notifTitle, body: notifText }),
+    });
+    setNotifSending(false);
+    setNotifSent(true);
+    setNotifTitle("");
+    setNotifText("");
+    setTimeout(() => { setNotifSent(false); setNotifOpen(false); }, 1500);
+  };
+
   useEffect(() => {
     setLoading(true);
     fetch(`${ADMIN_URL}?action=user_details&id=${userRow.id}`, {
@@ -99,14 +121,69 @@ export default function UserDetailsModal({ user: userRow, token, onClose }: Prop
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <Badge className={isOrganizer ? "bg-neon-purple/20 text-neon-purple border-neon-purple/30" : "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30"}>
               {isOrganizer ? "Организатор" : "Площадка"}
             </Badge>
+            <button
+              onClick={() => setNotifOpen(true)}
+              title="Отправить уведомление"
+              className="flex items-center gap-1.5 px-3 py-1.5 glass rounded-lg text-xs text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/10 transition-colors">
+              <Icon name="Bell" size={13} />Уведомление
+            </button>
             <button onClick={onClose} className="text-white/30 hover:text-white transition-colors p-1">
               <Icon name="X" size={18} />
             </button>
           </div>
+
+          {/* Модалка отправки уведомления */}
+          {notifOpen && (
+            <div className="fixed inset-0 z-[220] flex items-center justify-center p-4">
+              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setNotifOpen(false)} />
+              <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-cyan/20 animate-scale-in">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-oswald font-bold text-white flex items-center gap-2">
+                    <Icon name="Bell" size={16} className="text-neon-cyan" />Уведомление для {userRow.name}
+                  </h4>
+                  <button onClick={() => setNotifOpen(false)} className="text-white/30 hover:text-white transition-colors">
+                    <Icon name="X" size={15} />
+                  </button>
+                </div>
+                {notifSent ? (
+                  <div className="text-center py-4 text-neon-green flex items-center justify-center gap-2">
+                    <Icon name="CheckCircle2" size={20} />Отправлено!
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-white/40 mb-1 block">Заголовок</label>
+                      <input value={notifTitle} onChange={e => setNotifTitle(e.target.value)}
+                        placeholder="Важное сообщение"
+                        className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs text-white/40 mb-1 block">Текст</label>
+                      <textarea value={notifText} onChange={e => setNotifText(e.target.value)}
+                        placeholder="Текст уведомления..."
+                        rows={3}
+                        className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 text-sm resize-none" />
+                    </div>
+                    <div className="flex gap-2 pt-1">
+                      <button onClick={() => setNotifOpen(false)}
+                        className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
+                        Отмена
+                      </button>
+                      <button onClick={sendNotification} disabled={notifSending || !notifTitle.trim() || !notifText.trim()}
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30 rounded-xl text-sm font-oswald font-semibold hover:bg-neon-cyan/30 disabled:opacity-50 transition-colors">
+                        {notifSending ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Send" size={14} />}
+                        Отправить
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Табы */}

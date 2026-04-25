@@ -18,8 +18,25 @@ export const ROLE_LABELS: Record<string, string> = {
   admin:      "Администратор",
 };
 
+export interface AccessPermissions {
+  canViewExpenses: boolean;
+  canViewIncome: boolean;
+  canViewSummary: boolean;
+  canEditExpenses: boolean;
+  canEditIncome: boolean;
+}
+
+export const DEFAULT_ACCESS_PERMISSIONS: AccessPermissions = {
+  canViewExpenses: true,
+  canViewIncome: true,
+  canViewSummary: true,
+  canEditExpenses: true,
+  canEditIncome: true,
+};
+
 export interface Employee {
   id: string; name: string; email: string;
   roleInCompany: string; avatar: string; avatarColor: string;
   isActive: boolean; createdAt: string;
+  accessPermissions: AccessPermissions;
 }

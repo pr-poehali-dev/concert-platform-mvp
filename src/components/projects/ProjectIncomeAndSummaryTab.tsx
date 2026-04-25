@@ -13,10 +13,10 @@ interface Props {
   taxFact: number;
   profitPlan: number;
   profitFact: number;
-  onAddIncome: () => void;
-  onUpdateIncome: (id: string, fields: Partial<IncomeLine>) => void;
-  onDeleteIncome: (id: string) => void;
-  onUpdateTaxSystem: (value: string) => void;
+  onAddIncome?: () => void;
+  onUpdateIncome?: (id: string, fields: Partial<IncomeLine>) => void;
+  onDeleteIncome?: (id: string) => void;
+  onUpdateTaxSystem?: (value: string) => void;
 }
 
 export default function ProjectIncomeAndSummaryTab({
@@ -33,9 +33,11 @@ export default function ProjectIncomeAndSummaryTab({
         <div className="glass rounded-2xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-3 border-b border-white/10">
             <span className="font-oswald font-semibold text-white">Доходы от билетов</span>
-            <button onClick={onAddIncome} className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-green/20 text-neon-green border border-neon-green/30 rounded-lg text-xs hover:bg-neon-green/30 transition-colors">
-              <Icon name="Plus" size={13}/>Добавить категорию
-            </button>
+            {onAddIncome && (
+              <button onClick={onAddIncome} className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-green/20 text-neon-green border border-neon-green/30 rounded-lg text-xs hover:bg-neon-green/30 transition-colors">
+                <Icon name="Plus" size={13}/>Добавить категорию
+              </button>
+            )}
           </div>
           <table className="w-full">
             <thead>
@@ -51,21 +53,21 @@ export default function ProjectIncomeAndSummaryTab({
               ):(project.incomeLines||[]).map((inc,i)=>(
                 <tr key={inc.id} className={`hover:bg-white/3 transition-colors ${i<(project.incomeLines||[]).length-1?"border-b border-white/5":""}`}>
                   <td className="px-4 py-3">
-                    <EditCell value={inc.category} onSave={v=>onUpdateIncome(inc.id,{category:v})} className="text-white font-medium text-sm" />
+                    {onUpdateIncome ? <EditCell value={inc.category} onSave={v=>onUpdateIncome(inc.id,{category:v})} className="text-white font-medium text-sm" /> : <span className="text-white font-medium text-sm">{inc.category}</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <EditCell value={inc.ticketCount} onSave={v=>onUpdateIncome(inc.id,{ticketCount:Number(v)})} type="number" suffix=" шт" className="text-white/70 text-sm" />
+                    {onUpdateIncome ? <EditCell value={inc.ticketCount} onSave={v=>onUpdateIncome(inc.id,{ticketCount:Number(v)})} type="number" suffix=" шт" className="text-white/70 text-sm" /> : <span className="text-white/70 text-sm">{inc.ticketCount} шт</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <EditCell value={inc.ticketPrice} onSave={v=>onUpdateIncome(inc.id,{ticketPrice:Number(v)})} type="number" suffix=" ₽" className="text-neon-cyan text-sm font-medium" />
+                    {onUpdateIncome ? <EditCell value={inc.ticketPrice} onSave={v=>onUpdateIncome(inc.id,{ticketPrice:Number(v)})} type="number" suffix=" ₽" className="text-neon-cyan text-sm font-medium" /> : <span className="text-neon-cyan text-sm font-medium">{fmt(inc.ticketPrice)} ₽</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <EditCell value={inc.soldCount} onSave={v=>onUpdateIncome(inc.id,{soldCount:Number(v)})} type="number" suffix=" шт" className="text-white/70 text-sm" />
+                    {onUpdateIncome ? <EditCell value={inc.soldCount} onSave={v=>onUpdateIncome(inc.id,{soldCount:Number(v)})} type="number" suffix=" шт" className="text-white/70 text-sm" /> : <span className="text-white/70 text-sm">{inc.soldCount} шт</span>}
                   </td>
                   <td className="px-4 py-3 text-neon-green font-medium text-sm">{fmt(inc.totalPlan)} ₽</td>
                   <td className="px-4 py-3 text-neon-green font-medium text-sm">{fmt(inc.totalFact)} ₽</td>
                   <td className="px-4 py-3">
-                    <button onClick={()=>onDeleteIncome(inc.id)} className="text-white/20 hover:text-neon-pink transition-colors"><Icon name="Trash2" size={14}/></button>
+                    {onDeleteIncome && <button onClick={()=>onDeleteIncome(inc.id)} className="text-white/20 hover:text-neon-pink transition-colors"><Icon name="Trash2" size={14}/></button>}
                   </td>
                 </tr>
               ))}
@@ -97,8 +99,10 @@ export default function ProjectIncomeAndSummaryTab({
         </h3>
         <div className="space-y-2">
           {TAX_OPTIONS.map(opt=>(
-            <button key={opt.value} onClick={()=>onUpdateTaxSystem(opt.value)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${project.taxSystem===opt.value?"bg-neon-purple/20 border-neon-purple/50":"glass border-white/10 hover:border-white/25"}`}>
+            <button key={opt.value}
+              onClick={onUpdateTaxSystem ? ()=>onUpdateTaxSystem(opt.value) : undefined}
+              disabled={!onUpdateTaxSystem}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${project.taxSystem===opt.value?"bg-neon-purple/20 border-neon-purple/50":"glass border-white/10 hover:border-white/25"} ${!onUpdateTaxSystem?"cursor-default":""}`}>
               <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${project.taxSystem===opt.value?"border-neon-purple bg-neon-purple":"border-white/30"}`}>
                 {project.taxSystem===opt.value && <div className="w-1.5 h-1.5 rounded-full bg-white"/>}
               </div>

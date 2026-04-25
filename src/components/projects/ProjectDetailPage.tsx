@@ -113,14 +113,23 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const taxPlan = f.taxPlan, taxFact = f.taxFact;
   const profitPlan = f.profitPlan, profitFact = f.profitFact;
 
-  const TABS = [
-    {id:"budget",label:"Бюджет расходов",icon:"TrendingDown"},
-    {id:"income",label:"Доходы",icon:"TrendingUp"},
-    {id:"summary",label:"Итог / P&L",icon:"BarChart3"},
-    {id:"venue",label:"Площадка",icon:"Building2"},
-    {id:"crm",label:"Задачи",icon:"ClipboardList"},
-    {id:"company",label:"Компания",icon:"Users"},
+  // Права доступа для сотрудников
+  const ap = user?.accessPermissions;
+  const canViewExpenses = !user?.isEmployee || (ap?.canViewExpenses ?? true);
+  const canViewIncome   = !user?.isEmployee || (ap?.canViewIncome   ?? true);
+  const canViewSummary  = !user?.isEmployee || (ap?.canViewSummary  ?? true);
+  const canEditExpenses = !user?.isEmployee || (ap?.canEditExpenses ?? true);
+  const canEditIncome   = !user?.isEmployee || (ap?.canEditIncome   ?? true);
+
+  const ALL_TABS = [
+    {id:"budget",  label:"Бюджет расходов", icon:"TrendingDown", visible: canViewExpenses},
+    {id:"income",  label:"Доходы",          icon:"TrendingUp",   visible: canViewIncome},
+    {id:"summary", label:"Итог / P&L",      icon:"BarChart3",    visible: canViewSummary},
+    {id:"venue",   label:"Площадка",        icon:"Building2",    visible: true},
+    {id:"crm",     label:"Задачи",          icon:"ClipboardList",visible: true},
+    {id:"company", label:"Компания",        icon:"Users",        visible: true},
   ] as const;
+  const TABS = ALL_TABS.filter(t => t.visible);
 
   return (
     <div className="min-h-screen pt-20">
@@ -147,19 +156,19 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
         </div>
 
         {/* ── BUDGET ── */}
-        {activeTab==="budget" && (
+        {activeTab==="budget" && canViewExpenses && (
           <ProjectBudgetTab
             project={project}
             expPlan={expPlan}
             expFact={expFact}
-            onAddExpense={addExpense}
-            onUpdateExpense={updateExpense}
-            onDeleteExpense={deleteExpense}
+            onAddExpense={canEditExpenses ? addExpense : undefined}
+            onUpdateExpense={canEditExpenses ? updateExpense : undefined}
+            onDeleteExpense={canEditExpenses ? deleteExpense : undefined}
           />
         )}
 
         {/* ── INCOME ── */}
-        {activeTab==="income" && (
+        {activeTab==="income" && canViewIncome && (
           <ProjectIncomeAndSummaryTab
             activeTab="income"
             project={project}
@@ -167,15 +176,15 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
             incPlan={incPlan} incFact={incFact}
             taxPlan={taxPlan} taxFact={taxFact}
             profitPlan={profitPlan} profitFact={profitFact}
-            onAddIncome={addIncome}
-            onUpdateIncome={updateIncome}
-            onDeleteIncome={deleteIncome}
-            onUpdateTaxSystem={v => updateField("taxSystem", v)}
+            onAddIncome={canEditIncome ? addIncome : undefined}
+            onUpdateIncome={canEditIncome ? updateIncome : undefined}
+            onDeleteIncome={canEditIncome ? deleteIncome : undefined}
+            onUpdateTaxSystem={!user?.isEmployee ? v => updateField("taxSystem", v) : undefined}
           />
         )}
 
         {/* ── SUMMARY P&L ── */}
-        {activeTab==="summary" && (
+        {activeTab==="summary" && canViewSummary && (
           <ProjectIncomeAndSummaryTab
             activeTab="summary"
             project={project}
@@ -183,10 +192,10 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
             incPlan={incPlan} incFact={incFact}
             taxPlan={taxPlan} taxFact={taxFact}
             profitPlan={profitPlan} profitFact={profitFact}
-            onAddIncome={addIncome}
-            onUpdateIncome={updateIncome}
-            onDeleteIncome={deleteIncome}
-            onUpdateTaxSystem={v => updateField("taxSystem", v)}
+            onAddIncome={canEditIncome ? addIncome : undefined}
+            onUpdateIncome={canEditIncome ? updateIncome : undefined}
+            onDeleteIncome={canEditIncome ? deleteIncome : undefined}
+            onUpdateTaxSystem={!user?.isEmployee ? v => updateField("taxSystem", v) : undefined}
           />
         )}
 

@@ -1,12 +1,13 @@
 """
 Управление сотрудниками компании GLOBAL LINK.
 GET  ?action=list&company_user_id=X   — список сотрудников
-POST ?action=add                      — добавить сотрудника
-POST ?action=update                   — обновить роль/имя
+POST ?action=add                      — добавить сотрудника (+ accessPermissions)
+POST ?action=update                   — обновить роль/имя/accessPermissions
+POST ?action=update_permissions       — обновить только права доступа
 POST ?action=deactivate               — деактивировать
 POST ?action=activate                 — восстановить
 """
-import json, os, hashlib, secrets, random
+import json, os, hashlib, random
 import psycopg2
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
@@ -17,6 +18,11 @@ AVATAR_COLORS = [
 ]
 
 ROLES = ["employee", "manager", "accountant", "admin"]
+
+DEFAULT_PERMISSIONS = {
+    "canViewExpenses": True, "canViewIncome": True, "canViewSummary": True,
+    "canEditExpenses": True, "canEditIncome": True,
+}
 
 
 def get_conn():
@@ -52,6 +58,17 @@ def err(msg, status=400):
 
 
 def row_to_emp(row) -> dict:
+    # row: id, company_user_id, name, email, role_in_company, avatar, avatar_color, is_active, created_at, access_permissions
+    raw_perms = row[9] if len(row) > 9 else None
+    if isinstance(raw_perms, dict):
+        perms = raw_perms
+    elif isinstance(raw_perms, str):
+        try:
+            perms = json.loads(raw_perms)
+        except Exception:
+            perms = DEFAULT_PERMISSIONS.copy()
+    else:
+        perms = DEFAULT_PERMISSIONS.copy()
     return {
         "id": str(row[0]),
         "companyUserId": str(row[1]),
@@ -62,6 +79,7 @@ def row_to_emp(row) -> dict:
         "avatarColor": row[6],
         "isActive": row[7],
         "createdAt": str(row[8]),
+        "accessPermissions": perms,
     }
 
 
@@ -81,7 +99,7 @@ def handler(event: dict, context) -> dict:
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
             f"""SELECT id, company_user_id, name, email, role_in_company,
-                       avatar, avatar_color, is_active, created_at
+                       avatar, avatar_color, is_active, created_at, access_permissions
                 FROM {SCHEMA}.employees WHERE company_user_id = %s
                 ORDER BY created_at""",
             (cid,)
@@ -97,6 +115,11 @@ def handler(event: dict, context) -> dict:
         email    = (b.get("email") or "").strip().lower()
         password = b.get("password") or ""
         role_c   = b.get("roleInCompany") or "employee"
+        perms    = b.get("accessPermissions") or DEFAULT_PERMISSIONS.copy()
+        # Валидируем и дополняем permissions
+        for k, v in DEFAULT_PERMISSIONS.items():
+            if k not in perms:
+                perms[k] = v
 
         if not cid:            return err("companyUserId required")
         if not name:           return err("Введите имя сотрудника")
@@ -120,9 +143,9 @@ def handler(event: dict, context) -> dict:
 
         cur.execute(
             f"""INSERT INTO {SCHEMA}.employees
-                (company_user_id, name, email, password_hash, role_in_company, avatar, avatar_color)
-                VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (cid, name, email, pw_hash, role_c, avatar, avatar_color),
+                (company_user_id, name, email, password_hash, role_in_company, avatar, avatar_color, access_permissions)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (cid, name, email, pw_hash, role_c, avatar, avatar_color, json.dumps(perms)),
         )
         emp_id = str(cur.fetchone()[0])
         conn.commit(); conn.close()
@@ -137,6 +160,12 @@ def handler(event: dict, context) -> dict:
         fields = {}
         if "name" in b:           fields["name"] = b["name"]
         if "roleInCompany" in b:  fields["role_in_company"] = b["roleInCompany"]
+        if "accessPermissions" in b:
+            perms = b["accessPermissions"]
+            for k, v in DEFAULT_PERMISSIONS.items():
+                if k not in perms:
+                    perms[k] = v
+            fields["access_permissions"] = json.dumps(perms)
         if not fields:            return err("Нет данных")
 
         set_clause = ", ".join(f"{c} = %s" for c in fields)
@@ -145,6 +174,24 @@ def handler(event: dict, context) -> dict:
                     list(fields.values()) + [emp_id])
         conn.commit(); conn.close()
         return ok({"success": True})
+
+    # ── POST update_permissions ───────────────────────────────────────────
+    if method == "POST" and action == "update_permissions":
+        b = json.loads(event.get("body") or "{}")
+        emp_id = b.get("id", "")
+        perms  = b.get("accessPermissions")
+        if not emp_id: return err("id required")
+        if not perms:  return err("accessPermissions required")
+        for k, v in DEFAULT_PERMISSIONS.items():
+            if k not in perms:
+                perms[k] = v
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {SCHEMA}.employees SET access_permissions = %s WHERE id = %s RETURNING id",
+            (json.dumps(perms), emp_id)
+        )
+        conn.commit(); conn.close()
+        return ok({"success": True, "accessPermissions": perms})
 
     # ── POST deactivate / activate ────────────────────────────────────────
     if method == "POST" and action in ("deactivate", "activate"):
