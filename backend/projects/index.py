@@ -739,13 +739,15 @@ def handler(event: dict, context) -> dict:
         if not booking_id: return err("booking_id required")
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
-            f"""SELECT b.id, b.venue_id, v.name, b.project_id, p.title,
+            f"""SELECT b.id, b.venue_id, v.name, b.project_id, COALESCE(p.title, b.artist, 'Мероприятие'),
                        b.event_date, b.event_time, b.artist, b.age_limit,
                        b.expected_guests, b.status, b.rental_amount, b.venue_conditions,
-                       b.organizer_id, b.venue_user_id, b.conversation_id
+                       b.organizer_id, b.venue_user_id, b.conversation_id,
+                       COALESCE(u.name, 'Организатор')
                 FROM {SCHEMA}.venue_bookings b
                 JOIN {SCHEMA}.venues v ON v.id=b.venue_id
-                JOIN {SCHEMA}.projects p ON p.id=b.project_id
+                LEFT JOIN {SCHEMA}.projects p ON p.id=b.project_id
+                LEFT JOIN {SCHEMA}.users u ON u.id=b.organizer_id
                 WHERE b.id=%s""", (booking_id,))
         row = cur.fetchone()
         if not row: conn.close(); return err("Не найдено", 404)
@@ -758,6 +760,7 @@ def handler(event: dict, context) -> dict:
             "venueConditions": row[12] or "", "organizerId": str(row[13]),
             "venueUserId": str(row[14]),
             "conversationId": str(row[15]) if row[15] else "",
+            "organizerName": row[16],
         }
         cur.execute(
             f"SELECT id,title,description,status,sort_order FROM {SCHEMA}.booking_tasks WHERE booking_id=%s ORDER BY sort_order",

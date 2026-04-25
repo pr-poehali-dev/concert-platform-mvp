@@ -3,6 +3,8 @@ import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL, fmt } from "@/hooks/useProjects";
 
+const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
+
 interface ChecklistItem {
   id: string;
   stepKey: string;
@@ -35,6 +37,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
   const [updatingItem, setUpdatingItem] = useState<string | null>(null);
   const [noteEditing, setNoteEditing] = useState<string | null>(null);
   const [noteText, setNoteText] = useState("");
+  const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -51,6 +54,17 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${CHAT_URL}?action=conversations&user_id=${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<string, number> = {};
+        (data.conversations || []).forEach((c: { id: string; unread: number }) => { map[c.id] = c.unread; });
+        setUnreadMap(map);
+      }).catch(() => {});
+  }, [user]);
 
   const toggleStep = async (itemId: string, currentDone: boolean, note: string, bookingId: string) => {
     setUpdatingItem(itemId);
@@ -133,9 +147,14 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                 {proj.conversationId && onOpenChat && (
                   <button
                     onClick={() => onOpenChat(proj.conversationId)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-lg text-xs hover:bg-neon-cyan/20 transition-colors"
+                    className="relative flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-lg text-xs hover:bg-neon-cyan/20 transition-colors"
                   >
                     <Icon name="MessageCircle" size={13} />Чат
+                    {(unreadMap[proj.conversationId] || 0) > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neon-pink rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                        {unreadMap[proj.conversationId] > 9 ? "9+" : unreadMap[proj.conversationId]}
+                      </span>
+                    )}
                   </button>
                 )}
               </div>

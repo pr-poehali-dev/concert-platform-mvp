@@ -43,6 +43,7 @@ interface Conversation {
   lastMessageAt: string;
   unread: number;
   isOrganizer: boolean;
+  organizerName: string;
 }
 
 interface Message {
@@ -211,7 +212,7 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
                 </div>
               ) : (
                 filteredConvs.map(conv => {
-                  const name = conv.isOrganizer ? conv.venueName : "Организатор";
+                  const name = conv.isOrganizer ? conv.venueName : (conv.organizerName || "Организатор");
                   const color = getAvatarColor(name);
                   const initial = getInitial(name);
                   const isActive = conv.id === activeConvId;
@@ -262,12 +263,12 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
                     className="sm:hidden w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-white/60 hover:text-white shrink-0">
                     <Icon name="ArrowLeft" size={16} />
                   </button>
-                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(activeConv.isOrganizer ? activeConv.venueName : "Организатор")} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
-                    {getInitial(activeConv.isOrganizer ? activeConv.venueName : "Организатор")}
+                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(activeConv.isOrganizer ? activeConv.venueName : (activeConv.organizerName || "Организатор"))} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
+                    {getInitial(activeConv.isOrganizer ? activeConv.venueName : (activeConv.organizerName || "Организатор"))}
                   </div>
                   <div>
                     <h3 className="font-oswald font-semibold text-white">
-                      {activeConv.isOrganizer ? activeConv.venueName : "Организатор"}
+                      {activeConv.isOrganizer ? activeConv.venueName : (activeConv.organizerName || "Организатор")}
                     </h3>
                     <p className="text-xs text-white/40">
                       {activeConv.isOrganizer ? "Концертная площадка" : "Организатор тура"}

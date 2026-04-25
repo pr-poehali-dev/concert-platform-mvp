@@ -81,11 +81,13 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            f"""SELECT id, organizer_id, venue_id, venue_user_id, venue_name,
-                       last_message, last_message_at, organizer_unread, venue_unread, created_at
-                FROM {SCHEMA}.conversations
-                WHERE organizer_id = %s OR venue_user_id = %s
-                ORDER BY last_message_at DESC""",
+            f"""SELECT c.id, c.organizer_id, c.venue_id, c.venue_user_id, c.venue_name,
+                       c.last_message, c.last_message_at, c.organizer_unread, c.venue_unread, c.created_at,
+                       COALESCE(u.name, 'Организатор')
+                FROM {SCHEMA}.conversations c
+                LEFT JOIN {SCHEMA}.users u ON u.id = c.organizer_id
+                WHERE c.organizer_id = %s OR c.venue_user_id = %s
+                ORDER BY c.last_message_at DESC""",
             (user_id, user_id),
         )
         rows = cur.fetchall()
@@ -105,6 +107,7 @@ def handler(event: dict, context) -> dict:
                 "lastMessageAt": str(r[6]),
                 "unread": unread,
                 "isOrganizer": is_organizer,
+                "organizerName": r[10],
             })
         return ok({"conversations": result})
 

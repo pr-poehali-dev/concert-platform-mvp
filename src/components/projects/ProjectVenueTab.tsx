@@ -1,6 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL, fmt } from "@/hooks/useProjects";
+import { useAuth } from "@/context/AuthContext";
+
+const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
 
 interface BookingTask {
   id: string;
@@ -39,9 +42,11 @@ const TASK_STATUS_CONFIG = {
 } as const;
 
 export default function ProjectVenueTab({ projectId, onOpenChat }: { projectId: string; onOpenChat?: (conversationId: string) => void }) {
+  const { user } = useAuth();
   const [bookings, setBookings] = useState<BookingInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingTask, setUpdatingTask] = useState<string | null>(null);
+  const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +81,18 @@ export default function ProjectVenueTab({ projectId, onOpenChat }: { projectId: 
   }, [projectId]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Загружаем счётчики непрочитанных
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${CHAT_URL}?action=conversations&user_id=${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<string, number> = {};
+        (data.conversations || []).forEach((c: { id: string; unread: number }) => { map[c.id] = c.unread; });
+        setUnreadMap(map);
+      }).catch(() => {});
+  }, [user]);
 
   const updateTask = async (taskId: string, status: "pending" | "in_progress" | "done") => {
     setUpdatingTask(taskId);
@@ -140,9 +157,14 @@ export default function ProjectVenueTab({ projectId, onOpenChat }: { projectId: 
                 {booking.conversationId && onOpenChat && (
                   <button
                     onClick={() => onOpenChat(booking.conversationId)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-lg text-xs hover:bg-neon-cyan/20 transition-colors"
+                    className="relative flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-lg text-xs hover:bg-neon-cyan/20 transition-colors"
                   >
-                    <Icon name="MessageCircle" size={13} />Открыть чат
+                    <Icon name="MessageCircle" size={13} />Чат
+                    {(unreadMap[booking.conversationId] || 0) > 0 && (
+                      <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neon-pink rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                        {unreadMap[booking.conversationId] > 9 ? "9+" : unreadMap[booking.conversationId]}
+                      </span>
+                    )}
                   </button>
                 )}
                 <span className="text-xs text-white/30">{doneTasks}/{totalTasks} задач</span>

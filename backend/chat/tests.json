@@ -37,7 +37,7 @@
       "method": "GET",
       "path": "/?action=conversations&user_id=00000000-0000-0000-0000-000000000001",
       "expectedStatus": 200,
-      "expectedBody": { "conversations": [] },
+      "expectedBody": { "conversations": [{ "id": "string", "organizerName": "string" }] },
       "bodyMatcher": "partial"
     }
   ]

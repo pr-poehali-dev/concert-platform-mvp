@@ -146,12 +146,15 @@ function OrganizerRespondModal({ booking, onClose, onSubmit }: OrganizerRespondM
   );
 }
 
+const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
+
 export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeBooking, setActiveBooking] = useState<Booking | null>(null);
   const [modalType, setModalType] = useState<"venue" | "organizer" | null>(null);
+  const [unreadMap, setUnreadMap] = useState<Record<string, number>>({});
 
   const isVenue = user?.role === "venue";
 
@@ -174,6 +177,17 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
   };
 
   useEffect(() => { load(); }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    fetch(`${CHAT_URL}?action=conversations&user_id=${user.id}`)
+      .then(r => r.json())
+      .then(data => {
+        const map: Record<string, number> = {};
+        (data.conversations || []).forEach((c: { id: string; unread: number }) => { map[c.id] = c.unread; });
+        setUnreadMap(map);
+      }).catch(() => {});
+  }, [user]);
 
   const venueRespond = async (bookingId: string, response: "confirmed" | "rejected", rentalAmount: number | null, conditions: string) => {
     await fetch(`${PROJECTS_URL}?action=venue_respond`, {
@@ -246,8 +260,13 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
           {b.conversationId && onNavigate && (
             <button
               onClick={() => onNavigate(`chat:${b.conversationId}`)}
-              className="flex items-center gap-1.5 px-3 py-2 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-xl text-xs font-medium hover:bg-neon-cyan/20 transition-colors">
+              className="relative flex items-center gap-1.5 px-3 py-2 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-xl text-xs font-medium hover:bg-neon-cyan/20 transition-colors">
               <Icon name="MessageCircle" size={13}/>Открыть чат
+              {(unreadMap[b.conversationId] || 0) > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neon-pink rounded-full text-white text-[9px] font-bold flex items-center justify-center">
+                  {unreadMap[b.conversationId] > 9 ? "9+" : unreadMap[b.conversationId]}
+                </span>
+              )}
             </button>
           )}
         </div>
