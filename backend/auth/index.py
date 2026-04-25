@@ -1,5 +1,5 @@
 """
-Авторизация и регистрация пользователей GLOBAL LINK.
+Авторизация и регистрация пользователей GLOBAL LINK. v2
 POST ?action=register           — создать аккаунт + отправить письмо подтверждения
 GET  ?action=verify_email       — подтвердить email по токену из письма
 POST ?action=resend_verification— повторно отправить письмо подтверждения
