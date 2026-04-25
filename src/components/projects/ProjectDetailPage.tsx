@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { PROJECTS_URL, STATUS_CONFIG, TAX_OPTIONS, EXPENSE_CATEGORIES, fmt, type Project, type Expense, type IncomeLine } from "@/hooks/useProjects";
+import { exportCSV, exportExcel, exportPDF } from "@/lib/exportProject";
 
 interface Props { projectId: string; onBack: () => void; }
 
@@ -55,6 +56,18 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     setProject(p=>p?{...p,[key]:val}:p);
   };
 
+  // Закрытие дропдауна по клику вне
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
+
   // Expenses
   const addExpense = async () => {
     const data = await api("add_expense",{projectId,category:"Прочее",title:"Новая статья",amountPlan:0,amountFact:0});
@@ -102,6 +115,9 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     });
   };
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
+
   if(loading) return (
     <div className="min-h-screen pt-20 flex items-center justify-center">
       <Icon name="Loader2" size={32} className="text-white/30 animate-spin" />
@@ -127,9 +143,42 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
         <div className="absolute inset-0 gradient-bg-purple opacity-30" />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <button onClick={onBack} className="flex items-center gap-2 text-white/50 hover:text-white mb-4 text-sm transition-colors">
-            <Icon name="ArrowLeft" size={16}/>Назад к проектам
-          </button>
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={onBack} className="flex items-center gap-2 text-white/50 hover:text-white text-sm transition-colors">
+              <Icon name="ArrowLeft" size={16}/>Назад к проектам
+            </button>
+
+            {/* Export dropdown */}
+            <div className="relative" ref={exportRef}>
+              <button
+                onClick={() => setExportOpen(o => !o)}
+                className="flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/15 hover:border-neon-purple/40 text-white/70 hover:text-white transition-all text-sm"
+              >
+                <Icon name="Download" size={15}/>
+                Экспорт
+                <Icon name="ChevronDown" size={14} className={`transition-transform ${exportOpen ? "rotate-180" : ""}`}/>
+              </button>
+
+              {exportOpen && (
+                <div className="absolute right-0 top-full mt-2 w-52 glass-strong rounded-xl border border-white/10 overflow-hidden z-50 animate-scale-in">
+                  <div className="px-3 py-2 border-b border-white/10">
+                    <p className="text-white/40 text-xs uppercase tracking-wider">Скачать отчёт P&L</p>
+                  </div>
+                  {[
+                    { icon: "FileText", label: "PDF (для печати)", color: "text-neon-pink", action: () => { exportPDF(project); setExportOpen(false); } },
+                    { icon: "Table2", label: "Excel (.xls)", color: "text-neon-green", action: () => { exportExcel(project); setExportOpen(false); } },
+                    { icon: "FileSpreadsheet", label: "CSV (таблица)", color: "text-neon-cyan", action: () => { exportCSV(project); setExportOpen(false); } },
+                  ].map((opt, i) => (
+                    <button key={i} onClick={opt.action}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left">
+                      <Icon name={opt.icon} size={16} className={opt.color}/>
+                      <span className="text-white/80 text-sm">{opt.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           <div className="flex items-start justify-between flex-wrap gap-4">
             <div>
               <div className="flex items-center gap-3 mb-1 flex-wrap">
