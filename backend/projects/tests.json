@@ -43,7 +43,7 @@
     {
       "name": "Venues list",
       "method": "GET",
-      "path": "/?action=venues_list",
+      "path": "/?action=venues_list&city=__nonexistent__",
       "expectedStatus": 200,
       "expectedBody": { "venues": [] },
       "bodyMatcher": "partial"
@@ -52,6 +52,22 @@
       "name": "Booked dates no venue_id",
       "method": "GET",
       "path": "/?action=booked_dates",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Booking tasks no id",
+      "method": "GET",
+      "path": "/?action=booking_tasks",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Booking checklist no id",
+      "method": "GET",
+      "path": "/?action=booking_checklist",
       "expectedStatus": 400,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"

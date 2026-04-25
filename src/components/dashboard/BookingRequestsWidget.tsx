@@ -186,7 +186,7 @@ export default function BookingRequestsWidget() {
   const organizerRespond = async (bookingId: string, response: "accepted" | "cancelled") => {
     await fetch(`${PROJECTS_URL}?action=organizer_respond`, {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ bookingId, response }),
+      body: JSON.stringify({ bookingId, response, organizerName: user?.name || "Организатор" }),
     });
     setActiveBooking(null); setModalType(null);
     load();

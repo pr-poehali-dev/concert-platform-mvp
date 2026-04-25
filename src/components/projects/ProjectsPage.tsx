@@ -6,7 +6,7 @@ import { PROJECTS_URL, STATUS_CONFIG, fmt, type Project } from "@/hooks/useProje
 import CreateProjectModal from "./CreateProjectModal";
 import ProjectDetailPage from "./ProjectDetailPage";
 
-export default function ProjectsPage() {
+export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -25,7 +25,11 @@ export default function ProjectsPage() {
   useEffect(()=>{load();},[user]);
 
   if(openProjectId) return (
-    <ProjectDetailPage projectId={openProjectId} onBack={()=>{setOpenProjectId(null);load();}} />
+    <ProjectDetailPage
+      projectId={openProjectId}
+      onBack={()=>{setOpenProjectId(null);load();}}
+      onOpenChat={onNavigate ? (convId) => onNavigate(`chat:${convId}`) : undefined}
+    />
   );
 
   const filtered = filter==="all" ? projects : projects.filter(p=>p.status===filter);

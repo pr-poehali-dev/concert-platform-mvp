@@ -7,6 +7,70 @@ from helpers import (
 )
 
 NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826"
+CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5"
+
+BOOKING_TASKS = [
+    ("contract",    "Заключение договора",      "Подготовить и подписать договор аренды площадки с обеих сторон"),
+    ("rider",       "Согласование техрайдера",   "Передать технический райдер площадке и получить подтверждение"),
+    ("payment",     "Оплата аренды",             "Произвести оплату аренды площадки согласно договору"),
+    ("timing",      "Согласование тайминга",     "Согласовать время заезда, саундчека, начала и конца мероприятия"),
+    ("logistics",   "Логистика заезда/выезда",   "Уточнить условия заезда оборудования и выезда после мероприятия"),
+    ("promo",       "Промо и реклама",            "Согласовать рекламные материалы и размещение афиш"),
+]
+
+VENUE_CHECKLIST = [
+    ("date_confirmed",  "Дата подтверждена"),
+    ("contract_signed", "Договор подписан"),
+    ("rent_paid",       "Аренда оплачена"),
+    ("timing_agreed",   "Тайминг согласован"),
+    ("logistics_agreed","Заезд/выезд согласован"),
+]
+
+
+def start_chat(organizer_id: str, venue_id: str, venue_user_id: str, venue_name: str, message: str, organizer_name: str = "Организатор") -> str:
+    """Создаёт или находит чат между организатором и площадкой, возвращает conversation_id."""
+    payload = json.dumps({
+        "organizerId": organizer_id,
+        "venueId": venue_id,
+        "venueUserId": venue_user_id,
+        "venueName": venue_name,
+        "message": message,
+        "organizerName": organizer_name,
+    }).encode()
+    req = urllib.request.Request(
+        f"{CHAT_URL}?action=start",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read())
+        return data.get("conversationId", "")
+    except Exception:
+        return ""
+
+
+def send_chat_message(conversation_id: str, sender_id: str, text: str, sender_name: str = "Система"):
+    """Отправляет сообщение в чат."""
+    if not conversation_id:
+        return
+    payload = json.dumps({
+        "conversationId": conversation_id,
+        "senderId": sender_id,
+        "text": text,
+        "senderName": sender_name,
+    }).encode()
+    req = urllib.request.Request(
+        f"{CHAT_URL}?action=send",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass
 
 
 def send_notification(user_id: str, notif_type: str, title: str, body: str, link_page: str = ""):
@@ -340,30 +404,93 @@ def handler(event: dict, context) -> dict:
     # POST organizer_respond — организатор принимает/отклоняет условия
     if method == "POST" and action == "organizer_respond":
         b = json.loads(event.get("body") or "{}")
-        booking_id = b.get("bookingId", "")
-        response   = b.get("response", "")  # "accepted" / "cancelled"
+        booking_id    = b.get("bookingId", "")
+        response      = b.get("response", "")  # "accepted" / "cancelled"
+        organizer_name = b.get("organizerName", "Организатор")
         if not booking_id or response not in ("accepted", "cancelled"):
             return err("Некорректные данные")
         conn = get_conn(); cur = conn.cursor()
         new_status = "accepted" if response == "accepted" else "cancelled"
         cur.execute(
-            f"UPDATE {SCHEMA}.venue_bookings SET status=%s, organizer_response=%s, updated_at=NOW() WHERE id=%s RETURNING venue_user_id, venue_id, event_date",
+            f"""UPDATE {SCHEMA}.venue_bookings SET status=%s, organizer_response=%s, updated_at=NOW()
+                WHERE id=%s
+                RETURNING venue_user_id, venue_id, event_date, organizer_id, project_id,
+                          rental_amount, venue_conditions, event_time, artist""",
             (new_status, response, booking_id))
         row = cur.fetchone()
         if not row: conn.close(); return err("Не найдено", 404)
-        venue_user_id, vid, edate = str(row[0]), str(row[1]), str(row[2])
+        venue_user_id = str(row[0])
+        vid           = str(row[1])
+        edate         = str(row[2])
+        organizer_id  = str(row[3])
+        project_id    = str(row[4])
+        rental_amount = row[5]
+        venue_conditions = row[6] or ""
+        event_time    = row[7] or ""
+        artist        = row[8] or ""
         cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (vid,))
         vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
-        conn.commit(); conn.close()
+
+        conversation_id = ""
         if response == "accepted":
+            # Создаём задачи для организатора
+            existing = cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
+            cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
+            if not cur.fetchone():
+                for i, (key, title, desc) in enumerate(BOOKING_TASKS):
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.booking_tasks (booking_id, project_id, title, description, sort_order) VALUES (%s,%s,%s,%s,%s)",
+                        (booking_id, project_id, title, desc, i))
+
+            # Создаём чеклист для площадки
+            cur.execute(f"SELECT id FROM {SCHEMA}.booking_checklist WHERE booking_id=%s", (booking_id,))
+            if not cur.fetchone():
+                for i, (step_key, step_title) in enumerate(VENUE_CHECKLIST):
+                    is_done = step_key == "date_confirmed"
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.booking_checklist (booking_id, venue_id, step_key, step_title, is_done, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
+                        (booking_id, vid, step_key, step_title, is_done, i))
+
+            conn.commit()
+
+            # Создаём автоматический чат и дублируем условия
+            rent_str = f"{int(rental_amount):,} ₽".replace(",", " ") if rental_amount else "не указана"
+            chat_text = (
+                f"Бронирование подтверждено!\n\n"
+                f"Площадка: {venue_name}\n"
+                f"Дата: {edate}" + (f" {event_time}" if event_time else "") + "\n"
+                + (f"Артист: {artist}\n" if artist else "")
+                + f"Аренда: {rent_str}\n"
+                + (f"Условия: {venue_conditions}\n" if venue_conditions else "")
+                + "\nЖдём вас на площадке! По всем вопросам пишите в этот чат."
+            )
+            conversation_id = start_chat(
+                organizer_id, vid, venue_user_id, venue_name,
+                chat_text, organizer_name
+            )
+            if conversation_id:
+                cur2 = get_conn().cursor()
+                cur2.connection.autocommit = False
+                get_conn().close()
+                # Сохраняем conversation_id в бронировании
+                conn2 = get_conn(); cur2 = conn2.cursor()
+                cur2.execute(
+                    f"UPDATE {SCHEMA}.venue_bookings SET conversation_id=%s WHERE id=%s",
+                    (conversation_id, booking_id))
+                conn2.commit(); conn2.close()
+
             send_notification(venue_user_id, "booking",
                               "Организатор принял условия бронирования",
-                              f"Дата {edate} — бронирование подтверждено с обеих сторон", "notifications")
+                              f"Дата {edate} — бронирование подтверждено с обеих сторон. Создан общий чат.", "chat")
+            send_notification(organizer_id, "booking",
+                              f"Площадка «{venue_name}» — бронирование активно!",
+                              f"Дата {edate} подтверждена. Задачи по организации добавлены в проект.", "projects")
         else:
+            conn.commit(); conn.close()
             send_notification(venue_user_id, "booking",
                               "Организатор отменил бронирование",
                               f"Запрос на дату {edate} отменён", "notifications")
-        return ok({"success": True})
+        return ok({"success": True, "conversationId": conversation_id})
 
     # GET booking_by_project — бронирования по проекту
     if method == "GET" and action == "booking_by_project":
@@ -437,5 +564,142 @@ def handler(event: dict, context) -> dict:
              "venueConditions": r[12], "organizerId": str(r[13]), "organizerName": r[14]}
             for r in rows
         ]})
+
+    # GET booking_tasks — задачи организатора по бронированию
+    if method == "GET" and action == "booking_tasks":
+        booking_id = params.get("booking_id", "")
+        project_id = params.get("project_id", "")
+        if not booking_id and not project_id: return err("booking_id или project_id required")
+        conn = get_conn(); cur = conn.cursor()
+        if booking_id:
+            cur.execute(
+                f"SELECT id,booking_id,project_id,title,description,status,sort_order FROM {SCHEMA}.booking_tasks WHERE booking_id=%s ORDER BY sort_order",
+                (booking_id,))
+        else:
+            cur.execute(
+                f"SELECT id,booking_id,project_id,title,description,status,sort_order FROM {SCHEMA}.booking_tasks WHERE project_id=%s ORDER BY sort_order",
+                (project_id,))
+        rows = cur.fetchall(); conn.close()
+        return ok({"tasks": [
+            {"id": str(r[0]), "bookingId": str(r[1]), "projectId": str(r[2]),
+             "title": r[3], "description": r[4], "status": r[5], "sortOrder": r[6]}
+            for r in rows
+        ]})
+
+    # POST update_task — обновить статус задачи
+    if method == "POST" and action == "update_task":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", "")
+        status  = b.get("status", "")
+        if not task_id or status not in ("pending", "in_progress", "done"):
+            return err("taskId и status (pending/in_progress/done) обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.booking_tasks SET status=%s, updated_at=NOW() WHERE id=%s", (status, task_id))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
+    # GET booking_checklist — чеклист площадки по бронированию
+    if method == "GET" and action == "booking_checklist":
+        booking_id = params.get("booking_id", "")
+        venue_id   = params.get("venue_id", "")
+        if not booking_id and not venue_id: return err("booking_id или venue_id required")
+        conn = get_conn(); cur = conn.cursor()
+        if booking_id:
+            cur.execute(
+                f"SELECT id,booking_id,venue_id,step_key,step_title,is_done,note,sort_order FROM {SCHEMA}.booking_checklist WHERE booking_id=%s ORDER BY sort_order",
+                (booking_id,))
+        else:
+            cur.execute(
+                f"""SELECT c.id,c.booking_id,c.venue_id,c.step_key,c.step_title,c.is_done,c.note,c.sort_order,
+                           b.event_date, b.project_id, p.title, b.rental_amount, b.venue_conditions,
+                           b.organizer_id, u.name, b.event_time, b.artist, b.status, b.conversation_id
+                    FROM {SCHEMA}.booking_checklist c
+                    JOIN {SCHEMA}.venue_bookings b ON b.id=c.booking_id
+                    JOIN {SCHEMA}.projects p ON p.id=b.project_id
+                    JOIN {SCHEMA}.users u ON u.id=b.organizer_id
+                    WHERE c.venue_id=%s ORDER BY b.event_date ASC, c.sort_order ASC""",
+                (venue_id,))
+        rows = cur.fetchall(); conn.close()
+        if venue_id:
+            # Группируем по booking_id
+            bookings_map = {}
+            for r in rows:
+                bid = str(r[1])
+                if bid not in bookings_map:
+                    bookings_map[bid] = {
+                        "bookingId": bid,
+                        "eventDate": str(r[8]),
+                        "projectId": str(r[9]),
+                        "projectTitle": r[10],
+                        "rentalAmount": float(r[11]) if r[11] else None,
+                        "venueConditions": r[12] or "",
+                        "organizerId": str(r[13]),
+                        "organizerName": r[14],
+                        "eventTime": r[15] or "",
+                        "artist": r[16] or "",
+                        "status": r[17],
+                        "conversationId": str(r[18]) if r[18] else "",
+                        "checklist": [],
+                    }
+                bookings_map[bid]["checklist"].append({
+                    "id": str(r[0]), "stepKey": r[3], "stepTitle": r[4],
+                    "isDone": r[5], "note": r[6], "sortOrder": r[7]
+                })
+            return ok({"bookings": list(bookings_map.values())})
+        return ok({"checklist": [
+            {"id": str(r[0]), "bookingId": str(r[1]), "venueId": str(r[2]),
+             "stepKey": r[3], "stepTitle": r[4], "isDone": r[5], "note": r[6], "sortOrder": r[7]}
+            for r in rows
+        ]})
+
+    # POST update_checklist — отметить шаг чеклиста
+    if method == "POST" and action == "update_checklist":
+        b = json.loads(event.get("body") or "{}")
+        item_id = b.get("itemId", "")
+        is_done = b.get("isDone", False)
+        note    = b.get("note", "")
+        if not item_id: return err("itemId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {SCHEMA}.booking_checklist SET is_done=%s, note=%s, updated_at=NOW() WHERE id=%s",
+            (is_done, note, item_id))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
+    # GET booking_detail — полное бронирование с задачами и чеклистом
+    if method == "GET" and action == "booking_detail":
+        booking_id = params.get("booking_id", "")
+        if not booking_id: return err("booking_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT b.id, b.venue_id, v.name, b.project_id, p.title,
+                       b.event_date, b.event_time, b.artist, b.age_limit,
+                       b.expected_guests, b.status, b.rental_amount, b.venue_conditions,
+                       b.organizer_id, b.venue_user_id, b.conversation_id
+                FROM {SCHEMA}.venue_bookings b
+                JOIN {SCHEMA}.venues v ON v.id=b.venue_id
+                JOIN {SCHEMA}.projects p ON p.id=b.project_id
+                WHERE b.id=%s""", (booking_id,))
+        row = cur.fetchone()
+        if not row: conn.close(); return err("Не найдено", 404)
+        booking = {
+            "id": str(row[0]), "venueId": str(row[1]), "venueName": row[2],
+            "projectId": str(row[3]), "projectTitle": row[4],
+            "eventDate": str(row[5]), "eventTime": row[6] or "", "artist": row[7] or "",
+            "ageLimit": row[8] or "", "expectedGuests": row[9], "status": row[10],
+            "rentalAmount": float(row[11]) if row[11] else None,
+            "venueConditions": row[12] or "", "organizerId": str(row[13]),
+            "venueUserId": str(row[14]),
+            "conversationId": str(row[15]) if row[15] else "",
+        }
+        cur.execute(
+            f"SELECT id,title,description,status,sort_order FROM {SCHEMA}.booking_tasks WHERE booking_id=%s ORDER BY sort_order",
+            (booking_id,))
+        booking["tasks"] = [
+            {"id": str(r[0]), "title": r[1], "description": r[2], "status": r[3], "sortOrder": r[4]}
+            for r in cur.fetchall()
+        ]
+        conn.close()
+        return ok({"booking": booking})
 
     return err("Not found", 404)

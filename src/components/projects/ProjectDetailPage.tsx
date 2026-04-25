@@ -4,8 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { PROJECTS_URL, STATUS_CONFIG, TAX_OPTIONS, EXPENSE_CATEGORIES, fmt, type Project, type Expense, type IncomeLine } from "@/hooks/useProjects";
 import { exportCSV, exportExcel, exportPDF, companyInfoFromUser } from "@/lib/exportProject";
 import { useAuth } from "@/context/AuthContext";
+import ProjectVenueTab from "@/components/projects/ProjectVenueTab";
 
-interface Props { projectId: string; onBack: () => void; }
+interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversationId: string) => void; }
 
 // ─── Редактируемая ячейка ─────────────────────────────────────────────────────
 function EditCell({ value, onSave, prefix="", suffix="", type="text", className="" }: {
@@ -29,11 +30,11 @@ function EditCell({ value, onSave, prefix="", suffix="", type="text", className=
   );
 }
 
-export default function ProjectDetailPage({ projectId, onBack }: Props) {
+export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Props) {
   const { user } = useAuth();
   const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary">("budget");
+  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue">("budget");
   const [saving, setSaving] = useState<string|null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -144,7 +145,12 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
   const taxPlan = f.taxPlan, taxFact = f.taxFact;
   const profitPlan = f.profitPlan, profitFact = f.profitFact;
 
-  const TABS = [{id:"budget",label:"Бюджет расходов",icon:"TrendingDown"},{id:"income",label:"Доходы",icon:"TrendingUp"},{id:"summary",label:"Итог / P&L",icon:"BarChart3"}] as const;
+  const TABS = [
+    {id:"budget",label:"Бюджет расходов",icon:"TrendingDown"},
+    {id:"income",label:"Доходы",icon:"TrendingUp"},
+    {id:"summary",label:"Итог / P&L",icon:"BarChart3"},
+    {id:"venue",label:"Площадка",icon:"Building2"},
+  ] as const;
 
   return (
     <div className="min-h-screen pt-20">
@@ -444,6 +450,11 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── VENUE ── */}
+        {activeTab==="venue" && (
+          <ProjectVenueTab projectId={projectId} onOpenChat={onOpenChat} />
         )}
 
         {saving && (

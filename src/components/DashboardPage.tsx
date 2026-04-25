@@ -8,6 +8,7 @@ import DashboardVenuesTab from "@/components/dashboard/DashboardVenuesTab";
 import DashboardToursTab from "@/components/dashboard/DashboardToursTab";
 import DashboardNotificationsTab from "@/components/dashboard/DashboardNotificationsTab";
 import DashboardProfileTab from "@/components/dashboard/DashboardProfileTab";
+import DashboardVenueProjectsTab from "@/components/dashboard/DashboardVenueProjectsTab";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -58,6 +59,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const tabs = isVenue
     ? [
         { id: "venues", label: "Мои площадки", icon: "Building2" },
+        { id: "projects", label: "Проекты", icon: "FolderOpen" },
         { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
         { id: "profile", label: "Профиль", icon: "User" },
       ]
@@ -163,6 +165,12 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             venues={myVenues}
             loading={venuesLoading}
             onAddVenue={() => setShowVenueSetup(true)}
+          />
+        )}
+
+        {tab === "projects" && isVenue && (
+          <DashboardVenueProjectsTab
+            onOpenChat={onNavigate ? (convId) => onNavigate(`chat:${convId}`) : undefined}
           />
         )}
 

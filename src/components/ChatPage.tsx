@@ -53,10 +53,10 @@ interface Message {
   createdAt: string;
 }
 
-export default function ChatPage() {
+export default function ChatPage({ initialConversationId }: { initialConversationId?: string | null }) {
   const { user } = useAuth();
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [activeConvId, setActiveConvId] = useState<string | null>(null);
+  const [activeConvId, setActiveConvId] = useState<string | null>(initialConversationId || null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [sending, setSending] = useState(false);
