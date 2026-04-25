@@ -358,6 +358,32 @@ def handler(event: dict, context) -> dict:
         _sessions[session_id] = user
         return ok({"logoUrl": logo_url})
 
+    # ── POST change_password ──────────────────────────────────────────────
+    if method == "POST" and action == "change_password":
+        session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
+        if not session_id or session_id not in _sessions:
+            return err("Не авторизован", 401)
+        user = _sessions[session_id]
+        uid  = user["id"]
+        b = json.loads(event.get("body") or "{}")
+        current_pw  = b.get("currentPassword") or ""
+        new_pw      = b.get("newPassword") or ""
+        if not current_pw or not new_pw:
+            return err("Заполните все поля")
+        if len(new_pw) < 6:
+            return err("Новый пароль минимум 6 символов")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"SELECT password_hash FROM {SCHEMA}.users WHERE id = %s", (uid,))
+        row = cur.fetchone()
+        if not row or row[0] != hash_pw(current_pw):
+            conn.close()
+            return err("Неверный текущий пароль")
+        cur.execute(f"UPDATE {SCHEMA}.users SET password_hash = %s WHERE id = %s",
+                    (hash_pw(new_pw), uid))
+        conn.commit()
+        conn.close()
+        return ok({"ok": True})
+
     # ── GET status ────────────────────────────────────────────────────────
     if method == "GET" and action == "status":
         session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
