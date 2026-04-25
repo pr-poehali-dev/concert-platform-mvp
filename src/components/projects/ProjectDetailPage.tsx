@@ -30,11 +30,15 @@ function EditCell({ value, onSave, prefix="", suffix="", type="text", className=
 }
 
 export default function ProjectDetailPage({ projectId, onBack }: Props) {
-  const [project, setProject] = useState<Project|null>(null);
   const { user } = useAuth();
+  const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary">("budget");
   const [saving, setSaving] = useState<string|null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const exportRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +48,18 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
   }, [projectId]);
 
   useEffect(()=>{load();},[load]);
+
+  // Закрытие дропдауна по клику вне
+  useEffect(() => {
+    if (!exportOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
+        setExportOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportOpen]);
 
   const api = async (action:string, body:object) => {
     setSaving(action);
@@ -58,17 +74,12 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     setProject(p=>p?{...p,[key]:val}:p);
   };
 
-  // Закрытие дропдауна по клику вне
-  useEffect(() => {
-    if (!exportOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (exportRef.current && !exportRef.current.contains(e.target as Node)) {
-        setExportOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [exportOpen]);
+  const handleDelete = async () => {
+    setDeleting(true);
+    await fetch(`${PROJECTS_URL}?action=delete`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({projectId})});
+    setDeleting(false);
+    onBack();
+  };
 
   // Expenses
   const addExpense = async () => {
@@ -117,9 +128,6 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
     });
   };
 
-  const [exportOpen, setExportOpen] = useState(false);
-  const exportRef = useRef<HTMLDivElement>(null);
-
   if(loading) return (
     <div className="min-h-screen pt-20 flex items-center justify-center">
       <Icon name="Loader2" size={32} className="text-white/30 animate-spin" />
@@ -148,6 +156,13 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
           <div className="flex items-center justify-between mb-4">
             <button onClick={onBack} className="flex items-center gap-2 text-white/50 hover:text-white text-sm transition-colors">
               <Icon name="ArrowLeft" size={16}/>Назад к проектам
+            </button>
+
+            <div className="flex items-center gap-2">
+            {/* Delete button */}
+            <button onClick={()=>setConfirmDelete(true)}
+              className="flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/10 hover:border-neon-pink/40 text-white/40 hover:text-neon-pink transition-all text-sm">
+              <Icon name="Trash2" size={15}/>Удалить
             </button>
 
             {/* Export dropdown */}
@@ -179,6 +194,7 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
                   ))}
                 </div>
               )}
+            </div>
             </div>
           </div>
           <div className="flex items-start justify-between flex-wrap gap-4">
@@ -436,6 +452,32 @@ export default function ProjectDetailPage({ projectId, onBack }: Props) {
           </div>
         )}
       </div>
+
+      {/* Подтверждение удаления */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={()=>setConfirmDelete(false)}/>
+          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-pink/20 animate-scale-in">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-neon-pink/20 flex items-center justify-center">
+                <Icon name="Trash2" size={18} className="text-neon-pink"/>
+              </div>
+              <h3 className="font-oswald font-bold text-white text-lg">Удалить проект?</h3>
+            </div>
+            <p className="text-white/50 text-sm mb-5">«{project.title}» будет удалён без возможности восстановления вместе со всеми расходами и доходами.</p>
+            <div className="flex gap-3">
+              <button onClick={()=>setConfirmDelete(false)}
+                className="flex-1 py-2.5 glass rounded-xl text-white/60 hover:text-white text-sm transition-colors border border-white/10">
+                Отмена
+              </button>
+              <button onClick={handleDelete} disabled={deleting}
+                className="flex-1 py-2.5 bg-neon-pink/90 hover:bg-neon-pink text-white font-oswald font-semibold rounded-xl text-sm transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+                {deleting?<><Icon name="Loader2" size={14} className="animate-spin"/>Удаляю...</>:"Удалить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
