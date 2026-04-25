@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL } from "@/hooks/useProjects";
@@ -289,11 +290,13 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
         </div>
       )}
 
-      {activeBooking && modalType === "venue" && (
-        <VenueRespondModal booking={activeBooking} onClose={()=>{setActiveBooking(null);setModalType(null);}} onSubmit={venueRespond}/>
+      {activeBooking && modalType === "venue" && createPortal(
+        <VenueRespondModal booking={activeBooking} onClose={()=>{setActiveBooking(null);setModalType(null);}} onSubmit={venueRespond}/>,
+        document.body
       )}
-      {activeBooking && modalType === "organizer" && (
-        <OrganizerRespondModal booking={activeBooking} onClose={()=>{setActiveBooking(null);setModalType(null);}} onSubmit={organizerRespond}/>
+      {activeBooking && modalType === "organizer" && createPortal(
+        <OrganizerRespondModal booking={activeBooking} onClose={()=>{setActiveBooking(null);setModalType(null);}} onSubmit={organizerRespond}/>,
+        document.body
       )}
     </div>
   );

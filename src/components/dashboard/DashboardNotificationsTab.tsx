@@ -57,8 +57,11 @@ export default function DashboardNotificationsTab({
           {notifications.map(n => (
             <div
               key={n.id}
-              onClick={() => !n.isRead && markRead(n.id)}
-              className={`flex items-start gap-4 glass rounded-2xl p-4 cursor-pointer hover:bg-white/5 transition-all ${!n.isRead ? "border border-neon-purple/20" : ""}`}
+              onClick={() => {
+                if (!n.isRead) markRead(n.id);
+                if (n.linkPage && onNavigate) onNavigate(n.linkPage);
+              }}
+              className={`flex items-start gap-4 glass rounded-2xl p-4 transition-all ${n.linkPage ? "cursor-pointer hover:bg-white/5" : "cursor-default"} ${!n.isRead ? "border border-neon-purple/20" : ""}`}
             >
               <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-lg shrink-0 ${TYPE_COLOR[n.type] || TYPE_COLOR.system}`}>
                 {n.icon}
@@ -71,6 +74,7 @@ export default function DashboardNotificationsTab({
                       {new Date(n.createdAt).toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" })}
                     </span>
                     {!n.isRead && <span className="w-2 h-2 bg-neon-purple rounded-full" />}
+                    {n.linkPage && <Icon name="ChevronRight" size={14} className="text-white/20" />}
                   </div>
                 </div>
                 {n.body && <p className="text-xs text-white/40 mt-0.5">{n.body}</p>}

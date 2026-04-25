@@ -72,9 +72,9 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
 
       {/* Panel */}
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 glass-strong rounded-2xl border border-white/10 overflow-hidden animate-scale-in z-50 shadow-2xl shadow-black/50">
+        <div className="absolute right-0 top-full mt-2 w-80 rounded-2xl border border-white/15 overflow-hidden animate-scale-in z-50 shadow-2xl shadow-black/80" style={{ background: "#13131f" }}>
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-white/10" style={{ background: "#1a1a2e" }}>
             <div className="flex items-center gap-2">
               <span className="font-oswald font-semibold text-white">Уведомления</span>
               {unreadCount > 0 && (
@@ -140,7 +140,7 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
 
           {/* Footer */}
           {notifications.length > 0 && (
-            <div className="px-4 py-2.5 border-t border-white/10">
+            <div className="px-4 py-2.5 border-t border-white/10" style={{ background: "#1a1a2e" }}>
               <button
                 onClick={() => { onNavigate("dashboard"); setOpen(false); }}
                 className="w-full text-center text-xs text-white/40 hover:text-neon-cyan transition-colors"
