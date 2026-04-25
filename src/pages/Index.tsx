@@ -5,14 +5,20 @@ import SearchPage from "@/components/SearchPage";
 import ToursPage from "@/components/ToursPage";
 import ChatPage from "@/components/ChatPage";
 import DashboardPage from "@/components/DashboardPage";
+import { useAuth } from "@/context/AuthContext";
 
 type Page = "home" | "search" | "tours" | "chat" | "dashboard";
 
 export default function Index() {
+  const { user } = useAuth();
   const [activePage, setActivePage] = useState<Page>("home");
 
   const handleNavigate = (page: string) => {
-    setActivePage(page as Page);
+    if ((page === "chat" || page === "dashboard") && !user) {
+      setActivePage("home");
+    } else {
+      setActivePage(page as Page);
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 

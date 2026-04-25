@@ -20,7 +20,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
     { id: "home", label: "Главная", icon: "Home" },
     { id: "search", label: "Площадки", icon: "Search" },
     { id: "tours", label: "Туры", icon: "Route" },
-    { id: "chat", label: "Сообщения", icon: "MessageCircle" },
+    ...(user ? [{ id: "chat", label: "Сообщения", icon: "MessageCircle" }] : []),
   ];
 
   const roleLabel = user?.role === "organizer" ? "Организатор" : "Площадка";
