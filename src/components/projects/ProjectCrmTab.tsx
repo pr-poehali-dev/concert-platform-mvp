@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL } from "@/hooks/useProjects";
 import { EMPLOYEES_URL, type Employee, ROLE_LABELS } from "@/components/dashboard/profile/types";
@@ -52,9 +52,9 @@ export default function ProjectCrmTab({ projectId }: { projectId: string }) {
   const [filterAssignee, setFilterAssignee] = useState<string>("all");
   const [saving, setSaving] = useState(false);
 
-  const emptyForm = {
+  const emptyForm = useMemo(() => ({
     title: "", description: "", assignedTo: "", priority: "medium" as const, dueDate: "",
-  };
+  }), []);
   const [form, setForm] = useState(emptyForm);
 
   const load = useCallback(async () => {

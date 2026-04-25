@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
 import NotificationBell from "@/components/NotificationBell";
+
+const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
 
 interface NavbarProps {
   activePage: string;
@@ -15,6 +17,30 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authModal, setAuthModal] = useState<{ open: boolean; tab: "login" | "register" }>({ open: false, tab: "login" });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [chatUnread, setChatUnread] = useState(0);
+
+  const fetchChatUnread = useCallback(async () => {
+    if (!user) return;
+    try {
+      const res = await fetch(`${CHAT_URL}?action=conversations&user_id=${user.id}`);
+      const data = await res.json();
+      const total = (data.conversations || []).reduce((s: number, c: { unread: number }) => s + (c.unread || 0), 0);
+      setChatUnread(total);
+    } catch { /* silent */ }
+  }, [user]);
+
+  // Сброс при переходе в чат
+  useEffect(() => {
+    if (activePage === "chat") setChatUnread(0);
+  }, [activePage]);
+
+  // Загружаем и обновляем каждые 15 сек
+  useEffect(() => {
+    if (!user) { setChatUnread(0); return; }
+    fetchChatUnread();
+    const t = setInterval(fetchChatUnread, 15000);
+    return () => clearInterval(t);
+  }, [user, fetchChatUnread]);
 
   const navItems = [
     ...(!user ? [{ id: "home", label: "Главная", icon: "Home" }] : []),
@@ -57,8 +83,8 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
                 >
                   <Icon name={item.icon} size={16} />
                   {item.label}
-                  {item.id === "chat" && (
-                    <Badge className="bg-neon-pink text-white text-xs px-1.5 py-0 h-4 min-w-4">3</Badge>
+                  {item.id === "chat" && chatUnread > 0 && (
+                    <Badge className="bg-neon-pink text-white text-xs px-1.5 py-0 h-4 min-w-4">{chatUnread > 9 ? "9+" : chatUnread}</Badge>
                   )}
                 </button>
               ))}
@@ -144,6 +170,9 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
                 >
                   <Icon name={item.icon} size={18} />
                   {item.label}
+                  {item.id === "chat" && chatUnread > 0 && (
+                    <Badge className="ml-auto bg-neon-pink text-white text-xs px-1.5 py-0 h-4 min-w-4">{chatUnread > 9 ? "9+" : chatUnread}</Badge>
+                  )}
                 </button>
               ))}
 

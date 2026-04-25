@@ -55,11 +55,13 @@ export default function DashboardCompanyTab() {
   }, [companyId]);
 
   useEffect(() => {
+    if (!companyId) return;
     loadEmployees();
     loadMessages();
+    if (pollingRef.current) clearInterval(pollingRef.current);
     pollingRef.current = setInterval(loadMessages, 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [loadEmployees, loadMessages]);
+  }, [loadEmployees, loadMessages, companyId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
