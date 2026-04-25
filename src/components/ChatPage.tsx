@@ -162,7 +162,7 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     !search || c.venueName.toLowerCase().includes(search.toLowerCase())
   );
 
-  const totalUnread = conversations.reduce((s, c) => s + c.unread, 0);
+  const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
   // Группировка сообщений по дате
   let lastDate = "";

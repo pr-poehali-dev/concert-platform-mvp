@@ -586,22 +586,22 @@ def handler(event: dict, context) -> dict:
         if not organizer_id: return err("organizer_id required")
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
-            f"""SELECT b.id, b.venue_id, v.name, b.project_id, p.title,
+            f"""SELECT b.id, b.venue_id, COALESCE(v.name, ''), b.project_id, COALESCE(p.title, b.artist, 'Мероприятие'),
                        b.event_date, b.event_time, b.artist, b.age_limit,
                        b.expected_guests, b.status, b.rental_amount, b.venue_conditions,
                        b.organizer_id, b.conversation_id
                 FROM {SCHEMA}.venue_bookings b
-                JOIN {SCHEMA}.venues v ON v.id=b.venue_id
-                JOIN {SCHEMA}.projects p ON p.id=b.project_id
+                LEFT JOIN {SCHEMA}.venues v ON v.id=b.venue_id
+                LEFT JOIN {SCHEMA}.projects p ON p.id=b.project_id
                 WHERE b.organizer_id=%s ORDER BY b.created_at DESC""", (organizer_id,))
         rows = cur.fetchall(); conn.close()
         return ok({"bookings": [
             {"id": str(r[0]), "venueId": str(r[1]), "venueName": r[2],
              "projectId": str(r[3]), "projectTitle": r[4],
-             "eventDate": str(r[5]), "eventTime": r[6], "artist": r[7],
-             "ageLimit": r[8], "expectedGuests": r[9], "status": r[10],
+             "eventDate": str(r[5]), "eventTime": r[6] or "", "artist": r[7] or "",
+             "ageLimit": r[8] or "", "expectedGuests": r[9], "status": r[10],
              "rentalAmount": float(r[11]) if r[11] else None,
-             "venueConditions": r[12], "organizerId": str(r[13]),
+             "venueConditions": r[12] or "", "organizerId": str(r[13]),
              "conversationId": str(r[14]) if r[14] else ""}
             for r in rows
         ]})
@@ -612,23 +612,23 @@ def handler(event: dict, context) -> dict:
         if not venue_user_id: return err("venue_user_id required")
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
-            f"""SELECT b.id, b.venue_id, v.name, b.project_id, p.title,
+            f"""SELECT b.id, b.venue_id, COALESCE(v.name, ''), b.project_id, COALESCE(p.title, b.artist, 'Мероприятие'),
                        b.event_date, b.event_time, b.artist, b.age_limit,
                        b.expected_guests, b.status, b.rental_amount, b.venue_conditions,
-                       b.organizer_id, u.name, b.conversation_id
+                       b.organizer_id, COALESCE(u.name, 'Организатор'), b.conversation_id
                 FROM {SCHEMA}.venue_bookings b
-                JOIN {SCHEMA}.venues v ON v.id=b.venue_id
-                JOIN {SCHEMA}.projects p ON p.id=b.project_id
-                JOIN {SCHEMA}.users u ON u.id=b.organizer_id
+                LEFT JOIN {SCHEMA}.venues v ON v.id=b.venue_id
+                LEFT JOIN {SCHEMA}.projects p ON p.id=b.project_id
+                LEFT JOIN {SCHEMA}.users u ON u.id=b.organizer_id
                 WHERE b.venue_user_id=%s ORDER BY b.created_at DESC""", (venue_user_id,))
         rows = cur.fetchall(); conn.close()
         return ok({"bookings": [
             {"id": str(r[0]), "venueId": str(r[1]), "venueName": r[2],
              "projectId": str(r[3]), "projectTitle": r[4],
-             "eventDate": str(r[5]), "eventTime": r[6], "artist": r[7],
-             "ageLimit": r[8], "expectedGuests": r[9], "status": r[10],
+             "eventDate": str(r[5]), "eventTime": r[6] or "", "artist": r[7] or "",
+             "ageLimit": r[8] or "", "expectedGuests": r[9], "status": r[10],
              "rentalAmount": float(r[11]) if r[11] else None,
-             "venueConditions": r[12], "organizerId": str(r[13]), "organizerName": r[14],
+             "venueConditions": r[12] or "", "organizerId": str(r[13]), "organizerName": r[14],
              "conversationId": str(r[15]) if r[15] else ""}
             for r in rows
         ]})

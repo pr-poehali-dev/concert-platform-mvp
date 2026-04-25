@@ -162,10 +162,6 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
     if (!user) return;
     setLoading(true);
     try {
-      const action = isVenue ? "bookings_for_venue" : "booking_by_project";
-      const param = isVenue ? `venue_user_id=${user.id}` : "";
-      // Для организатора грузим все проекты сначала, потом бронирования
-      // Упрощённо: загружаем по venue_user_id или all pending confirmed
       const url = isVenue
         ? `${PROJECTS_URL}?action=bookings_for_venue&venue_user_id=${user.id}`
         : `${PROJECTS_URL}?action=bookings_for_organizer&organizer_id=${user.id}`;
