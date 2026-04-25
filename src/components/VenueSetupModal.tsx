@@ -133,16 +133,17 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Ошибка");
 
+      onCreated();
+      onClose();
+
       if (user) {
-        await sendNotification(
+        sendNotification(
           user.id, "venue",
           `Площадка «${form.name}» опубликована!`,
           `Ваша площадка в ${form.city} теперь отображается в поиске.`,
           "search"
-        );
+        ).catch(() => {});
       }
-      onCreated();
-      onClose();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Ошибка при сохранении");
     } finally {
