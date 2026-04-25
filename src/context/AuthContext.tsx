@@ -62,17 +62,29 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 const AUTH_URL = "https://functions.poehali.dev/f5e06ba0-2cd8-4b53-8899-3cfc3badc3e8";
 const SESSION_KEY = "tourlink_session";
+const USER_CACHE_KEY = "tourlink_user_cache";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    try {
+      const cached = localStorage.getItem(USER_CACHE_KEY);
+      return cached ? (JSON.parse(cached) as User) : null;
+    } catch { return null; }
+  });
   const [isLoading, setIsLoading] = useState(true);
+
+  const setUserWithCache = (u: User | null) => {
+    setUser(u);
+    if (u) localStorage.setItem(USER_CACHE_KEY, JSON.stringify(u));
+    else localStorage.removeItem(USER_CACHE_KEY);
+  };
 
   useEffect(() => {
     const sessionId = localStorage.getItem(SESSION_KEY);
     if (!sessionId) { setIsLoading(false); return; }
     fetch(`${AUTH_URL}?action=me`, { headers: { "X-Session-Id": sessionId } })
       .then((r) => r.json())
-      .then((data) => { if (data.user) setUser(data.user); })
+      .then((data) => { if (data.user) setUserWithCache(data.user); })
       .catch(() => {})
       .finally(() => setIsLoading(false));
   }, []);
@@ -88,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       if (!res.ok) return data.error || "Ошибка входа";
       localStorage.setItem(SESSION_KEY, data.sessionId);
-      setUser(data.user);
+      setUserWithCache(data.user);
       return null;
     } catch {
       return "Ошибка соединения";
@@ -108,7 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const json = await res.json();
       if (!res.ok) return json.error || "Ошибка регистрации";
       localStorage.setItem(SESSION_KEY, json.sessionId);
-      setUser(json.user);
+      setUserWithCache(json.user);
       return null;
     } catch {
       return "Ошибка соединения";
@@ -128,7 +140,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await res.json();
       if (!res.ok) return data.error || "Ошибка сохранения";
-      if (data.user) setUser(data.user);
+      if (data.user) setUserWithCache(data.user);
       return null;
     } catch {
       return "Ошибка соединения";
@@ -137,7 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
-    setUser(null);
+    setUserWithCache(null);
   };
 
   return (
