@@ -39,6 +39,22 @@
       "expectedStatus": 404,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Venues list",
+      "method": "GET",
+      "path": "/?action=venues_list",
+      "expectedStatus": 200,
+      "expectedBody": { "venues": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Booked dates no venue_id",
+      "method": "GET",
+      "path": "/?action=booked_dates",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }
