@@ -1,5 +1,8 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import AuthModal from "@/components/AuthModal";
+import { useAuth } from "@/context/AuthContext";
 
 const HERO_IMAGE = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/e1d7542c-8ded-4ad1-8101-77b43e4b65bf.jpg";
 const VENUE_IMAGE = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/2d0113c6-c12e-42b6-9cd4-2141cf50ef4f.jpg";
@@ -62,6 +65,9 @@ interface HomePageProps {
 }
 
 export default function HomePage({ onNavigate }: HomePageProps) {
+  const { user } = useAuth();
+  const [authModal, setAuthModal] = useState<{ open: boolean; role: "organizer" | "venue" }>({ open: false, role: "organizer" });
+
   const colorMap: Record<string, string> = {
     "neon-purple": "text-neon-purple bg-neon-purple/10 border-neon-purple/20",
     "neon-cyan": "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20",
@@ -269,16 +275,39 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               Присоединяйтесь к сотням организаторов и площадок, которые уже работают через TourLink
             </p>
             <div className="flex flex-wrap justify-center gap-4 relative z-10">
-              <button className="px-8 py-4 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-lg rounded-xl hover:opacity-90 transition-opacity hover:shadow-lg hover:shadow-neon-purple/30">
-                Я организатор
-              </button>
-              <button className="px-8 py-4 glass-strong text-white font-oswald font-semibold text-lg rounded-xl hover:bg-white/10 transition-all border border-white/20">
-                Я площадка
-              </button>
+              {user ? (
+                <button
+                  onClick={() => onNavigate("tours")}
+                  className="px-8 py-4 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-lg rounded-xl hover:opacity-90 transition-opacity hover:shadow-lg hover:shadow-neon-purple/30"
+                >
+                  Мои туры
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setAuthModal({ open: true, role: "organizer" })}
+                    className="px-8 py-4 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-lg rounded-xl hover:opacity-90 transition-opacity hover:shadow-lg hover:shadow-neon-purple/30"
+                  >
+                    Я организатор
+                  </button>
+                  <button
+                    onClick={() => setAuthModal({ open: true, role: "venue" })}
+                    className="px-8 py-4 glass-strong text-white font-oswald font-semibold text-lg rounded-xl hover:bg-white/10 transition-all border border-white/20"
+                  >
+                    Я площадка
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
       </section>
+
+      <AuthModal
+        open={authModal.open}
+        onClose={() => setAuthModal({ ...authModal, open: false })}
+        defaultTab="register"
+      />
     </div>
   );
 }
