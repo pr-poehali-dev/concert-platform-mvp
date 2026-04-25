@@ -549,17 +549,19 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT b.id, b.venue_id, v.name, b.event_date, b.event_time,
                        b.artist, b.age_limit, b.expected_guests, b.status,
-                       b.rental_amount, b.venue_conditions, b.organizer_response
+                       b.rental_amount, b.venue_conditions, b.organizer_response,
+                       b.conversation_id
                 FROM {SCHEMA}.venue_bookings b
-                JOIN {SCHEMA}.venues v ON v.id=b.venue_id
+                LEFT JOIN {SCHEMA}.venues v ON v.id=b.venue_id
                 WHERE b.project_id=%s ORDER BY b.created_at DESC""", (pid,))
         rows = cur.fetchall(); conn.close()
         return ok({"bookings": [
-            {"id": str(r[0]), "venueId": str(r[1]), "venueName": r[2],
-             "eventDate": str(r[3]), "eventTime": r[4], "artist": r[5],
-             "ageLimit": r[6], "expectedGuests": r[7], "status": r[8],
+            {"id": str(r[0]), "venueId": str(r[1]), "venueName": r[2] or "",
+             "eventDate": str(r[3]), "eventTime": r[4] or "", "artist": r[5] or "",
+             "ageLimit": r[6] or "", "expectedGuests": r[7], "status": r[8],
              "rentalAmount": float(r[9]) if r[9] else None,
-             "venueConditions": r[10], "organizerResponse": r[11]}
+             "venueConditions": r[10] or "", "organizerResponse": r[11] or "",
+             "conversationId": str(r[12]) if r[12] else ""}
             for r in rows
         ]})
 
@@ -667,8 +669,8 @@ def handler(event: dict, context) -> dict:
 
     # GET booking_checklist — чеклист площадки по бронированию
     if method == "GET" and action == "booking_checklist":
-        booking_id = params.get("booking_id", "")
-        venue_id   = params.get("venue_id", "")
+        booking_id   = params.get("booking_id", "")
+        venue_id     = params.get("venue_id", "")      # venue_user_id площадки
         if not booking_id and not venue_id: return err("booking_id или venue_id required")
         conn = get_conn(); cur = conn.cursor()
         if booking_id:
@@ -676,15 +678,19 @@ def handler(event: dict, context) -> dict:
                 f"SELECT id,booking_id,venue_id,step_key,step_title,is_done,note,sort_order FROM {SCHEMA}.booking_checklist WHERE booking_id=%s ORDER BY sort_order",
                 (booking_id,))
         else:
+            # venue_id — это venue_user_id (ID пользователя-площадки), ищем через venue_bookings
             cur.execute(
-                f"""SELECT c.id,c.booking_id,c.venue_id,c.step_key,c.step_title,c.is_done,c.note,c.sort_order,
-                           b.event_date, b.project_id, p.title, b.rental_amount, b.venue_conditions,
-                           b.organizer_id, u.name, b.event_time, b.artist, b.status, b.conversation_id
+                f"""SELECT c.id, c.booking_id, c.venue_id, c.step_key, c.step_title, c.is_done, c.note, c.sort_order,
+                           b.event_date, b.project_id, COALESCE(p.title, b.artist, 'Мероприятие'),
+                           b.rental_amount, b.venue_conditions,
+                           b.organizer_id, COALESCE(u.name, 'Организатор'),
+                           b.event_time, b.artist, b.status, b.conversation_id
                     FROM {SCHEMA}.booking_checklist c
-                    JOIN {SCHEMA}.venue_bookings b ON b.id=c.booking_id
-                    JOIN {SCHEMA}.projects p ON p.id=b.project_id
-                    JOIN {SCHEMA}.users u ON u.id=b.organizer_id
-                    WHERE c.venue_id=%s ORDER BY b.event_date ASC, c.sort_order ASC""",
+                    JOIN {SCHEMA}.venue_bookings b ON b.id = c.booking_id
+                    LEFT JOIN {SCHEMA}.projects p ON p.id = b.project_id
+                    LEFT JOIN {SCHEMA}.users u ON u.id = b.organizer_id
+                    WHERE b.venue_user_id = %s
+                    ORDER BY b.event_date ASC, c.sort_order ASC""",
                 (venue_id,))
         rows = cur.fetchall(); conn.close()
         if venue_id:

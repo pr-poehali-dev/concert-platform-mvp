@@ -58,16 +58,25 @@ export default function ProjectVenueTab({ projectId, onOpenChat }: { projectId: 
       );
 
       const detailed = await Promise.all(
-        confirmedBookings.map(async (b: { id: string }) => {
+        confirmedBookings.map(async (b: { id: string; conversationId?: string }) => {
           const det = await fetch(`${PROJECTS_URL}?action=booking_detail&booking_id=${b.id}`).then(r => r.json());
           const booking = det.booking || null;
-          // Если чата ещё нет — создаём автоматически
+          // Если в detail нет conversationId но есть в списке — берём оттуда
+          if (booking && !booking.conversationId && b.conversationId) {
+            booking.conversationId = b.conversationId;
+          }
+          // Если чата всё ещё нет — создаём в фоне
           if (booking && !booking.conversationId) {
-            const chatRes = await fetch(`${PROJECTS_URL}?action=create_missing_chat`, {
+            fetch(`${PROJECTS_URL}?action=create_missing_chat`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ bookingId: booking.id }),
-            }).then(r => r.json());
-            if (chatRes.conversationId) booking.conversationId = chatRes.conversationId;
+            }).then(r => r.json()).then(chatRes => {
+              if (chatRes.conversationId) {
+                setBookings(prev => prev.map(bk =>
+                  bk.id === booking.id ? { ...bk, conversationId: chatRes.conversationId } : bk
+                ));
+              }
+            }).catch(() => {});
           }
           return booking;
         })
