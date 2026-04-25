@@ -1,0 +1,2 @@
+ALTER TABLE t_p17532248_concert_platform_mvp.users
+  ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE;
