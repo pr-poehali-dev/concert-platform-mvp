@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
@@ -14,6 +15,7 @@ interface NavbarProps {
 
 export default function Navbar({ activePage, onNavigate }: NavbarProps) {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authModal, setAuthModal] = useState<{ open: boolean; tab: "login" | "register" }>({ open: false, tab: "login" });
   const [userMenuOpen, setUserMenuOpen] = useState(false);
@@ -131,13 +133,13 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
               ) : (
                 <>
                   <button
-                    onClick={() => setAuthModal({ open: true, tab: "login" })}
+                    onClick={() => navigate("/login")}
                     className="px-4 py-2 text-sm text-white/70 hover:text-white transition-colors"
                   >
                     Войти
                   </button>
                   <button
-                    onClick={() => setAuthModal({ open: true, tab: "register" })}
+                    onClick={() => navigate("/login/organizer")}
                     className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-neon-purple to-neon-cyan rounded-lg hover:opacity-90 transition-opacity"
                   >
                     Регистрация
@@ -205,13 +207,13 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
               ) : (
                 <div className="pt-2 pb-1 flex gap-2">
                   <button
-                    onClick={() => { setAuthModal({ open: true, tab: "login" }); setMobileOpen(false); }}
+                    onClick={() => { navigate("/login"); setMobileOpen(false); }}
                     className="flex-1 py-2 text-sm text-white/70 border border-white/20 rounded-lg hover:border-white/40 transition-colors"
                   >
                     Войти
                   </button>
                   <button
-                    onClick={() => { setAuthModal({ open: true, tab: "register" }); setMobileOpen(false); }}
+                    onClick={() => { navigate("/login/organizer"); setMobileOpen(false); }}
                     className="flex-1 py-2 text-sm font-medium text-white bg-gradient-to-r from-neon-purple to-neon-cyan rounded-lg"
                   >
                     Регистрация

@@ -78,8 +78,13 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function AdminPage() {
-  const [token, setToken] = useState(() => localStorage.getItem("gl_admin_token") || "");
+interface AdminPageProps {
+  externalToken?: string;
+  onExternalLogout?: () => void;
+}
+
+export default function AdminPage({ externalToken, onExternalLogout }: AdminPageProps = {}) {
+  const [token, setToken] = useState(() => externalToken || localStorage.getItem("gl_admin_token") || "");
   const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import">("overview");
   const [supportUnread, setSupportUnread] = useState(0);
 
@@ -233,7 +238,11 @@ export default function AdminPage() {
             <span className="font-oswald font-bold text-white">GLOBAL LINK <span className="text-neon-purple">ADMIN</span></span>
           </div>
           <button
-            onClick={() => { setToken(""); localStorage.removeItem("gl_admin_token"); }}
+            onClick={() => {
+              setToken("");
+              localStorage.removeItem("gl_admin_token");
+              if (onExternalLogout) onExternalLogout();
+            }}
             className="flex items-center gap-1.5 text-white/40 hover:text-neon-pink transition-colors text-sm"
           >
             <Icon name="LogOut" size={14} />Выйти

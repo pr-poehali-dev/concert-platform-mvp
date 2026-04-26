@@ -9,6 +9,9 @@ import { NotificationsProvider } from "@/context/NotificationsContext";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import AdminPage from "./components/AdminPage";
+import LoginSelectPage from "./pages/LoginSelectPage";
+import OrganizerLoginPage from "./pages/OrganizerLoginPage";
+import AdminLoginPage from "./pages/AdminLoginPage";
 
 const queryClient = new QueryClient();
 
@@ -23,6 +26,10 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/admin" element={<AdminPage />} />
+            {/* ── Login routes ── */}
+            <Route path="/login" element={<LoginSelectPage />} />
+            <Route path="/login/organizer" element={<OrganizerLoginPage />} />
+            <Route path="/login/admin" element={<AdminLoginPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

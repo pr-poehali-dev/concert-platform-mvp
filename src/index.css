@@ -212,6 +212,19 @@
   }
 }
 
+/* Shared input style for login pages */
+.gl-input {
+  @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-white placeholder:text-white/20 outline-none focus:border-neon-cyan/40 transition-colors text-sm;
+  background: rgba(255, 255, 255, 0.05);
+}
+.gl-input:focus {
+  box-shadow: 0 0 0 1px rgba(34, 211, 238, 0.15);
+}
+select.gl-input option {
+  background: #141722;
+  color: white;
+}
+
 .scrollbar-thin::-webkit-scrollbar {
   width: 4px;
 }
