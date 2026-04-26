@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 
 const IMPORT_URL = "https://functions.poehali.dev/c7f2752f-6618-495c-9f9e-8553dce85384";
+const OG_URL = "https://functions.poehali.dev/5c748a1f-294a-4d95-95f2-e574b07c7d21";
 
 interface OsmVenue {
   osmId: string;
@@ -42,7 +43,10 @@ const TYPES = [
   { value: "theatre", label: "Театры" },
 ];
 
-type TabId = "search" | "claims";
+interface OgResult { name: string; photo: string | null; status: string; }
+interface OgStatus { needsFetch: number; hasPhoto: number; total: number; }
+
+type TabId = "search" | "claims" | "photos";
 
 export default function AdminImportTab({ token }: { token: string }) {
   const [tab, setTab] = useState<TabId>("search");
@@ -60,6 +64,43 @@ export default function AdminImportTab({ token }: { token: string }) {
   const [claims, setClaims] = useState<Claim[]>([]);
   const [claimsLoading, setClaimsLoading] = useState(false);
   const [processingId, setProcessingId] = useState<string | null>(null);
+
+  // Photos state
+  const [ogStatus, setOgStatus] = useState<OgStatus | null>(null);
+  const [ogLoading, setOgLoading] = useState(false);
+  const [ogFetching, setOgFetching] = useState(false);
+  const [ogResults, setOgResults] = useState<OgResult[]>([]);
+  const [ogMessage, setOgMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const loadOgStatus = async () => {
+    setOgLoading(true);
+    try {
+      const res = await fetch(`${OG_URL}/?action=status`, { headers: { "X-Admin-Secret": token } });
+      const data = await res.json();
+      setOgStatus(data);
+    } catch { /* silent */ }
+    finally { setOgLoading(false); }
+  };
+
+  const runOgFetch = async () => {
+    setOgFetching(true);
+    setOgResults([]);
+    setOgMessage(null);
+    try {
+      const res = await fetch(`${OG_URL}/?action=fetch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Secret": token },
+        body: JSON.stringify({ limit: 20 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка");
+      setOgResults(data.results || []);
+      setOgMessage({ type: "ok", text: `Обновлено: ${data.updated} из ${data.total} площадок` });
+      loadOgStatus();
+    } catch (e: unknown) {
+      setOgMessage({ type: "err", text: e instanceof Error ? e.message : "Ошибка" });
+    } finally { setOgFetching(false); }
+  };
 
   const search = async () => {
     setLoading(true);
@@ -152,10 +193,10 @@ export default function AdminImportTab({ token }: { token: string }) {
 
       {/* Вкладки */}
       <div className="flex gap-1 glass rounded-xl p-1 w-fit">
-        {([["search", "Поиск OSM", "Search"], ["claims", "Заявки владельцев", "KeyRound"]] as const).map(([id, label, icon]) => (
+        {([["search", "Поиск OSM", "Search"], ["claims", "Заявки владельцев", "KeyRound"], ["photos", "Фото с сайтов", "Image"]] as const).map(([id, label, icon]) => (
           <button
             key={id}
-            onClick={() => { setTab(id); if (id === "claims") loadClaims(); }}
+            onClick={() => { setTab(id); if (id === "claims") loadClaims(); if (id === "photos") loadOgStatus(); }}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${tab === id ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
           >
             <Icon name={icon} size={14} />{label}
@@ -329,6 +370,85 @@ export default function AdminImportTab({ token }: { token: string }) {
                 </div>
               ))}
             </>
+          )}
+        </div>
+      )}
+
+      {/* ── Фото с сайтов ── */}
+      {tab === "photos" && (
+        <div className="space-y-5">
+          {/* Статус */}
+          <div className="glass rounded-2xl p-6 border border-white/10">
+            {ogLoading ? (
+              <div className="flex items-center gap-3 text-white/50 text-sm">
+                <Icon name="Loader2" size={16} className="animate-spin" />Загружаю статистику...
+              </div>
+            ) : ogStatus ? (
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="text-center">
+                  <div className="font-oswald font-bold text-3xl text-neon-cyan">{ogStatus.hasPhoto}</div>
+                  <div className="text-white/40 text-xs mt-0.5">Есть фото</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-oswald font-bold text-3xl text-neon-pink">{ogStatus.needsFetch}</div>
+                  <div className="text-white/40 text-xs mt-0.5">Нет фото (есть сайт)</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-oswald font-bold text-3xl text-white/40">{ogStatus.total}</div>
+                  <div className="text-white/40 text-xs mt-0.5">Всего из OSM</div>
+                </div>
+                <div className="flex-1" />
+                <button
+                  onClick={runOgFetch}
+                  disabled={ogFetching || ogStatus.needsFetch === 0}
+                  className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity"
+                >
+                  {ogFetching
+                    ? <><Icon name="Loader2" size={16} className="animate-spin" />Парсю сайты...</>
+                    : <><Icon name="Image" size={16} />Подтянуть фото (до 20 шт.)</>
+                  }
+                </button>
+              </div>
+            ) : (
+              <p className="text-white/30 text-sm">Нажми на вкладку чтобы загрузить статус</p>
+            )}
+            <p className="text-white/25 text-xs mt-4 flex items-center gap-1.5">
+              <Icon name="Info" size={12} />
+              Скрипт заходит на сайт каждой площадки и берёт главное фото (og:image). За раз обрабатывается до 20 площадок.
+            </p>
+          </div>
+
+          {ogMessage && (
+            <div className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm ${ogMessage.type === "ok" ? "bg-green-500/10 border-green-500/20 text-green-400" : "bg-neon-pink/10 border-neon-pink/20 text-neon-pink"}`}>
+              <Icon name={ogMessage.type === "ok" ? "CheckCircle2" : "AlertCircle"} size={16} />
+              {ogMessage.text}
+            </div>
+          )}
+
+          {ogResults.length > 0 && (
+            <div className="grid gap-3">
+              {ogResults.map((r, i) => (
+                <div key={i} className="glass rounded-xl p-4 border border-white/10 flex items-center gap-4">
+                  {r.photo ? (
+                    <img src={r.photo} alt={r.name}
+                      className="w-16 h-12 rounded-lg object-cover flex-shrink-0 border border-white/10"
+                      onError={e => { (e.target as HTMLImageElement).style.display = "none"; }}
+                    />
+                  ) : (
+                    <div className="w-16 h-12 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 border border-white/10">
+                      <Icon name="ImageOff" size={16} className="text-white/20" />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">{r.name}</p>
+                    {r.photo
+                      ? <p className="text-green-400 text-xs flex items-center gap-1 mt-0.5"><Icon name="CheckCircle2" size={11} />Фото найдено</p>
+                      : <p className="text-white/30 text-xs flex items-center gap-1 mt-0.5"><Icon name="XCircle" size={11} />og:image не найден</p>
+                    }
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

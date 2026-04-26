@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Status requires auth",
+      "method": "GET",
+      "path": "/?action=status",
+      "expectedStatus": 403,
+      "expectedBody": {"error": "Доступ запрещён"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
