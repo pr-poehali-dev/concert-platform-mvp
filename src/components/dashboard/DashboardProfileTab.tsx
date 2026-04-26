@@ -117,6 +117,38 @@ export default function DashboardProfileTab({
     setTimeout(() => setReqSaved(false), 2000);
   };
 
+  // Email confirmation
+  const [emailConfirmed, setEmailConfirmed] = useState(!!user.verified);
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
+
+  const sendVerification = async () => {
+    setEmailSending(true);
+    setEmailMsg(null);
+    try {
+      const res = await fetch(`${AUTH_URL}?action=resend_verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: user.email }),
+      });
+      const data = await res.json();
+      if (data.reason === "already_confirmed") {
+        setEmailConfirmed(true);
+        setEmailMsg({ ok: true, text: "Email уже подтверждён" });
+      } else if (data.sent) {
+        setEmailSent(true);
+        setEmailMsg({ ok: true, text: "Письмо отправлено — проверьте почту и папку «Спам»" });
+      } else {
+        setEmailMsg({ ok: false, text: "Не удалось отправить письмо, попробуйте позже" });
+      }
+    } catch {
+      setEmailMsg({ ok: false, text: "Ошибка соединения" });
+    } finally {
+      setEmailSending(false);
+    }
+  };
+
   // 2FA
   const [tfaEnabled, setTfaEnabled] = useState(!!user.twofaEnabled);
   const [tfaLoading, setTfaLoading] = useState(false);
@@ -178,6 +210,73 @@ export default function DashboardProfileTab({
 
       {section === "security" && (
         <div className="space-y-4 max-w-lg">
+
+          {/* Email confirmation card */}
+          <div className={`glass rounded-2xl border p-6 ${emailConfirmed ? "border-neon-cyan/20" : "border-amber-400/25"}`}>
+            <div className="flex items-start gap-4">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${emailConfirmed ? "bg-neon-cyan/15 border border-neon-cyan/25" : "bg-amber-400/10 border border-amber-400/20"}`}>
+                <Icon
+                  name={emailConfirmed ? "MailCheck" : "MailWarning"}
+                  size={20}
+                  className={emailConfirmed ? "text-neon-cyan" : "text-amber-400"}
+                />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <h3 className="font-oswald font-semibold text-white text-base">Подтверждение email</h3>
+                  {emailConfirmed
+                    ? <span className="flex items-center gap-1 text-neon-cyan text-xs bg-neon-cyan/10 border border-neon-cyan/20 px-2 py-0.5 rounded-full"><Icon name="Check" size={10} />Подтверждён</span>
+                    : <span className="flex items-center gap-1 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full"><Icon name="Clock" size={10} />Не подтверждён</span>
+                  }
+                </div>
+                <p className="text-white/40 text-sm mb-1">{user.email}</p>
+
+                {emailConfirmed ? (
+                  <p className="text-white/30 text-xs mt-2 flex items-center gap-1.5">
+                    <Icon name="ShieldCheck" size={12} className="text-neon-cyan/50" />
+                    Почта подтверждена — аккаунт защищён
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-white/35 text-xs mt-2 mb-4 leading-relaxed">
+                      Подтвердите почту чтобы защитить аккаунт, получать уведомления и включить двухфакторную аутентификацию.
+                    </p>
+
+                    {emailMsg && (
+                      <div className={`flex items-center gap-2 text-xs rounded-xl px-3 py-2 border mb-3 ${emailMsg.ok ? "text-neon-cyan bg-neon-cyan/5 border-neon-cyan/20" : "text-neon-pink bg-neon-pink/5 border-neon-pink/20"}`}>
+                        <Icon name={emailMsg.ok ? "CheckCircle2" : "AlertCircle"} size={13} />
+                        {emailMsg.text}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={sendVerification}
+                      disabled={emailSending || emailSent}
+                      className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-400/15 border border-amber-400/25 text-amber-300 text-sm font-medium hover:bg-amber-400/25 disabled:opacity-50 transition-all"
+                    >
+                      {emailSending
+                        ? <><Icon name="Loader2" size={14} className="animate-spin" />Отправляю...</>
+                        : emailSent
+                        ? <><Icon name="CheckCircle2" size={14} />Письмо отправлено</>
+                        : <><Icon name="Send" size={14} />Отправить письмо подтверждения</>
+                      }
+                    </button>
+
+                    {emailSent && (
+                      <p className="text-white/25 text-xs mt-2 flex items-center gap-1.5">
+                        <Icon name="Info" size={11} />
+                        Не пришло? Проверьте папку «Спам» или{" "}
+                        <button onClick={() => { setEmailSent(false); setEmailMsg(null); }} className="underline hover:text-white/50 transition-colors">
+                          отправьте снова
+                        </button>
+                      </p>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* 2FA card */}
           <div className="glass rounded-2xl border border-white/10 p-6">
             <div className="flex items-start gap-4">
