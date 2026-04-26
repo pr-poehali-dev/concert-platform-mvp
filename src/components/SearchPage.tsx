@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
@@ -8,6 +8,79 @@ import StartChatModal from "@/components/StartChatModal";
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 const IMPORT_URL = "https://functions.poehali.dev/c7f2752f-6618-495c-9f9e-8553dce85384";
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/e1d7542c-8ded-4ad1-8101-77b43e4b65bf.jpg";
+
+function VenuePhotoSlider({ photos, fallback, alt, verified, venueType }: {
+  photos: string[];
+  fallback: string;
+  alt: string;
+  verified: boolean;
+  venueType: string;
+}) {
+  const [idx, setIdx] = useState(0);
+  const [hovered, setHovered] = useState(false);
+  const imgs = photos.length > 0 ? photos : [fallback];
+
+  const prev = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIdx(i => (i - 1 + imgs.length) % imgs.length);
+  }, [imgs.length]);
+
+  const next = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIdx(i => (i + 1) % imgs.length);
+  }, [imgs.length]);
+
+  return (
+    <div
+      className="relative h-44 overflow-hidden"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {imgs.map((src, i) => (
+        <img
+          key={i}
+          src={src}
+          alt={`${alt} ${i + 1}`}
+          onError={e => { (e.target as HTMLImageElement).src = fallback; }}
+          className={`absolute inset-0 w-full h-full object-cover transition-all duration-500 ${i === idx ? "opacity-100 scale-100" : "opacity-0 scale-105"} ${hovered && i === idx ? "scale-105" : ""}`}
+        />
+      ))}
+      <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
+
+      {/* Стрелки — только при наведении и если фото > 1 */}
+      {imgs.length > 1 && hovered && (
+        <>
+          <button onClick={prev}
+            className="absolute left-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-background/70 backdrop-blur flex items-center justify-center text-white hover:bg-background/90 transition-all z-10">
+            <Icon name="ChevronLeft" size={14} />
+          </button>
+          <button onClick={next}
+            className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-background/70 backdrop-blur flex items-center justify-center text-white hover:bg-background/90 transition-all z-10">
+            <Icon name="ChevronRight" size={14} />
+          </button>
+        </>
+      )}
+
+      {/* Точки-индикаторы */}
+      {imgs.length > 1 && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+          {imgs.map((_, i) => (
+            <button key={i} onClick={e => { e.stopPropagation(); setIdx(i); }}
+              className={`rounded-full transition-all ${i === idx ? "w-4 h-1.5 bg-white" : "w-1.5 h-1.5 bg-white/40 hover:bg-white/70"}`}
+            />
+          ))}
+        </div>
+      )}
+
+      {verified && (
+        <div className="absolute top-3 left-3 flex items-center gap-1 bg-neon-green/20 backdrop-blur border border-neon-green/40 text-neon-green text-xs px-2 py-1 rounded-lg z-10">
+          <Icon name="BadgeCheck" size={12} />Верифицирован
+        </div>
+      )}
+      <Badge className="absolute top-3 right-3 bg-background/60 backdrop-blur text-white border-white/20 text-xs z-10">{venueType}</Badge>
+    </div>
+  );
+}
 
 const CITIES = ["Все города","Москва","Санкт-Петербург","Екатеринбург","Новосибирск","Казань","Ростов-на-Дону","Краснодар"];
 const TYPES = ["Все типы","Клуб","Концертный зал","Театр","Арена","Площадка на открытом воздухе","Бар","Арт-пространство"];
@@ -221,26 +294,13 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {filtered.map(venue => (
                   <div key={venue.id} className="glass rounded-2xl overflow-hidden hover-lift group cursor-pointer">
-                    <div className="relative h-44 overflow-hidden">
-                      <img
-                        src={(venue.photos && venue.photos.length > 0 ? venue.photos[0] : null) || venue.photoUrl || FALLBACK_IMG}
-                        alt={venue.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        onError={e => { (e.target as HTMLImageElement).src = FALLBACK_IMG; }}
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
-                      {venue.verified && (
-                        <div className="absolute top-3 left-3 flex items-center gap-1 bg-neon-green/20 backdrop-blur border border-neon-green/40 text-neon-green text-xs px-2 py-1 rounded-lg">
-                          <Icon name="BadgeCheck" size={12} />Верифицирован
-                        </div>
-                      )}
-                      {venue.photos && venue.photos.length > 1 && (
-                        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-background/60 backdrop-blur border border-white/20 text-white/60 text-xs px-2 py-1 rounded-lg">
-                          <Icon name="Images" size={11} />{venue.photos.length}
-                        </div>
-                      )}
-                      <Badge className="absolute top-3 right-3 bg-background/60 backdrop-blur text-white border-white/20 text-xs">{venue.venueType}</Badge>
-                    </div>
+                    <VenuePhotoSlider
+                      photos={venue.photos && venue.photos.length > 0 ? venue.photos : (venue.photoUrl ? [venue.photoUrl] : [])}
+                      fallback={FALLBACK_IMG}
+                      alt={venue.name}
+                      verified={venue.verified}
+                      venueType={venue.venueType}
+                    />
                     <div className="p-5">
                       <div className="flex items-start justify-between mb-2">
                         <h3 className="font-oswald font-bold text-xl text-white">{venue.name}</h3>
