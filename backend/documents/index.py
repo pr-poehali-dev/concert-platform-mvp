@@ -16,7 +16,6 @@ import uuid
 import psycopg2
 import boto3
 from datetime import datetime
-import urllib.request
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 
@@ -85,15 +84,30 @@ def cdn_url(key: str) -> str:
 
 
 def get_session_user(session_id: str) -> dict | None:
-    auth_url = "https://functions.poehali.dev/f5e06ba0-2cd8-4b53-8899-3cfc3badc3e8"
+    """Проверяет сессию напрямую через таблицу sessions в БД."""
     try:
-        req = urllib.request.Request(
-            f"{auth_url}?action=me",
-            headers={"X-Session-Id": session_id},
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute(
+            f"""SELECT user_data FROM {SCHEMA}.sessions
+                WHERE session_id = %s
+                  AND last_seen > NOW() - INTERVAL '30 days'""",
+            (session_id,),
         )
-        with urllib.request.urlopen(req, timeout=5) as resp:
-            data = json.loads(resp.read())
-            return data.get("user")
+        row = cur.fetchone()
+        if row:
+            cur.execute(
+                f"UPDATE {SCHEMA}.sessions SET last_seen = NOW() WHERE session_id = %s",
+                (session_id,),
+            )
+            conn.commit()
+            conn.close()
+            user_data = row[0]
+            if isinstance(user_data, str):
+                user_data = json.loads(user_data)
+            return user_data
+        conn.close()
+        return None
     except Exception as e:
         print(f"[documents] session check error: {e}")
         return None

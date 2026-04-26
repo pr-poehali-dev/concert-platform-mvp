@@ -348,77 +348,76 @@ export default function ProjectDocumentsTab({ projectId }: Props) {
       {/* ── Upload Modal ───────────────────────────────────────────────── */}
       {uploadModal && uploadFile && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !uploading && setUploadModal(false)} />
-          <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl border border-white/10 p-6 shadow-2xl">
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple/60 to-transparent rounded-t-2xl" />
-            <h3 className="font-oswald font-bold text-lg text-white mb-4 flex items-center gap-2">
-              <Icon name="Upload" size={17} className="text-neon-purple" />
-              Добавить документ к проекту
-            </h3>
+          <div className="absolute inset-0 bg-black/80" onClick={() => !uploading && setUploadModal(false)} />
+          <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/15 shadow-2xl overflow-hidden"
+               style={{ background: "#15152a" }}>
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple/60 to-transparent" />
 
-            {/* File info */}
-            <div className="flex items-center gap-3 glass rounded-xl p-3 border border-white/10 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-neon-purple/10 flex items-center justify-center flex-shrink-0">
-                <Icon name={mimeIcon(uploadFile.type) as never} size={16} className="text-neon-purple" />
+            {/* Header */}
+            <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-white/10">
+              <div className="w-9 h-9 rounded-xl bg-neon-purple/20 flex items-center justify-center flex-shrink-0">
+                <Icon name="Upload" size={16} className="text-neon-purple" />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-sm font-medium truncate">{uploadFile.name}</p>
-                <p className="text-white/30 text-xs">
-                  {uploadFile.size > 1024 * 1024
-                    ? `${(uploadFile.size / 1024 / 1024).toFixed(1)} МБ`
-                    : `${Math.round(uploadFile.size / 1024)} КБ`}
-                </p>
+              <div className="flex-1">
+                <h3 className="font-oswald font-bold text-base text-white">Документ проекта</h3>
+                <p className="text-white/40 text-xs truncate">{uploadFile.name}</p>
               </div>
+              <span className="text-white/25 text-xs flex-shrink-0">
+                {uploadFile.size > 1024 * 1024
+                  ? `${(uploadFile.size / 1024 / 1024).toFixed(1)} МБ`
+                  : `${Math.round(uploadFile.size / 1024)} КБ`}
+              </span>
             </div>
 
-            {/* Category */}
-            <div className="mb-4">
-              <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Категория</label>
-              <div className="grid grid-cols-1 gap-1.5">
-                {CATEGORIES.map(c => (
-                  <button key={c.value} type="button" onClick={() => setUploadCategory(c.value)}
-                    className={`flex items-center gap-2.5 px-3 py-2 rounded-xl border text-sm transition-all ${
-                      uploadCategory === c.value
-                        ? "border-neon-purple/50 bg-neon-purple/15 text-white"
-                        : "border-white/10 bg-white/5 text-white/50 hover:text-white hover:border-white/20"
-                    }`}>
-                    <Icon name={c.icon as never} size={14} className={uploadCategory === c.value ? c.color : ""} />
-                    {c.label}
-                    {uploadCategory === c.value && (
-                      <Icon name="Check" size={13} className="ml-auto text-neon-purple" />
-                    )}
-                  </button>
-                ))}
+            <div className="px-5 py-4 space-y-4">
+              {/* Category — горизонтальная сетка 2 колонки для компактности */}
+              <div>
+                <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Категория</label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {CATEGORIES.map(c => (
+                    <button key={c.value} type="button" onClick={() => setUploadCategory(c.value)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
+                        uploadCategory === c.value
+                          ? "border-neon-purple/60 bg-neon-purple/20 text-white"
+                          : "border-white/10 bg-white/5 text-white/50 hover:text-white hover:border-white/20"
+                      }`}>
+                      <Icon name={c.icon as never} size={13} className={uploadCategory === c.value ? c.color : ""} />
+                      <span className="truncate">{c.label}</span>
+                      {uploadCategory === c.value && <Icon name="Check" size={11} className="ml-auto text-neon-purple flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            {/* Note */}
-            <div className="mb-5">
-              <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">
-                Заметка <span className="normal-case text-white/20">(необязательно)</span>
-              </label>
-              <input type="text" value={uploadNote} onChange={e => setUploadNote(e.target.value)}
-                placeholder="Например: версия для Москвы"
-                className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder:text-white/20 outline-none focus:border-neon-purple/40 transition-colors" />
-            </div>
-
-            {uploadError && (
-              <div className="flex items-center gap-2 text-neon-pink text-sm bg-neon-pink/10 border border-neon-pink/20 rounded-xl px-3 py-2 mb-4">
-                <Icon name="AlertCircle" size={14} />{uploadError}
+              {/* Note */}
+              <div>
+                <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">
+                  Заметка <span className="normal-case text-white/20">(необязательно)</span>
+                </label>
+                <input type="text" value={uploadNote} onChange={e => setUploadNote(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && !uploading && doUpload()}
+                  placeholder="Например: версия для Москвы"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder:text-white/20 outline-none focus:border-neon-purple/40 transition-colors" />
               </div>
-            )}
 
-            <div className="flex gap-3">
-              <button onClick={() => setUploadModal(false)} disabled={uploading}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all disabled:opacity-40">
-                Отмена
-              </button>
-              <button onClick={doUpload} disabled={uploading}
-                className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-sm hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
-                {uploading
-                  ? <><Icon name="Loader2" size={14} className="animate-spin" />Загружаю...</>
-                  : <><Icon name="Upload" size={14} />Загрузить</>}
-              </button>
+              {uploadError && (
+                <div className="flex items-center gap-2 text-neon-pink text-xs bg-neon-pink/10 border border-neon-pink/20 rounded-xl px-3 py-2">
+                  <Icon name="AlertCircle" size={13} />{uploadError}
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setUploadModal(false)} disabled={uploading}
+                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all disabled:opacity-40">
+                  Отмена
+                </button>
+                <button onClick={doUpload} disabled={uploading}
+                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-sm hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {uploading
+                    ? <><Icon name="Loader2" size={14} className="animate-spin" />Загружаю...</>
+                    : <><Icon name="Upload" size={14} />Загрузить</>}
+                </button>
+              </div>
             </div>
           </div>
         </div>

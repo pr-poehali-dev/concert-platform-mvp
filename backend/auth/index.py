@@ -30,6 +30,22 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+def save_session_db(conn, session_id: str, user_id: str, user_data: dict):
+    """Сохраняет сессию в БД для доступа из других функций."""
+    try:
+        cur = conn.cursor()
+        user_json = json.dumps(user_data, ensure_ascii=False)
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.sessions (session_id, user_id, user_data)
+                VALUES (%s, %s, %s::jsonb)
+                ON CONFLICT (session_id) DO UPDATE
+                SET user_data = EXCLUDED.user_data, last_seen = NOW()""",
+            (session_id, user_id, user_json),
+        )
+    except Exception as e:
+        print(f"[auth] save_session_db error: {e}")
+
+
 def get_s3():
     return boto3.client(
         "s3",
@@ -300,6 +316,10 @@ def handler(event: dict, context) -> dict:
         }
         session_id = secrets.token_hex(32)
         _sessions[session_id] = user_data
+        conn2 = get_conn()
+        save_session_db(conn2, session_id, user_id, user_data)
+        conn2.commit()
+        conn2.close()
         return ok({
             "sessionId": session_id,
             "user": user_data,
@@ -324,9 +344,11 @@ def handler(event: dict, context) -> dict:
         row = cur.fetchone()
         if row:
             user = build_user(row)
-            conn.close()
             session_id = secrets.token_hex(32)
             _sessions[session_id] = user
+            save_session_db(conn, session_id, user["id"], user)
+            conn.commit()
+            conn.close()
             return ok({"sessionId": session_id, "user": user})
 
         # Пробуем как сотрудник компании
@@ -384,6 +406,9 @@ def handler(event: dict, context) -> dict:
         }
         session_id = secrets.token_hex(32)
         _sessions[session_id] = user
+        save_session_db(conn, session_id, str(emp[4]), user)
+        conn.commit()
+        conn.close()
         return ok({"sessionId": session_id, "user": user})
 
     # ── POST update_profile ───────────────────────────────────────────────
