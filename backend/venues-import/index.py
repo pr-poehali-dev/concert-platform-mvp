@@ -3,7 +3,7 @@ API для поиска и импорта концертных площадок 
 GET  ?action=search&city=Москва&type=club  — поиск через OSM
 POST ?action=import                         — импорт выбранных площадок в БД (admin)
 POST ?action=claim                          — заявка на владение площадкой (venue owner)
-POST ?action=approve_claim                  — одобрить заявку (admin)
+POST ?action=approve_claim                  — одобрить/отклонить заявку (admin)
 GET  ?action=claims                         — список заявок (admin)
 """
 import json
@@ -12,6 +12,103 @@ import uuid
 import psycopg2
 import urllib.request
 import urllib.parse
+
+APP_URL = "https://concert-platform-mvp.poehali.dev"
+
+
+def send_email(to_email: str, to_name: str, subject: str, html: str) -> None:
+    """Отправляет письмо через Resend API."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        return
+    payload = json.dumps({
+        "from": "GLOBAL LINK <noreply@globallink.art>",
+        "to": [to_email],
+        "subject": subject,
+        "html": html,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as e:
+        print(f"[Resend] Error: {e}")
+
+
+def email_claim_approved(to_email: str, to_name: str, venue_name: str) -> None:
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr><td style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:32px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+          <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Концертная платформа</p>
+        </td></tr>
+        <tr><td style="padding:40px 32px;">
+          <h2 style="margin:0 0 16px;color:#fff;font-size:22px;">Поздравляем, {to_name}!</h2>
+          <p style="margin:0 0 16px;color:rgba(255,255,255,0.6);font-size:15px;line-height:1.6;">
+            Ваша заявка на площадку <strong style="color:#fff;">«{venue_name}»</strong> одобрена.
+          </p>
+          <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:15px;line-height:1.6;">
+            Теперь вы можете войти в личный кабинет и отредактировать карточку площадки: добавить фотографии, описание, технический райдер, цены и контакты.
+          </p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="{APP_URL}"
+               style="display:inline-block;padding:16px 40px;background:linear-gradient(135deg,#7c3aed,#06b6d4);
+                      color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:700;">
+              Открыть личный кабинет
+            </a>
+          </div>
+        </td></tr>
+        <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">© 2025 GLOBAL LINK · Концертная платформа</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>"""
+    send_email(to_email, to_name, f"Заявка одобрена — площадка «{venue_name}»", html)
+
+
+def email_claim_rejected(to_email: str, to_name: str, venue_name: str) -> None:
+    html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr><td style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:32px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+          <p style="margin:8px 0 0;color:rgba(255,255,255,0.8);font-size:14px;">Концертная платформа</p>
+        </td></tr>
+        <tr><td style="padding:40px 32px;">
+          <h2 style="margin:0 0 16px;color:#fff;font-size:22px;">Привет, {to_name}</h2>
+          <p style="margin:0 0 24px;color:rgba(255,255,255,0.6);font-size:15px;line-height:1.6;">
+            К сожалению, мы не смогли подтвердить вашу заявку на площадку <strong style="color:#fff;">«{venue_name}»</strong>.<br><br>
+            Если вы считаете, что это ошибка — напишите нам через раздел «Поддержка» в личном кабинете.
+          </p>
+          <div style="text-align:center;margin:32px 0;">
+            <a href="{APP_URL}"
+               style="display:inline-block;padding:16px 40px;background:rgba(255,255,255,0.08);
+                      color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:700;border:1px solid rgba(255,255,255,0.15);">
+              Перейти на платформу
+            </a>
+          </div>
+        </td></tr>
+        <tr><td style="padding:20px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">© 2025 GLOBAL LINK · Концертная платформа</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>"""
+    send_email(to_email, to_name, f"Заявка на площадку «{venue_name}»", html)
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 OVERPASS_URL = "https://overpass-api.de/api/interpreter"
@@ -334,7 +431,7 @@ def handler(event: dict, context) -> dict:
         } for r in rows]
         return ok({"claims": claims})
 
-    # ── POST approve_claim — одобрить заявку (admin) ──────────────────────
+    # ── POST approve_claim — одобрить/отклонить заявку (admin) ───────────
     if method == "POST" and action == "approve_claim":
         body = json.loads(event.get("body") or "{}")
         venue_id = body.get("venueId", "")
@@ -346,6 +443,16 @@ def handler(event: dict, context) -> dict:
 
         conn = get_conn()
         cur = conn.cursor()
+
+        # Получаем данные для письма
+        cur.execute(f"""
+            SELECT v.name, u.name, u.email
+            FROM {SCHEMA}.venues v
+            JOIN {SCHEMA}.users u ON u.id = v.owner_user_id
+            WHERE v.id = '{venue_id}'
+        """)
+        info = cur.fetchone()
+
         if approve:
             cur.execute(f"""
                 UPDATE {SCHEMA}.venues
@@ -360,6 +467,14 @@ def handler(event: dict, context) -> dict:
             """)
         conn.commit()
         conn.close()
+
+        if info:
+            venue_name, user_name, user_email = info
+            if approve:
+                email_claim_approved(user_email, user_name, venue_name)
+            else:
+                email_claim_rejected(user_email, user_name, venue_name)
+
         return ok({"success": True, "approved": approve})
 
     return err("Неизвестное действие", 404)
