@@ -123,7 +123,7 @@ USER_SELECT = f"""
 """
 
 
-APP_URL = "https://concert-platform-mvp.poehali.dev"
+APP_URL = os.environ.get("APP_URL", "https://preview--concert-platform-mvp.poehali.dev").rstrip("/")
 
 
 def send_2fa_email(email: str, name: str, code: str) -> bool:
@@ -186,7 +186,7 @@ def send_verification_email(email: str, name: str, token: str) -> bool:
     if not api_key:
         return False
 
-    verify_url = f"{APP_URL}?verify={token}"
+    verify_url = f"{APP_URL}/verify?token={token}"
 
     html = f"""<!DOCTYPE html>
 <html>
