@@ -6,6 +6,7 @@ import AdminPendingTab from "./admin/AdminPendingTab";
 import AdminUsersTab from "./admin/AdminUsersTab";
 import AdminVenuesTab from "./admin/AdminVenuesTab";
 import AdminSupportTab from "./admin/AdminSupportTab";
+import AdminImportTab from "./admin/AdminImportTab";
 
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
@@ -79,7 +80,7 @@ function AdminLogin({ onLogin }: { onLogin: (token: string) => void }) {
 
 export default function AdminPage() {
   const [token, setToken] = useState(() => localStorage.getItem("gl_admin_token") || "");
-  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support">("overview");
+  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import">("overview");
   const [supportUnread, setSupportUnread] = useState(0);
 
   const [stats, setStats] = useState<Stats | null>(null);
@@ -218,6 +219,7 @@ export default function AdminPage() {
     { id: "users", label: "Пользователи", icon: "Users", badge: 0 },
     { id: "venues", label: "Площадки", icon: "Building2", badge: 0 },
     { id: "support", label: "Поддержка", icon: "Headphones", badge: supportUnread },
+    { id: "import", label: "Импорт", icon: "Download", badge: 0 },
   ] as const;
 
   return (
@@ -310,6 +312,10 @@ export default function AdminPage() {
 
         {tab === "support" && (
           <AdminSupportTab token={token} />
+        )}
+
+        {tab === "import" && (
+          <AdminImportTab token={token} />
         )}
       </div>
     </div>

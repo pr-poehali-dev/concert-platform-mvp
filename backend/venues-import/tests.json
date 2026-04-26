@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "Search venues Yandex",
+      "method": "GET",
+      "path": "/?action=search&query=концертный+клуб&city=Москва",
+      "expectedStatus": 200,
+      "expectedBody": {"results": []},
+      "bodyMatcher": "partial"
+    }
+  ]
+}
