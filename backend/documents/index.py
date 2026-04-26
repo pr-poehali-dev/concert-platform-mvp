@@ -1,11 +1,13 @@
 """
 Хранилище документов пользователей (организаторы и площадки).
 Каждый пользователь видит только свои документы — изоляция по user_id.
+Документы могут быть привязаны к конкретному проекту (project_id).
 
-GET  ?action=list              — список документов текущего пользователя
-POST ?action=upload            — загрузить новый документ (base64)
-POST ?action=delete            — удалить документ (только свой)
-POST ?action=update_note       — обновить заметку к документу
+GET  ?action=list              — все документы пользователя
+GET  ?action=list&project_id=X — документы конкретного проекта
+POST ?action=upload            — загрузить документ (base64), можно передать projectId
+POST ?action=delete            — удалить свой документ
+POST ?action=update_note       — обновить заметку
 """
 import json
 import os
@@ -14,9 +16,9 @@ import uuid
 import psycopg2
 import boto3
 from datetime import datetime
+import urllib.request
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
-AUTH_SCHEMA = SCHEMA
 
 CATEGORIES = {
     "technical_rider":  "Технический райдер",
@@ -26,7 +28,19 @@ CATEGORIES = {
     "other":            "Прочее",
 }
 
-MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 MB в base64-decoded bytes
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 МБ
+
+EXT_MAP = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "text/plain": "txt",
+    "application/zip": "zip",
+}
 
 
 def cors():
@@ -70,12 +84,7 @@ def cdn_url(key: str) -> str:
     return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
-def get_session_user(conn, session_id: str) -> dict | None:
-    """Возвращает user по session_id из in-memory сессий через SELECT на users."""
-    # Сессии хранятся in-memory в auth функции, но мы можем проверить через auth action=me
-    # Вместо этого используем X-Session-Id для поиска активной сессии.
-    # Поскольку сессии in-memory, делаем запрос к auth через HTTP внутри бэкенда.
-    import urllib.request
+def get_session_user(session_id: str) -> dict | None:
     auth_url = "https://functions.poehali.dev/f5e06ba0-2cd8-4b53-8899-3cfc3badc3e8"
     try:
         req = urllib.request.Request(
@@ -99,95 +108,99 @@ def format_size(size_bytes: int) -> str:
         return f"{size_bytes / 1024 / 1024:.1f} МБ"
 
 
+def row_to_doc(r) -> dict:
+    return {
+        "id":            str(r[0]),
+        "category":      r[1],
+        "categoryLabel": CATEGORIES.get(r[1], "Прочее"),
+        "name":          r[2],
+        "fileUrl":       r[3],
+        "fileSize":      r[4],
+        "fileSizeHuman": format_size(r[4]),
+        "mimeType":      r[5],
+        "note":          r[6],
+        "createdAt":     r[7].isoformat() if r[7] else "",
+        "projectId":     str(r[8]) if r[8] else None,
+    }
+
+
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": cors(), "body": ""}
 
-    method = event.get("httpMethod", "GET")
-    params = event.get("queryStringParameters") or {}
-    action = params.get("action", "list")
+    method  = event.get("httpMethod", "GET")
+    params  = event.get("queryStringParameters") or {}
+    action  = params.get("action", "list")
     headers = event.get("headers") or {}
 
     session_id = headers.get("X-Session-Id", "") or headers.get("x-session-id", "")
     if not session_id:
         return err("Требуется авторизация", 401)
 
-    conn = get_conn()
-    user = get_session_user(conn, session_id)
+    user = get_session_user(session_id)
     if not user:
-        conn.close()
         return err("Сессия недействительна", 401)
 
-    user_id = user["id"]
+    user_id   = user["id"]
     user_role = user.get("role", "organizer")
 
     # ── GET list ──────────────────────────────────────────────────────────
     if method == "GET" and action == "list":
-        cur = conn.cursor()
-        cur.execute(f"""
-            SELECT id, category, name, file_url, file_size, mime_type, note, created_at
-            FROM {SCHEMA}.user_documents
-            WHERE user_id = '{user_id}'
-            ORDER BY created_at DESC
-        """)
+        project_id = params.get("project_id", "")
+        conn = get_conn()
+        cur  = conn.cursor()
+
+        if project_id:
+            # Документы привязанные к проекту (только своего пользователя)
+            cur.execute(f"""
+                SELECT id, category, name, file_url, file_size, mime_type, note, created_at, project_id
+                FROM {SCHEMA}.user_documents
+                WHERE user_id = '{user_id}' AND project_id = '{project_id}'
+                  AND name != '[удалён]'
+                ORDER BY created_at DESC
+            """)
+        else:
+            # Все документы пользователя без привязки к проекту
+            cur.execute(f"""
+                SELECT id, category, name, file_url, file_size, mime_type, note, created_at, project_id
+                FROM {SCHEMA}.user_documents
+                WHERE user_id = '{user_id}' AND project_id IS NULL
+                  AND name != '[удалён]'
+                ORDER BY created_at DESC
+            """)
+
         rows = cur.fetchall()
         conn.close()
-        docs = []
-        for r in rows:
-            docs.append({
-                "id":         str(r[0]),
-                "category":   r[1],
-                "categoryLabel": CATEGORIES.get(r[1], "Прочее"),
-                "name":       r[2],
-                "fileUrl":    r[3],
-                "fileSize":   r[4],
-                "fileSizeHuman": format_size(r[4]),
-                "mimeType":   r[5],
-                "note":       r[6],
-                "createdAt":  r[7].isoformat() if r[7] else "",
-            })
+        docs = [row_to_doc(r) for r in rows]
         return ok({"documents": docs, "total": len(docs)})
 
     # ── POST upload ────────────────────────────────────────────────────────
     if method == "POST" and action == "upload":
-        body = json.loads(event.get("body") or "{}")
+        body      = json.loads(event.get("body") or "{}")
         file_data = body.get("fileData", "")
         file_name = body.get("fileName", "document")
         mime_type = body.get("mimeType", "application/octet-stream")
         category  = body.get("category", "other")
         note      = body.get("note", "")
+        project_id = body.get("projectId", None)  # опционально
 
         if category not in CATEGORIES:
             category = "other"
-
         if not file_data:
-            conn.close()
             return err("Файл не передан")
 
         try:
             raw = base64.b64decode(file_data)
         except Exception:
-            conn.close()
             return err("Некорректный base64")
 
         if len(raw) > MAX_FILE_SIZE:
-            conn.close()
-            return err(f"Файл слишком большой (максимум 20 МБ)")
+            return err("Файл слишком большой (максимум 20 МБ)")
 
-        # Расширение из mime
-        ext_map = {
-            "application/pdf": "pdf",
-            "application/msword": "doc",
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
-            "application/vnd.ms-excel": "xls",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
-            "image/jpeg": "jpg",
-            "image/png": "png",
-            "text/plain": "txt",
-        }
-        ext = ext_map.get(mime_type, "bin")
+        ext    = EXT_MAP.get(mime_type, "bin")
+        folder = f"documents/projects/{project_id}" if project_id else f"documents/{user_role}/{user_id}"
+        s3_key = f"{folder}/{uuid.uuid4()}.{ext}"
 
-        s3_key = f"documents/{user_role}/{user_id}/{uuid.uuid4()}.{ext}"
         s3 = get_s3()
         s3.put_object(
             Bucket="files",
@@ -196,51 +209,53 @@ def handler(event: dict, context) -> dict:
             ContentType=mime_type,
             ContentDisposition=f'attachment; filename="{file_name}"',
         )
-        file_url = cdn_url(s3_key)
+        file_url  = cdn_url(s3_key)
         file_size = len(raw)
 
-        safe_name = file_name.replace("'", "''")
-        safe_url  = file_url.replace("'", "''")
-        safe_mime = mime_type.replace("'", "''")
-        safe_note = note.replace("'", "''")
-        safe_cat  = category.replace("'", "''")
-
+        safe = lambda v: v.replace("'", "''") if isinstance(v, str) else v
         doc_id = str(uuid.uuid4())
-        cur = conn.cursor()
+
+        pid_sql = f"'{project_id}'" if project_id else "NULL"
+
+        conn = get_conn()
+        cur  = conn.cursor()
         cur.execute(f"""
             INSERT INTO {SCHEMA}.user_documents
-                (id, user_id, user_role, category, name, file_url, file_size, mime_type, note)
+                (id, user_id, user_role, category, name, file_url, file_size, mime_type, note, project_id)
             VALUES
-                ('{doc_id}', '{user_id}', '{user_role}', '{safe_cat}', '{safe_name}',
-                 '{safe_url}', {file_size}, '{safe_mime}', '{safe_note}')
+                ('{doc_id}', '{user_id}', '{user_role}',
+                 '{safe(category)}', '{safe(file_name)}',
+                 '{safe(file_url)}', {file_size},
+                 '{safe(mime_type)}', '{safe(note)}',
+                 {pid_sql})
         """)
         conn.commit()
         conn.close()
 
         return ok({
-            "id":       doc_id,
-            "fileUrl":  file_url,
-            "fileSize": file_size,
+            "id":            doc_id,
+            "fileUrl":       file_url,
+            "fileSize":      file_size,
             "fileSizeHuman": format_size(file_size),
-            "name":     file_name,
-            "category": category,
+            "name":          file_name,
+            "category":      category,
             "categoryLabel": CATEGORIES.get(category, "Прочее"),
-            "mimeType": mime_type,
-            "note":     note,
-            "createdAt": datetime.utcnow().isoformat(),
+            "mimeType":      mime_type,
+            "note":          note,
+            "projectId":     project_id,
+            "createdAt":     datetime.utcnow().isoformat(),
         })
 
     # ── POST update_note ──────────────────────────────────────────────────
     if method == "POST" and action == "update_note":
-        body = json.loads(event.get("body") or "{}")
-        doc_id = body.get("id", "")
-        note   = body.get("note", "")
-        safe_note = note.replace("'", "''")
-
-        cur = conn.cursor()
+        body      = json.loads(event.get("body") or "{}")
+        doc_id    = body.get("id", "")
+        note      = body.get("note", "").replace("'", "''")
+        conn      = get_conn()
+        cur       = conn.cursor()
         cur.execute(f"""
             UPDATE {SCHEMA}.user_documents
-            SET note = '{safe_note}'
+            SET note = '{note}'
             WHERE id = '{doc_id}' AND user_id = '{user_id}'
         """)
         conn.commit()
@@ -249,20 +264,17 @@ def handler(event: dict, context) -> dict:
 
     # ── POST delete ────────────────────────────────────────────────────────
     if method == "POST" and action == "delete":
-        body = json.loads(event.get("body") or "{}")
+        body   = json.loads(event.get("body") or "{}")
         doc_id = body.get("id", "")
-
-        cur = conn.cursor()
+        conn   = get_conn()
+        cur    = conn.cursor()
         cur.execute(f"""
-            SELECT file_url FROM {SCHEMA}.user_documents
+            SELECT id FROM {SCHEMA}.user_documents
             WHERE id = '{doc_id}' AND user_id = '{user_id}'
         """)
-        row = cur.fetchone()
-        if not row:
+        if not cur.fetchone():
             conn.close()
             return err("Документ не найден", 404)
-
-        # Помечаем удалённым через UPDATE (физически из S3 не удаляем — дёшево)
         cur.execute(f"""
             UPDATE {SCHEMA}.user_documents
             SET name = '[удалён]', file_url = '', file_size = 0
@@ -272,5 +284,4 @@ def handler(event: dict, context) -> dict:
         conn.close()
         return ok({"ok": True})
 
-    conn.close()
     return err("Неизвестное действие", 404)

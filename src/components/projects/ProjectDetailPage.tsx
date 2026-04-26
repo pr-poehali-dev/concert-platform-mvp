@@ -9,6 +9,7 @@ import ProjectIncomeAndSummaryTab from "./ProjectIncomeAndSummaryTab";
 import ProjectVenueTab from "@/components/projects/ProjectVenueTab";
 import ProjectCrmTab from "@/components/projects/ProjectCrmTab";
 import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
+import ProjectDocumentsTab from "@/components/projects/ProjectDocumentsTab";
 
 interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversationId: string) => void; }
 
@@ -16,7 +17,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const { user } = useAuth();
   const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"company">("budget");
+  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"company"|"documents">("budget");
   const [saving, setSaving] = useState<string|null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -122,12 +123,13 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const canEditIncome   = !user?.isEmployee || (ap?.canEditIncome   ?? true);
 
   const ALL_TABS = [
-    {id:"budget",  label:"Бюджет расходов", icon:"TrendingDown", visible: canViewExpenses},
-    {id:"income",  label:"Доходы",          icon:"TrendingUp",   visible: canViewIncome},
-    {id:"summary", label:"Итог / P&L",      icon:"BarChart3",    visible: canViewSummary},
-    {id:"venue",   label:"Площадка",        icon:"Building2",    visible: true},
-    {id:"crm",     label:"Задачи",          icon:"ClipboardList",visible: true},
-    {id:"company", label:"Компания",        icon:"Users",        visible: true},
+    {id:"budget",    label:"Бюджет расходов", icon:"TrendingDown",  visible: canViewExpenses},
+    {id:"income",    label:"Доходы",          icon:"TrendingUp",    visible: canViewIncome},
+    {id:"summary",   label:"Итог / P&L",      icon:"BarChart3",     visible: canViewSummary},
+    {id:"venue",     label:"Площадка",        icon:"Building2",     visible: true},
+    {id:"crm",       label:"Задачи",          icon:"ClipboardList", visible: true},
+    {id:"documents", label:"Документы",       icon:"FileArchive",   visible: true},
+    {id:"company",   label:"Компания",        icon:"Users",         visible: true},
   ] as const;
   const TABS = ALL_TABS.filter(t => t.visible);
 
@@ -213,6 +215,11 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
         {/* ── CRM ЗАДАЧИ ── */}
         {activeTab==="crm" && (
           <ProjectCrmTab projectId={projectId} />
+        )}
+
+        {/* ── ДОКУМЕНТЫ ── */}
+        {activeTab==="documents" && (
+          <ProjectDocumentsTab projectId={projectId} />
         )}
 
         {/* ── КОМПАНИЯ ── */}
