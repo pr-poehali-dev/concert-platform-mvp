@@ -4,19 +4,53 @@
 GET  ?action=conversations&user_id=X          — список диалогов пользователя
 GET  ?action=messages&conversation_id=X       — сообщения диалога
 POST ?action=start                            — начать диалог (организатор → площадка)
-POST ?action=send                             — отправить сообщение
-POST ?action=read&conversation_id=X&user_id=Y — пометить сообщения прочитанными
+POST ?action=send                             — отправить сообщение (text и/или attachment)
+POST ?action=send_file                        — отправить готовый файл из хранилища (по URL)
+POST ?action=read                             — пометить сообщения прочитанными
+POST ?action=upload_attachment                — загрузить файл в S3 и вернуть URL (base64)
 """
 import json
 import os
+import base64
+import uuid
 import psycopg2
+import boto3
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826"
 
+EXT_MAP = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/gif": "gif",
+    "image/webp": "webp",
+    "text/plain": "txt",
+    "application/zip": "zip",
+}
+
+MAX_FILE_SIZE = 20 * 1024 * 1024  # 20 МБ
+
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
+def get_s3():
+    return boto3.client(
+        "s3",
+        endpoint_url="https://bucket.poehali.dev",
+        aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+        aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+    )
+
+
+def cdn_url(key: str) -> str:
+    return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
 def cors():
@@ -43,8 +77,16 @@ def err(msg, status=400):
     }
 
 
+def format_size(size_bytes: int) -> str:
+    if size_bytes < 1024:
+        return f"{size_bytes} Б"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes // 1024} КБ"
+    else:
+        return f"{size_bytes / 1024 / 1024:.1f} МБ"
+
+
 def notify(recipient_id: str, title: str, body: str, link_page: str = "chat"):
-    """Создать уведомление через notifications API."""
     import urllib.request
     payload = json.dumps({
         "userId": recipient_id,
@@ -63,6 +105,22 @@ def notify(recipient_id: str, title: str, body: str, link_page: str = "chat"):
         urllib.request.urlopen(req, timeout=5)
     except Exception:
         pass
+
+
+def msg_to_dict(r) -> dict:
+    """Конвертирует строку messages в dict. r = (id, conv_id, sender_id, text, created_at, att_url, att_name, att_size, att_mime)"""
+    return {
+        "id":             str(r[0]),
+        "conversationId": str(r[1]),
+        "senderId":       str(r[2]),
+        "text":           r[3] or "",
+        "createdAt":      str(r[4]),
+        "attachmentUrl":  r[5] or "",
+        "attachmentName": r[6] or "",
+        "attachmentSize": r[7] or 0,
+        "attachmentMime": r[8] or "",
+        "attachmentSizeHuman": format_size(r[7] or 0) if (r[7] or 0) > 0 else "",
+    }
 
 
 def handler(event: dict, context) -> dict:
@@ -116,11 +174,12 @@ def handler(event: dict, context) -> dict:
         conv_id = params.get("conversation_id", "")
         if not conv_id:
             return err("conversation_id required")
-        limit = int(params.get("limit", 50))
+        limit = int(params.get("limit", 100))
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            f"""SELECT id, conversation_id, sender_id, text, created_at
+            f"""SELECT id, conversation_id, sender_id, text, created_at,
+                       attachment_url, attachment_name, attachment_size, attachment_mime
                 FROM {SCHEMA}.messages
                 WHERE conversation_id = %s
                 ORDER BY created_at ASC LIMIT %s""",
@@ -128,21 +187,16 @@ def handler(event: dict, context) -> dict:
         )
         rows = cur.fetchall()
         conn.close()
-        msgs = [
-            {"id": str(r[0]), "conversationId": str(r[1]),
-             "senderId": str(r[2]), "text": r[3], "createdAt": str(r[4])}
-            for r in rows
-        ]
-        return ok({"messages": msgs})
+        return ok({"messages": [msg_to_dict(r) for r in rows]})
 
     # ── POST start ─────────────────────────────────────────────────────────
     if method == "POST" and action == "start":
         body = json.loads(event.get("body") or "{}")
-        organizer_id = body.get("organizerId", "")
-        venue_id = body.get("venueId", "")
+        organizer_id  = body.get("organizerId", "")
+        venue_id      = body.get("venueId", "")
         venue_user_id = body.get("venueUserId", "")
-        venue_name = (body.get("venueName") or "").strip()
-        first_msg = (body.get("message") or "").strip()
+        venue_name    = (body.get("venueName") or "").strip()
+        first_msg     = (body.get("message") or "").strip()
         organizer_name = (body.get("organizerName") or "Организатор").strip()
 
         if not organizer_id or not venue_id or not venue_user_id:
@@ -151,7 +205,6 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
 
-        # Проверяем — диалог уже существует?
         cur.execute(
             f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s AND venue_id = %s",
             (organizer_id, venue_id),
@@ -169,7 +222,6 @@ def handler(event: dict, context) -> dict:
             )
             conv_id = str(cur.fetchone()[0])
 
-        # Если есть первое сообщение — сохраняем
         if first_msg:
             cur.execute(
                 f"INSERT INTO {SCHEMA}.messages (conversation_id, sender_id, text) VALUES (%s, %s, %s)",
@@ -190,21 +242,63 @@ def handler(event: dict, context) -> dict:
 
         return ok({"conversationId": conv_id}, 201)
 
+    # ── POST upload_attachment ─────────────────────────────────────────────
+    if method == "POST" and action == "upload_attachment":
+        """Загружает файл (base64) в S3 и возвращает URL — без сохранения в messages."""
+        body      = json.loads(event.get("body") or "{}")
+        file_data = body.get("fileData", "")
+        file_name = body.get("fileName", "file")
+        mime_type = body.get("mimeType", "application/octet-stream")
+
+        if not file_data:
+            return err("fileData обязателен")
+        try:
+            raw = base64.b64decode(file_data)
+        except Exception:
+            return err("Некорректный base64")
+        if len(raw) > MAX_FILE_SIZE:
+            return err("Файл слишком большой (максимум 20 МБ)")
+
+        ext    = EXT_MAP.get(mime_type, "bin")
+        s3_key = f"chat-attachments/{uuid.uuid4()}.{ext}"
+        s3 = get_s3()
+        s3.put_object(
+            Bucket="files",
+            Key=s3_key,
+            Body=raw,
+            ContentType=mime_type,
+            ContentDisposition=f'attachment; filename="{file_name}"',
+        )
+        url = cdn_url(s3_key)
+        return ok({
+            "url":      url,
+            "name":     file_name,
+            "size":     len(raw),
+            "sizeHuman": format_size(len(raw)),
+            "mime":     mime_type,
+        })
+
     # ── POST send ──────────────────────────────────────────────────────────
     if method == "POST" and action == "send":
-        body = json.loads(event.get("body") or "{}")
-        conv_id = body.get("conversationId", "")
-        sender_id = body.get("senderId", "")
-        text = (body.get("text") or "").strip()
-        sender_name = (body.get("senderName") or "Пользователь").strip()
+        body         = json.loads(event.get("body") or "{}")
+        conv_id      = body.get("conversationId", "")
+        sender_id    = body.get("senderId", "")
+        text         = (body.get("text") or "").strip()
+        sender_name  = (body.get("senderName") or "Пользователь").strip()
+        # Вложение (опционально — уже загруженный файл)
+        att_url      = body.get("attachmentUrl", "")
+        att_name     = body.get("attachmentName", "")
+        att_size     = int(body.get("attachmentSize", 0))
+        att_mime     = body.get("attachmentMime", "")
 
-        if not conv_id or not sender_id or not text:
-            return err("conversationId, senderId, text обязательны")
+        if not conv_id or not sender_id:
+            return err("conversationId, senderId обязательны")
+        if not text and not att_url:
+            return err("Нужен текст или вложение")
 
         conn = get_conn()
         cur = conn.cursor()
 
-        # Получаем участников
         cur.execute(
             f"SELECT organizer_id, venue_user_id FROM {SCHEMA}.conversations WHERE id = %s",
             (conv_id,),
@@ -218,60 +312,72 @@ def handler(event: dict, context) -> dict:
         is_organizer = sender_id == organizer_id
         recipient_id = venue_user_id if is_organizer else organizer_id
 
-        # Сохраняем сообщение
+        safe_att_url  = att_url.replace("'", "''")
+        safe_att_name = att_name.replace("'", "''")
+        safe_att_mime = att_mime.replace("'", "''")
+
         cur.execute(
-            f"INSERT INTO {SCHEMA}.messages (conversation_id, sender_id, text) VALUES (%s, %s, %s) RETURNING id, created_at",
-            (conv_id, sender_id, text),
+            f"""INSERT INTO {SCHEMA}.messages
+                (conversation_id, sender_id, text, attachment_url, attachment_name, attachment_size, attachment_mime)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, created_at""",
+            (conv_id, sender_id, text or "", att_url, att_name, att_size, att_mime),
         )
         msg_row = cur.fetchone()
-        msg_id = str(msg_row[0])
+        msg_id     = str(msg_row[0])
         created_at = str(msg_row[1])
 
-        # Обновляем диалог
+        # Превью для last_message в диалоге
+        last_msg_preview = text if text else f"📎 {att_name}"
         unread_col = "venue_unread" if is_organizer else "organizer_unread"
+
         cur.execute(
             f"""UPDATE {SCHEMA}.conversations
                 SET last_message = %s, last_message_at = NOW(), {unread_col} = {unread_col} + 1
                 WHERE id = %s""",
-            (text, conv_id),
+            (last_msg_preview[:200], conv_id),
         )
         conn.commit()
         conn.close()
 
-        notify(recipient_id, f"Новое сообщение от {sender_name}", text[:80])
+        notif_body = text[:80] if text else f"Прикреплён файл: {att_name}"
+        notify(recipient_id, f"Новое сообщение от {sender_name}", notif_body)
 
         return ok({
-            "id": msg_id,
+            "id":             msg_id,
             "conversationId": conv_id,
-            "senderId": sender_id,
-            "text": text,
-            "createdAt": created_at,
-        }, 201)
+            "senderId":       sender_id,
+            "text":           text or "",
+            "createdAt":      created_at,
+            "attachmentUrl":  att_url,
+            "attachmentName": att_name,
+            "attachmentSize": att_size,
+            "attachmentMime": att_mime,
+            "attachmentSizeHuman": format_size(att_size) if att_size > 0 else "",
+        })
 
     # ── POST read ──────────────────────────────────────────────────────────
     if method == "POST" and action == "read":
-        body = json.loads(event.get("body") or "{}")
+        body    = json.loads(event.get("body") or "{}")
         conv_id = body.get("conversationId", "")
         user_id = body.get("userId", "")
         if not conv_id or not user_id:
-            return err("conversationId и userId обязательны")
+            return err("conversationId, userId обязательны")
 
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            f"SELECT organizer_id FROM {SCHEMA}.conversations WHERE id = %s",
-            (conv_id,),
+            f"SELECT organizer_id FROM {SCHEMA}.conversations WHERE id = %s", (conv_id,)
         )
         row = cur.fetchone()
         if row:
             is_organizer = str(row[0]) == user_id
             col = "organizer_unread" if is_organizer else "venue_unread"
             cur.execute(
-                f"UPDATE {SCHEMA}.conversations SET {col} = 0 WHERE id = %s",
-                (conv_id,),
+                f"UPDATE {SCHEMA}.conversations SET {col} = 0 WHERE id = %s", (conv_id,)
             )
             conn.commit()
         conn.close()
-        return ok({"success": True})
+        return ok({"ok": True})
 
-    return err("Not found", 404)
+    return err("Неизвестное действие", 404)

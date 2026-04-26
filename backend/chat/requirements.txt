@@ -1,1 +1,2 @@
 psycopg2-binary
+boto3>=1.26.0

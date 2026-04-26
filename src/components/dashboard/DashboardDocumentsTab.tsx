@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
+import SendToConversationModal from "@/components/chat/SendToConversationModal";
 
 const DOCS_URL = "https://functions.poehali.dev/b805f044-ba82-4db5-a2a5-7a88dfbfce4a";
 
@@ -70,6 +71,9 @@ export default function DashboardDocumentsTab() {
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  // Send to chat
+  const [sendChatFile, setSendChatFile] = useState<{ url: string; name: string; size: number; mime: string } | null>(null);
 
   const isVenue = user?.role === "venue";
   const categories = isVenue ? CATEGORIES_VENUE : CATEGORIES_ORGANIZER;
@@ -336,11 +340,18 @@ export default function DashboardDocumentsTab() {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setSendChatFile({ url: doc.fileUrl, name: doc.name, size: doc.fileSize, mime: doc.mimeType })}
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+                      title="Отправить в чат"
+                    >
+                      <Icon name="Send" size={16} />
+                    </button>
                     <a
                       href={doc.fileUrl}
                       target="_blank"
                       rel="noreferrer"
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
                       title="Открыть"
                     >
                       <Icon name="ExternalLink" size={16} />
@@ -494,6 +505,13 @@ export default function DashboardDocumentsTab() {
             </div>
           </div>
         </div>
+      )}
+      {/* ── Send to Chat Modal ───────────────────────────────────────────── */}
+      {sendChatFile && (
+        <SendToConversationModal
+          file={sendChatFile}
+          onClose={() => setSendChatFile(null)}
+        />
       )}
     </div>
   );

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
+import SendToConversationModal from "@/components/chat/SendToConversationModal";
 
 const DOCS_URL = "https://functions.poehali.dev/b805f044-ba82-4db5-a2a5-7a88dfbfce4a";
 const SESSION_KEY = "tourlink_session";
@@ -65,6 +66,9 @@ export default function ProjectDocumentsTab({ projectId }: Props) {
   const [editNoteId, setEditNoteId] = useState<string | null>(null);
   const [editNoteText, setEditNoteText] = useState("");
   const [savingNote, setSavingNote] = useState(false);
+
+  // Send to chat
+  const [sendChatFile, setSendChatFile] = useState<{ url: string; name: string; size: number; mime: string } | null>(null);
 
   const session = () => localStorage.getItem(SESSION_KEY) || "";
 
@@ -311,8 +315,15 @@ export default function ProjectDocumentsTab({ projectId }: Props) {
 
                   {/* Actions */}
                   <div className="flex items-center gap-1 flex-shrink-0">
-                    <a href={doc.fileUrl} target="_blank" rel="noreferrer"
+                    <button
+                      onClick={() => setSendChatFile({ url: doc.fileUrl, name: doc.name, size: doc.fileSize, mime: doc.mimeType })}
                       className="w-8 h-8 rounded-lg flex items-center justify-center text-white/25 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+                      title="Отправить в чат"
+                    >
+                      <Icon name="Send" size={14} />
+                    </button>
+                    <a href={doc.fileUrl} target="_blank" rel="noreferrer"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-white/25 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
                       title="Открыть">
                       <Icon name="ExternalLink" size={14} />
                     </a>
@@ -435,6 +446,13 @@ export default function ProjectDocumentsTab({ projectId }: Props) {
             </div>
           </div>
         </div>
+      )}
+      {/* ── Send to Chat Modal ─────────────────────────────────────────── */}
+      {sendChatFile && (
+        <SendToConversationModal
+          file={sendChatFile}
+          onClose={() => setSendChatFile(null)}
+        />
       )}
     </div>
   );
