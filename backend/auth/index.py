@@ -109,18 +109,74 @@ def build_user(row) -> dict:
         "logoUrl": row[19] or "",
         "phone": row[20] or "",
         "emailNotificationsEnabled": row[21] if len(row) > 21 and row[21] is not None else True,
+        "twofaEnabled": row[22] if len(row) > 22 and row[22] is not None else False,
     }
 
 
 USER_SELECT = f"""
     SELECT id, name, email, role, city, verified, avatar, avatar_color, status,
            company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address,
-           bank_name, bank_account, bank_bik, logo_url, phone, email_notifications_enabled
+           bank_name, bank_account, bank_bik, logo_url, phone, email_notifications_enabled,
+           twofa_enabled
     FROM {SCHEMA}.users
 """
 
 
 APP_URL = "https://concert-platform-mvp.poehali.dev"
+
+
+def send_2fa_email(email: str, name: str, code: str) -> bool:
+    """Отправляет письмо с кодом двухфакторной аутентификации."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    if not api_key:
+        print(f"[auth] 2FA code for {email}: {code}")  # fallback — в логи
+        return True
+
+    html = f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+    <tr><td align="center">
+      <table width="480" cellpadding="0" cellspacing="0" style="background:#13131f;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+        <tr><td style="background:linear-gradient(135deg,#7c3aed,#06b6d4);padding:28px 32px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:24px;font-weight:800;letter-spacing:2px;">GLOBAL LINK</h1>
+          <p style="margin:6px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Двухфакторная аутентификация</p>
+        </td></tr>
+        <tr><td style="padding:36px 32px;text-align:center;">
+          <p style="margin:0 0 20px;color:rgba(255,255,255,0.6);font-size:15px;">Привет, {name}! Ваш код входа:</p>
+          <div style="background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.3);border-radius:12px;padding:20px;margin:0 auto;display:inline-block;">
+            <span style="font-size:36px;font-weight:900;letter-spacing:10px;color:#fff;font-family:monospace;">{code}</span>
+          </div>
+          <p style="margin:20px 0 0;color:rgba(255,255,255,0.4);font-size:13px;">Код действителен 10 минут. Не передавайте его никому.</p>
+        </td></tr>
+        <tr><td style="padding:16px 32px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+          <p style="margin:0;color:rgba(255,255,255,0.2);font-size:12px;">Если вы не пытались войти, проигнорируйте это письмо.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+    payload = json.dumps({
+        "from": "GLOBAL LINK <noreply@globallink.art>",
+        "to": [email],
+        "subject": f"Код входа: {code}",
+        "html": html,
+    }).encode()
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+        return True
+    except Exception as e:
+        print(f"[auth] 2FA email error: {e}")
+        return False
 
 
 def send_verification_email(email: str, name: str, token: str) -> bool:
@@ -344,6 +400,23 @@ def handler(event: dict, context) -> dict:
         row = cur.fetchone()
         if row:
             user = build_user(row)
+
+            # Если 2FA включена — создаём временную сессию и шлём код
+            if user.get("twofaEnabled"):
+                import random as _rnd
+                code = "".join([str(_rnd.randint(0, 9)) for _ in range(6)])
+                temp_id = secrets.token_hex(24)
+                cur.execute(
+                    f"""INSERT INTO {SCHEMA}.twofa_codes
+                        (temp_session_id, user_id, user_data, code)
+                        VALUES (%s, %s, %s::jsonb, %s)""",
+                    (temp_id, user["id"], json.dumps(user), code),
+                )
+                conn.commit()
+                conn.close()
+                send_2fa_email(email, user["name"], code)
+                return ok({"requires2fa": True, "tempSessionId": temp_id})
+
             session_id = secrets.token_hex(32)
             _sessions[session_id] = user
             save_session_db(conn, session_id, user["id"], user)
@@ -603,6 +676,122 @@ def handler(event: dict, context) -> dict:
 
         sent = send_verification_email(email, name, token)
         return ok({"sent": sent})
+
+    # ── POST verify_2fa ───────────────────────────────────────────────────
+    if method == "POST" and action == "verify_2fa":
+        b = json.loads(event.get("body") or "{}")
+        temp_id = b.get("tempSessionId", "")
+        code    = (b.get("code") or "").strip()
+        if not temp_id or not code:
+            return err("tempSessionId и code обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, user_id, user_data, code, expires_at, used
+                FROM {SCHEMA}.twofa_codes
+                WHERE temp_session_id = %s""",
+            (temp_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return err("Неверный или истёкший код", 400)
+        _, user_id, user_data_raw, db_code, expires_at, used = row
+        if used:
+            conn.close()
+            return err("Код уже использован", 400)
+        import datetime
+        if expires_at.replace(tzinfo=None) < datetime.datetime.utcnow():
+            conn.close()
+            return err("Код истёк. Войдите снова.", 400)
+        if code != db_code:
+            conn.close()
+            return err("Неверный код", 400)
+
+        # Помечаем использованным
+        cur.execute(f"UPDATE {SCHEMA}.twofa_codes SET used = TRUE WHERE temp_session_id = %s", (temp_id,))
+
+        # Получаем свежие данные пользователя
+        cur.execute(USER_SELECT + " WHERE id = %s", (str(user_id),))
+        user_row = cur.fetchone()
+        if user_row:
+            user = build_user(user_row)
+        else:
+            user = user_data_raw if isinstance(user_data_raw, dict) else json.loads(user_data_raw)
+
+        session_id = secrets.token_hex(32)
+        _sessions[session_id] = user
+        save_session_db(conn, session_id, str(user_id), user)
+        conn.commit(); conn.close()
+        return ok({"sessionId": session_id, "user": user})
+
+    # ── POST resend_2fa ───────────────────────────────────────────────────
+    if method == "POST" and action == "resend_2fa":
+        b = json.loads(event.get("body") or "{}")
+        temp_id = b.get("tempSessionId", "")
+        if not temp_id:
+            return err("tempSessionId обязателен")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT u.email, u.name
+                FROM {SCHEMA}.twofa_codes tc
+                JOIN {SCHEMA}.users u ON u.id = tc.user_id
+                WHERE tc.temp_session_id = %s AND tc.used = FALSE""",
+            (temp_id,)
+        )
+        row = cur.fetchone()
+        if not row:
+            conn.close()
+            return err("Сессия не найдена", 400)
+        email, name = row[0], row[1]
+        import random as _rnd
+        new_code = "".join([str(_rnd.randint(0, 9)) for _ in range(6)])
+        cur.execute(
+            f"""UPDATE {SCHEMA}.twofa_codes
+                SET code = %s, expires_at = NOW() + INTERVAL '10 minutes'
+                WHERE temp_session_id = %s""",
+            (new_code, temp_id)
+        )
+        conn.commit(); conn.close()
+        send_2fa_email(email, name, new_code)
+        return ok({"sent": True})
+
+    # ── POST toggle_2fa ───────────────────────────────────────────────────
+    if method == "POST" and action == "toggle_2fa":
+        session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
+        if not session_id:
+            return err("Не авторизован", 401)
+        # Проверяем через БД
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'", (session_id,))
+        sess_row = cur.fetchone()
+        if not sess_row:
+            conn.close()
+            return err("Не авторизован", 401)
+        user_data = sess_row[0] if isinstance(sess_row[0], dict) else json.loads(sess_row[0])
+        uid = user_data["id"]
+
+        b = json.loads(event.get("body") or "{}")
+        enable = bool(b.get("enable", False))
+
+        # Если включают — нужно проверить что email верифицирован
+        if enable:
+            cur.execute(f"SELECT email_confirmed FROM {SCHEMA}.users WHERE id = %s", (uid,))
+            row = cur.fetchone()
+            if not row or not row[0]:
+                conn.close()
+                return err("Для включения 2FA необходимо подтвердить email")
+
+        cur.execute(f"UPDATE {SCHEMA}.users SET twofa_enabled = %s WHERE id = %s", (enable, uid))
+        # Обновляем сессию
+        user_data["twofaEnabled"] = enable
+        cur.execute(
+            f"UPDATE {SCHEMA}.sessions SET user_data = %s::jsonb WHERE session_id = %s",
+            (json.dumps(user_data), session_id)
+        )
+        if session_id in _sessions:
+            _sessions[session_id]["twofaEnabled"] = enable
+        conn.commit(); conn.close()
+        return ok({"twofaEnabled": enable})
 
     # ── GET status ────────────────────────────────────────────────────────
     if method == "GET" and action == "status":

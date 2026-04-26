@@ -26,7 +26,7 @@ export default function DashboardProfileTab({
   onEditFormChange, onEditToggle, onSave, onCancelEdit, onLogout,
   onProfileUpdate,
 }: DashboardProfileTabProps) {
-  const [section, setSection] = useState<"profile" | "requisites" | "logo" | "employees">("profile");
+  const [section, setSection] = useState<"profile" | "security" | "requisites" | "logo" | "employees">("profile");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
 
@@ -117,8 +117,32 @@ export default function DashboardProfileTab({
     setTimeout(() => setReqSaved(false), 2000);
   };
 
+  // 2FA
+  const [tfaEnabled, setTfaEnabled] = useState(!!user.twofaEnabled);
+  const [tfaLoading, setTfaLoading] = useState(false);
+  const [tfaMsg, setTfaMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const toggleTfa = async () => {
+    setTfaLoading(true);
+    setTfaMsg(null);
+    try {
+      const sessionId = localStorage.getItem("tourlink_session");
+      const res = await fetch(`${AUTH_URL}?action=toggle_2fa`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId || "" },
+        body: JSON.stringify({ enable: !tfaEnabled }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setTfaMsg({ ok: false, text: data.error || "Ошибка" }); return; }
+      setTfaEnabled(data.twofaEnabled);
+      setTfaMsg({ ok: true, text: data.twofaEnabled ? "Двухфакторная аутентификация включена" : "Двухфакторная аутентификация отключена" });
+    } catch { setTfaMsg({ ok: false, text: "Ошибка соединения" }); }
+    finally { setTfaLoading(false); }
+  };
+
   const SECTIONS = [
     { id: "profile",    label: "Профиль",    icon: "User" },
+    { id: "security",   label: "Безопасность", icon: "ShieldCheck" },
     { id: "requisites", label: "Реквизиты",  icon: "FileText" },
     { id: "logo",       label: "Логотип",    icon: "Image" },
     { id: "employees",  label: "Сотрудники", icon: "Users" },
@@ -150,6 +174,68 @@ export default function DashboardProfileTab({
           onCancelEdit={onCancelEdit}
           onLogout={onLogout}
         />
+      )}
+
+      {section === "security" && (
+        <div className="space-y-4 max-w-lg">
+          {/* 2FA card */}
+          <div className="glass rounded-2xl border border-white/10 p-6">
+            <div className="flex items-start gap-4">
+              <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${tfaEnabled ? "bg-neon-cyan/15 border border-neon-cyan/25" : "bg-white/5 border border-white/10"}`}>
+                <Icon name="ShieldCheck" size={20} className={tfaEnabled ? "text-neon-cyan" : "text-white/30"} />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-oswald font-semibold text-white text-base">Двухфакторная аутентификация</h3>
+                    <p className="text-white/40 text-sm mt-0.5">
+                      {tfaEnabled
+                        ? "При входе будет отправлен код на вашу почту"
+                        : "Дополнительная защита аккаунта через код на почте"}
+                    </p>
+                  </div>
+                  {/* Toggle */}
+                  <button
+                    onClick={toggleTfa}
+                    disabled={tfaLoading || !user.verified}
+                    className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${tfaEnabled ? "bg-neon-cyan" : "bg-white/15"}`}
+                  >
+                    {tfaLoading
+                      ? <span className="absolute inset-0 flex items-center justify-center"><Icon name="Loader2" size={12} className="animate-spin text-white" /></span>
+                      : <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all duration-300 ${tfaEnabled ? "left-6" : "left-0.5"}`} />
+                    }
+                  </button>
+                </div>
+
+                {!user.verified && (
+                  <div className="mt-3 flex items-center gap-2 text-amber-400/80 text-xs bg-amber-400/5 border border-amber-400/15 rounded-xl px-3 py-2">
+                    <Icon name="AlertTriangle" size={13} />
+                    Подтвердите email чтобы включить 2FA
+                  </div>
+                )}
+
+                {tfaMsg && (
+                  <div className={`mt-3 flex items-center gap-2 text-sm rounded-xl px-3 py-2 border ${tfaMsg.ok ? "text-neon-cyan bg-neon-cyan/5 border-neon-cyan/20" : "text-neon-pink bg-neon-pink/5 border-neon-pink/20"}`}>
+                    <Icon name={tfaMsg.ok ? "CheckCircle2" : "AlertCircle"} size={14} />
+                    {tfaMsg.text}
+                  </div>
+                )}
+
+                <div className="mt-4 space-y-1.5 text-white/30 text-xs">
+                  <p className="flex items-center gap-2"><Icon name="Check" size={11} className="text-neon-cyan/50" />Код приходит на вашу верифицированную почту</p>
+                  <p className="flex items-center gap-2"><Icon name="Check" size={11} className="text-neon-cyan/50" />Код действует 10 минут</p>
+                  <p className="flex items-center gap-2"><Icon name="Check" size={11} className="text-neon-cyan/50" />Защищает от несанкционированного входа</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Hint about registration setting */}
+          <div className="flex items-start gap-2.5 text-white/25 text-xs bg-white/3 rounded-xl px-4 py-3 border border-white/5">
+            <Icon name="Info" size={13} className="flex-shrink-0 mt-0.5" />
+            <p>Включить 2FA можно здесь или при регистрации. Рекомендуем включить, если аккаунт содержит важные данные.</p>
+          </div>
+        </div>
       )}
 
       {section === "requisites" && (

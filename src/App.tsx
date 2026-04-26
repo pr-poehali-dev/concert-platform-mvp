@@ -11,6 +11,7 @@ import NotFound from "./pages/NotFound";
 import AdminPage from "./components/AdminPage";
 import LoginSelectPage from "./pages/LoginSelectPage";
 import OrganizerLoginPage from "./pages/OrganizerLoginPage";
+import VenueLoginPage from "./pages/VenueLoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             {/* ── Login routes ── */}
             <Route path="/login" element={<LoginSelectPage />} />
             <Route path="/login/organizer" element={<OrganizerLoginPage />} />
+            <Route path="/login/venue" element={<VenueLoginPage />} />
             <Route path="/login/admin" element={<AdminLoginPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
