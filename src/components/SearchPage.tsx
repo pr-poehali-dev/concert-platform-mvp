@@ -22,12 +22,15 @@ interface Venue {
   priceFrom: number;
   description: string;
   photoUrl: string;
+  photos?: string[];
   riderUrl: string;
   riderName: string;
   tags: string[];
   rating: number;
   reviewsCount: number;
   verified: boolean;
+  phone?: string;
+  website?: string;
   userId?: string;
   ownerUserId?: string;
   importedFrom?: string;
@@ -219,12 +222,21 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
                 {filtered.map(venue => (
                   <div key={venue.id} className="glass rounded-2xl overflow-hidden hover-lift group cursor-pointer">
                     <div className="relative h-44 overflow-hidden">
-                      <img src={venue.photoUrl || FALLBACK_IMG} alt={venue.name}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      <img
+                        src={(venue.photos && venue.photos.length > 0 ? venue.photos[0] : null) || venue.photoUrl || FALLBACK_IMG}
+                        alt={venue.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        onError={e => { (e.target as HTMLImageElement).src = FALLBACK_IMG; }}
+                      />
                       <div className="absolute inset-0 bg-gradient-to-t from-background/80 to-transparent" />
                       {venue.verified && (
                         <div className="absolute top-3 left-3 flex items-center gap-1 bg-neon-green/20 backdrop-blur border border-neon-green/40 text-neon-green text-xs px-2 py-1 rounded-lg">
                           <Icon name="BadgeCheck" size={12} />Верифицирован
+                        </div>
+                      )}
+                      {venue.photos && venue.photos.length > 1 && (
+                        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-background/60 backdrop-blur border border-white/20 text-white/60 text-xs px-2 py-1 rounded-lg">
+                          <Icon name="Images" size={11} />{venue.photos.length}
                         </div>
                       )}
                       <Badge className="absolute top-3 right-3 bg-background/60 backdrop-blur text-white border-white/20 text-xs">{venue.venueType}</Badge>
@@ -238,9 +250,29 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
                           {venue.reviewsCount > 0 && <span className="text-white/30 text-xs">({venue.reviewsCount})</span>}
                         </div>
                       </div>
-                      <div className="flex items-center gap-3 text-white/50 text-sm mb-3">
-                        <span className="flex items-center gap-1"><Icon name="MapPin" size={13} />{venue.city}</span>
-                        <span className="flex items-center gap-1"><Icon name="Users" size={13} />{venue.capacity.toLocaleString()} чел.</span>
+                      <div className="flex flex-col gap-1 text-white/50 text-sm mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="flex items-center gap-1"><Icon name="MapPin" size={13} />{venue.city}</span>
+                          {venue.capacity > 0 && <span className="flex items-center gap-1"><Icon name="Users" size={13} />{venue.capacity.toLocaleString()} чел.</span>}
+                        </div>
+                        {venue.address && (
+                          <span className="flex items-center gap-1 text-white/35 text-xs truncate">
+                            <Icon name="Navigation" size={11} />{venue.address}
+                          </span>
+                        )}
+                        {venue.phone && (
+                          <span className="flex items-center gap-1 text-white/40 text-xs">
+                            <Icon name="Phone" size={11} />{venue.phone}
+                          </span>
+                        )}
+                        {venue.website && (
+                          <a href={venue.website.startsWith("http") ? venue.website : `https://${venue.website}`}
+                            target="_blank" rel="noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="flex items-center gap-1 text-neon-cyan/70 text-xs hover:text-neon-cyan transition-colors truncate">
+                            <Icon name="Globe" size={11} />{venue.website.replace(/^https?:\/\//, "")}
+                          </a>
+                        )}
                       </div>
                       {venue.tags.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-4">

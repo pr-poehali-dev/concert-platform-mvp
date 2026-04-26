@@ -62,7 +62,7 @@ def row_to_venue(row) -> dict:
         "capacity": row[6],
         "priceFrom": row[7],
         "description": row[8],
-        "photoUrl": row[9],       # первое (главное) фото — обратная совместимость
+        "photoUrl": row[9],
         "riderUrl": row[10],
         "riderName": row[11],
         "tags": list(row[12]) if row[12] else [],
@@ -72,6 +72,10 @@ def row_to_venue(row) -> dict:
         "createdAt": str(row[16]),
         "schemaUrl": row[17] if len(row) > 17 else "",
         "schemaName": row[18] if len(row) > 18 else "",
+        "phone": row[19] if len(row) > 19 else "",
+        "website": row[20] if len(row) > 20 else "",
+        "importedFrom": row[21] if len(row) > 21 else "",
+        "ownerUserId": str(row[22]) if len(row) > 22 and row[22] else "",
     }
 
 
@@ -101,7 +105,8 @@ def handler(event: dict, context) -> dict:
         cur = conn.cursor()
         query = f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
                            description, photo_url, rider_url, rider_name, tags, rating,
-                           reviews_count, verified, created_at, schema_url, schema_name
+                           reviews_count, verified, created_at, schema_url, schema_name,
+                           phone, website, imported_from, owner_user_id
                     FROM {SCHEMA}.venues WHERE 1=1"""
         args = []
         if city:
@@ -144,7 +149,8 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
                        description, photo_url, rider_url, rider_name, tags, rating,
-                       reviews_count, verified, created_at, schema_url, schema_name
+                       reviews_count, verified, created_at, schema_url, schema_name,
+                       phone, website, imported_from, owner_user_id
                 FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
             (user_id,)
         )
