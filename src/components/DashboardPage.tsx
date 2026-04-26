@@ -10,6 +10,7 @@ import DashboardNotificationsTab from "@/components/dashboard/DashboardNotificat
 import DashboardProfileTab from "@/components/dashboard/DashboardProfileTab";
 import DashboardVenueProjectsTab from "@/components/dashboard/DashboardVenueProjectsTab";
 import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
+import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -59,18 +60,20 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const isVenue = user.role === "venue";
   const tabs = isVenue
     ? [
-        { id: "venues", label: "Мои площадки", icon: "Building2" },
-        { id: "projects", label: "Проекты", icon: "FolderOpen" },
-        { id: "company", label: "Компания", icon: "Users" },
+        { id: "venues",    label: "Мои площадки", icon: "Building2" },
+        { id: "projects",  label: "Проекты",       icon: "FolderOpen" },
+        { id: "documents", label: "Документы",     icon: "FileArchive" },
+        { id: "company",   label: "Компания",      icon: "Users" },
         { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
-        { id: "profile", label: "Профиль", icon: "User" },
+        { id: "profile",   label: "Профиль",       icon: "User" },
       ]
     : [
-        { id: "tours", label: "Мои туры", icon: "Route" },
-        { id: "history", label: "История", icon: "Clock" },
-        { id: "company", label: "Компания", icon: "Users" },
+        { id: "tours",     label: "Мои туры",      icon: "Route" },
+        { id: "history",   label: "История",        icon: "Clock" },
+        { id: "documents", label: "Документы",     icon: "FileArchive" },
+        { id: "company",   label: "Компания",      icon: "Users" },
         { id: "notifications", label: "Уведомления", icon: "Bell", badge: unreadCount },
-        { id: "profile", label: "Профиль", icon: "User" },
+        { id: "profile",   label: "Профиль",       icon: "User" },
       ];
 
   const handleSave = async () => {
@@ -182,6 +185,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             activeTab={tab as "tours" | "history"}
             onNavigate={onNavigate}
           />
+        )}
+
+        {tab === "documents" && (
+          <DashboardDocumentsTab />
         )}
 
         {tab === "company" && (
