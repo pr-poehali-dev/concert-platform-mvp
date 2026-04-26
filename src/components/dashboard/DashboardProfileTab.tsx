@@ -117,11 +117,27 @@ export default function DashboardProfileTab({
     setTimeout(() => setReqSaved(false), 2000);
   };
 
-  // Email confirmation
-  const [emailConfirmed, setEmailConfirmed] = useState(!!user.verified);
+  // Email confirmation — используем emailConfirmed (подтверждение по письму), НЕ verified (одобрение админом)
+  const [emailConfirmed, setEmailConfirmed] = useState(!!user.emailConfirmed);
   const [emailSending, setEmailSending] = useState(false);
   const [emailMsg, setEmailMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [emailSent, setEmailSent] = useState(false);
+
+  // При открытии секции безопасности — запрашиваем актуальный статус email из БД
+  useEffect(() => {
+    if (section !== "security") return;
+    const sessionId = localStorage.getItem("tourlink_session");
+    if (!sessionId) return;
+    fetch(`${AUTH_URL}?action=me`, { headers: { "X-Session-Id": sessionId } })
+      .then(r => r.json())
+      .then(data => {
+        if (data.user) {
+          setEmailConfirmed(!!data.user.emailConfirmed);
+          setTfaEnabled(!!data.user.twofaEnabled);
+        }
+      })
+      .catch(() => {});
+  }, [section]);
 
   const sendVerification = async () => {
     setEmailSending(true);
@@ -293,10 +309,10 @@ export default function DashboardProfileTab({
                         : "Дополнительная защита аккаунта через код на почте"}
                     </p>
                   </div>
-                  {/* Toggle */}
+                  {/* Toggle — активен только если email подтверждён */}
                   <button
                     onClick={toggleTfa}
-                    disabled={tfaLoading || !user.verified}
+                    disabled={tfaLoading || !emailConfirmed}
                     className={`relative w-12 h-6 rounded-full transition-all duration-300 flex-shrink-0 disabled:opacity-40 ${tfaEnabled ? "bg-neon-cyan" : "bg-white/15"}`}
                   >
                     {tfaLoading
@@ -306,10 +322,10 @@ export default function DashboardProfileTab({
                   </button>
                 </div>
 
-                {!user.verified && (
+                {!emailConfirmed && (
                   <div className="mt-3 flex items-center gap-2 text-amber-400/80 text-xs bg-amber-400/5 border border-amber-400/15 rounded-xl px-3 py-2">
                     <Icon name="AlertTriangle" size={13} />
-                    Подтвердите email чтобы включить 2FA
+                    Подтвердите email выше — после этого 2FA станет доступна
                   </div>
                 )}
 

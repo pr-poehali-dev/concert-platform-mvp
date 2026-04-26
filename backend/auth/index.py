@@ -110,6 +110,7 @@ def build_user(row) -> dict:
         "phone": row[20] or "",
         "emailNotificationsEnabled": row[21] if len(row) > 21 and row[21] is not None else True,
         "twofaEnabled": row[22] if len(row) > 22 and row[22] is not None else False,
+        "emailConfirmed": row[23] if len(row) > 23 and row[23] is not None else False,
     }
 
 
@@ -117,7 +118,7 @@ USER_SELECT = f"""
     SELECT id, name, email, role, city, verified, avatar, avatar_color, status,
            company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address,
            bank_name, bank_account, bank_bik, logo_url, phone, email_notifications_enabled,
-           twofa_enabled
+           twofa_enabled, email_confirmed
     FROM {SCHEMA}.users
 """
 
@@ -487,10 +488,26 @@ def handler(event: dict, context) -> dict:
     # ── POST update_profile ───────────────────────────────────────────────
     if method == "POST" and action == "update_profile":
         session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
-        if not session_id or session_id not in _sessions:
+        if not session_id:
             return err("Не авторизован", 401)
+
+        # in-memory сначала, затем БД
+        if session_id in _sessions:
+            user = _sessions[session_id]
+        else:
+            conn_s = get_conn(); cur_s = conn_s.cursor()
+            cur_s.execute(
+                f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'",
+                (session_id,)
+            )
+            sr = cur_s.fetchone()
+            conn_s.close()
+            if not sr:
+                return err("Не авторизован", 401)
+            user = sr[0] if isinstance(sr[0], dict) else json.loads(sr[0])
+            _sessions[session_id] = user
+
         b = json.loads(event.get("body") or "{}")
-        user = _sessions[session_id]
         uid  = user["id"]
 
         field_map = {
@@ -531,9 +548,28 @@ def handler(event: dict, context) -> dict:
     # ── GET me ────────────────────────────────────────────────────────────
     if method == "GET" and action == "me":
         session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
-        if not session_id or session_id not in _sessions:
+        if not session_id:
             return err("Не авторизован", 401)
-        user = _sessions[session_id]
+
+        # in-memory → sessions таблица → 401
+        if session_id in _sessions:
+            user = _sessions[session_id]
+        else:
+            conn_s = get_conn(); cur_s = conn_s.cursor()
+            cur_s.execute(
+                f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'",
+                (session_id,)
+            )
+            sr = cur_s.fetchone()
+            if sr:
+                cur_s.execute(f"UPDATE {SCHEMA}.sessions SET last_seen = NOW() WHERE session_id = %s", (session_id,))
+                conn_s.commit()
+            conn_s.close()
+            if not sr:
+                return err("Не авторизован", 401)
+            user = sr[0] if isinstance(sr[0], dict) else json.loads(sr[0])
+            _sessions[session_id] = user
+
         conn = get_conn(); cur = conn.cursor()
         cur.execute(USER_SELECT + " WHERE id = %s", (user["id"],))
         row = cur.fetchone()
@@ -541,7 +577,7 @@ def handler(event: dict, context) -> dict:
         if row:
             fresh = build_user(row)
             # Сохраняем employee-флаги если они были
-            for k in ("employeeId","roleInCompany","companyName","isEmployee"):
+            for k in ("employeeId","roleInCompany","companyName","isEmployee","accessPermissions"):
                 if k in user:
                     fresh[k] = user[k]
             _sessions[session_id] = fresh
@@ -551,8 +587,14 @@ def handler(event: dict, context) -> dict:
     # ── POST upload_logo ──────────────────────────────────────────────────
     if method == "POST" and action == "upload_logo":
         session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
-        if not session_id or session_id not in _sessions:
+        if not session_id:
             return err("Не авторизован", 401)
+        if session_id not in _sessions:
+            conn_s = get_conn(); cur_s = conn_s.cursor()
+            cur_s.execute(f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'", (session_id,))
+            sr = cur_s.fetchone(); conn_s.close()
+            if not sr: return err("Не авторизован", 401)
+            _sessions[session_id] = sr[0] if isinstance(sr[0], dict) else json.loads(sr[0])
         b = json.loads(event.get("body") or "{}")
         logo_b64  = b.get("logoBase64", "")
         logo_mime = b.get("logoMime", "image/png")
@@ -587,8 +629,14 @@ def handler(event: dict, context) -> dict:
     # ── POST change_password ──────────────────────────────────────────────
     if method == "POST" and action == "change_password":
         session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
-        if not session_id or session_id not in _sessions:
+        if not session_id:
             return err("Не авторизован", 401)
+        if session_id not in _sessions:
+            conn_s = get_conn(); cur_s = conn_s.cursor()
+            cur_s.execute(f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'", (session_id,))
+            sr = cur_s.fetchone(); conn_s.close()
+            if not sr: return err("Не авторизован", 401)
+            _sessions[session_id] = sr[0] if isinstance(sr[0], dict) else json.loads(sr[0])
         user = _sessions[session_id]
         uid  = user["id"]
         b = json.loads(event.get("body") or "{}")
@@ -760,36 +808,55 @@ def handler(event: dict, context) -> dict:
         session_id = headers.get("X-Session-Id") or headers.get("x-session-id")
         if not session_id:
             return err("Не авторизован", 401)
-        # Проверяем через БД
+
+        # Получаем uid: сначала из in-memory, потом из sessions БД
+        uid = None
+        if session_id in _sessions:
+            uid = _sessions[session_id].get("id")
+
         conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'", (session_id,))
-        sess_row = cur.fetchone()
-        if not sess_row:
+
+        if not uid:
+            cur.execute(
+                f"SELECT user_data FROM {SCHEMA}.sessions WHERE session_id = %s AND last_seen > NOW() - INTERVAL '30 days'",
+                (session_id,)
+            )
+            sess_row = cur.fetchone()
+            if not sess_row:
+                conn.close()
+                return err("Сессия не найдена. Войдите снова.", 401)
+            user_data_raw = sess_row[0]
+            user_data = user_data_raw if isinstance(user_data_raw, dict) else json.loads(user_data_raw)
+            uid = user_data.get("id")
+
+        if not uid:
             conn.close()
             return err("Не авторизован", 401)
-        user_data = sess_row[0] if isinstance(sess_row[0], dict) else json.loads(sess_row[0])
-        uid = user_data["id"]
 
         b = json.loads(event.get("body") or "{}")
         enable = bool(b.get("enable", False))
 
-        # Если включают — нужно проверить что email верифицирован
+        # Проверяем email_confirmed прямо в БД (единственный достоверный источник)
         if enable:
             cur.execute(f"SELECT email_confirmed FROM {SCHEMA}.users WHERE id = %s", (uid,))
             row = cur.fetchone()
             if not row or not row[0]:
                 conn.close()
-                return err("Для включения 2FA необходимо подтвердить email")
+                return err("Для включения 2FA подтвердите email — проверьте почту или запросите письмо повторно")
 
         cur.execute(f"UPDATE {SCHEMA}.users SET twofa_enabled = %s WHERE id = %s", (enable, uid))
-        # Обновляем сессию
-        user_data["twofaEnabled"] = enable
-        cur.execute(
-            f"UPDATE {SCHEMA}.sessions SET user_data = %s::jsonb WHERE session_id = %s",
-            (json.dumps(user_data), session_id)
-        )
+
+        # Обновляем in-memory сессию
         if session_id in _sessions:
             _sessions[session_id]["twofaEnabled"] = enable
+
+        # Обновляем sessions в БД
+        cur.execute(
+            f"""UPDATE {SCHEMA}.sessions
+                SET user_data = jsonb_set(COALESCE(user_data, '{{}}'), '{{twofaEnabled}}', %s::jsonb)
+                WHERE session_id = %s""",
+            (json.dumps(enable), session_id)
+        )
         conn.commit(); conn.close()
         return ok({"twofaEnabled": enable})
 

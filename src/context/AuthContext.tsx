@@ -29,6 +29,7 @@ export interface User {
   // Настройки
   emailNotificationsEnabled?: boolean;
   twofaEnabled?: boolean;
+  emailConfirmed?: boolean;
   // Сотрудник
   isEmployee?: boolean;
   employeeId?: string;
