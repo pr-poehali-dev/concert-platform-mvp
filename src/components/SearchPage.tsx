@@ -6,6 +6,7 @@ import VenueSetupModal from "@/components/VenueSetupModal";
 import StartChatModal from "@/components/StartChatModal";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
+const IMPORT_URL = "https://functions.poehali.dev/c7f2752f-6618-495c-9f9e-8553dce85384";
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/e1d7542c-8ded-4ad1-8101-77b43e4b65bf.jpg";
 
 const CITIES = ["Все города","Москва","Санкт-Петербург","Екатеринбург","Новосибирск","Казань","Ростов-на-Дону","Краснодар"];
@@ -28,6 +29,8 @@ interface Venue {
   reviewsCount: number;
   verified: boolean;
   userId?: string;
+  ownerUserId?: string;
+  importedFrom?: string;
 }
 
 interface SearchPageProps {
@@ -45,6 +48,25 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
   const [capacityMin, setCapacityMin] = useState(0);
   const [sortBy, setSortBy] = useState("rating");
   const [chatModal, setChatModal] = useState<{ venueId: string; venueUserId: string; venueName: string } | null>(null);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
+  const [claimDone, setClaimDone] = useState<Set<string>>(new Set());
+
+  const claimVenue = async (venueId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!user) return;
+    setClaimingId(venueId);
+    try {
+      const res = await fetch(`${IMPORT_URL}/?action=claim`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ venueId, userId: user.id }),
+      });
+      const data = await res.json();
+      if (res.ok) setClaimDone(prev => new Set([...prev, venueId]));
+      else alert(data.error || "Ошибка");
+    } catch { alert("Ошибка соединения"); }
+    finally { setClaimingId(null); }
+  };
 
   const loadVenues = async () => {
     setLoading(true);
@@ -246,6 +268,21 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
                               className="flex items-center gap-2 px-4 py-1.5 bg-neon-purple/20 text-neon-purple text-xs rounded-lg hover:bg-neon-purple/30 transition-colors border border-neon-purple/30">
                               Написать<Icon name="MessageCircle" size={13} />
                             </button>
+                          )}
+                          {user?.role === "venue" && venue.importedFrom && !venue.ownerUserId && (
+                            claimDone.has(venue.id) ? (
+                              <span className="flex items-center gap-1 px-3 py-1.5 bg-green-500/10 text-green-400 text-xs rounded-lg border border-green-500/20">
+                                <Icon name="CheckCircle2" size={13} />Заявка отправлена
+                              </span>
+                            ) : (
+                              <button
+                                onClick={e => claimVenue(venue.id, e)}
+                                disabled={claimingId === venue.id}
+                                className="flex items-center gap-1 px-3 py-1.5 bg-neon-cyan/15 text-neon-cyan text-xs rounded-lg hover:bg-neon-cyan/25 transition-colors border border-neon-cyan/30 disabled:opacity-50">
+                                {claimingId === venue.id ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="KeyRound" size={13} />}
+                                Это моя площадка
+                              </button>
+                            )
                           )}
                         </div>
                       </div>

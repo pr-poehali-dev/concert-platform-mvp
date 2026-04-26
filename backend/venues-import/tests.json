@@ -1,11 +1,11 @@
 {
   "tests": [
     {
-      "name": "Search venues Yandex",
+      "name": "Search venues OSM Москва",
       "method": "GET",
-      "path": "/?action=search&query=концертный+клуб&city=Москва",
+      "path": "/?action=search&city=%D0%9C%D0%BE%D1%81%D0%BA%D0%B2%D0%B0&type=all",
       "expectedStatus": 200,
-      "expectedBody": {"results": []},
+      "expectedBody": {"city": "Москва"},
       "bodyMatcher": "partial"
     }
   ]
