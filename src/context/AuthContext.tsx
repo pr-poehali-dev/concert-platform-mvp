@@ -63,6 +63,7 @@ export interface RegisterData {
 interface AuthContextType {
   user: User | null;
   login: (email: string, password: string) => Promise<string | null>;
+  loginWithSession: (sessionId: string, userData: User) => void;
   register: (data: RegisterData) => Promise<string | null>;
   updateProfile: (fields: Partial<User>) => Promise<string | null>;
   logout: () => void;
@@ -158,13 +159,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const loginWithSession = (sessionId: string, userData: User) => {
+    localStorage.setItem(SESSION_KEY, sessionId);
+    setUserWithCache(userData);
+  };
+
   const logout = () => {
     localStorage.removeItem(SESSION_KEY);
     setUserWithCache(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, updateProfile, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, loginWithSession, register, updateProfile, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

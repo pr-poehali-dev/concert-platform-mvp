@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
-import { useAuth, type RegisterData, type CompanyType, type UserRole, AUTH_URL } from "@/context/AuthContext";
+import { useAuth, type RegisterData, type CompanyType, type UserRole, type User, AUTH_URL } from "@/context/AuthContext";
 
 const CITIES = [
   "Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск",
@@ -42,7 +42,7 @@ interface Props {
 
 export default function OrganizerLoginPage({ initialRole = "organizer" }: Props) {
   const navigate  = useNavigate();
-  const { login, register, isLoading } = useAuth();
+  const { login, loginWithSession, register, isLoading } = useAuth();
 
   const [role, setRole]     = useState<UserRole>(initialRole);
   const [screen, setScreen] = useState<Screen>("login");
@@ -162,9 +162,8 @@ export default function OrganizerLoginPage({ initialRole = "organizer" }: Props)
         tfaRefs[0].current?.focus();
         return;
       }
-      // Сохраняем реальную сессию
-      localStorage.setItem("tourlink_session", data.sessionId);
-      localStorage.setItem("tourlink_user_cache", JSON.stringify(data.user));
+      // Записываем сессию в AuthContext — это обновит React state и всё приложение узнает о входе
+      loginWithSession(data.sessionId, data.user as User);
       navigate("/");
     } catch { setError("Ошибка соединения"); }
     finally { setTfaLoading(false); }
