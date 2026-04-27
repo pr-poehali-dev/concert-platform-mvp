@@ -643,14 +643,20 @@ def handler(event: dict, context) -> dict:
     # ── GET my_sent_requests — исходящие запросы (я отправил) ─────────────
     if method == "GET" and action == "my_sent_requests":
         conn = get_conn(); cur = conn.cursor()
+        # ВАЖНО: джойним user_documents по original_document_id (документ у ОТПРАВИТЕЛЯ),
+        # а не по document_id (копия у получателя). Это нужно чтобы documentId в ответе
+        # указывал на оригинал — иначе download_signed не найдёт подпись отправителя.
         cur.execute(
-            f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.recipient_name,
+            f"""SELECT sr.id,
+                       COALESCE(sr.original_document_id, sr.document_id) as orig_doc_id,
+                       sr.recipient_email, sr.recipient_name,
                        sr.status, sr.created_at, sr.message,
                        ud.name, ud.file_url, ud.category, ud.mime_type,
                        COALESCE(u.role, 'organizer') as recipient_role,
                        COALESCE(u.name, sr.recipient_name, sr.recipient_email) as recipient_resolved_name
                 FROM {SCHEMA}.signature_requests sr
-                JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
+                JOIN {SCHEMA}.user_documents ud
+                    ON ud.id = COALESCE(sr.original_document_id, sr.document_id)
                 LEFT JOIN {SCHEMA}.users u ON LOWER(u.email) = LOWER(sr.recipient_email)
                 WHERE sr.sender_user_id = %s
                 ORDER BY sr.created_at DESC""",
@@ -659,24 +665,24 @@ def handler(event: dict, context) -> dict:
         rows = cur.fetchall()
         result = []
         for r in rows:
-            doc_id_r = str(r[1])
-            # original_document_id = doc_id_r для исходящих (отправитель = владелец оригинала)
+            orig_doc_id = str(r[1])  # ID оригинала у отправителя
             cur.execute(
                 f"""SELECT COUNT(DISTINCT ds.signer_user_id)
                     FROM {SCHEMA}.document_signatures ds
                     WHERE ds.document_id IN (
                         SELECT DISTINCT unnested FROM (
                             SELECT %s::uuid AS unnested
-                            UNION SELECT document_id FROM {SCHEMA}.signature_requests WHERE original_document_id = %s
+                            UNION SELECT document_id FROM {SCHEMA}.signature_requests
+                                  WHERE original_document_id = %s
                         ) t WHERE unnested IS NOT NULL
                     ) AND ds.status = 'signed'""",
-                (doc_id_r, doc_id_r)
+                (orig_doc_id, orig_doc_id)
             )
             signed_count = cur.fetchone()[0]
             all_signed = (signed_count >= 2)
             display_name = r[12] or r[3] or r[2]
             result.append({
-                "id": str(r[0]), "documentId": doc_id_r,
+                "id": str(r[0]), "documentId": orig_doc_id,
                 "recipientEmail": r[2], "recipientName": display_name,
                 "status": r[4], "createdAt": str(r[5]), "message": r[6] or "",
                 "documentName": r[7], "fileUrl": r[8], "category": r[9],
