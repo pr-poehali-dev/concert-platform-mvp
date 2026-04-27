@@ -190,11 +190,17 @@ def handler(event: dict, context) -> dict:
         if not doc_id:
             return err("document_id required")
         conn = get_conn(); cur = conn.cursor()
+
+        # Получаем подписи со ВСЕХ копий документа (один file_url = один документ)
+        # Это позволяет видеть подпись контрагента даже если он подписал свою копию
         cur.execute(
-            f"""SELECT id, signer_user_id, signer_name, signer_email, sign_type,
-                       status, signed_at, hash, created_at
-                FROM {SCHEMA}.document_signatures
-                WHERE document_id = %s ORDER BY created_at""",
+            f"""SELECT DISTINCT ON (ds.signer_user_id)
+                       ds.id, ds.signer_user_id, ds.signer_name, ds.signer_email, ds.sign_type,
+                       ds.status, ds.signed_at, ds.hash, ds.created_at
+                FROM {SCHEMA}.document_signatures ds
+                JOIN {SCHEMA}.user_documents ud ON ud.id = ds.document_id
+                WHERE ud.file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
+                ORDER BY ds.signer_user_id, ds.created_at""",
             (doc_id,)
         )
         sigs = []
@@ -207,11 +213,15 @@ def handler(event: dict, context) -> dict:
                 "hash": r[7], "createdAt": str(r[8]),
                 "isMe": str(r[1]) == user_id,
             })
-        # Запросы на подпись
+        # Запросы на подпись (по текущему doc_id и по связанным через file_url)
         cur.execute(
             f"""SELECT id, recipient_email, recipient_name, status, created_at
                 FROM {SCHEMA}.signature_requests
-                WHERE document_id = %s ORDER BY created_at""",
+                WHERE document_id IN (
+                    SELECT id FROM {SCHEMA}.user_documents
+                    WHERE file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
+                )
+                ORDER BY created_at""",
             (doc_id,)
         )
         reqs = []
@@ -622,11 +632,15 @@ def handler(event: dict, context) -> dict:
             conn.close(); return err("Документ не найден", 404)
         doc_name, file_url, mime_type = doc_row
 
+        # Собираем подписи со ВСЕХ копий документа (один и тот же file_url)
+        # Это позволяет объединить подписи владельца и получателя в одном PDF
         cur.execute(
-            f"""SELECT signer_name, signer_email, sign_type, signed_at, hash, ip_address
-                FROM {SCHEMA}.document_signatures
-                WHERE document_id = %s AND status = 'signed'
-                ORDER BY signed_at""",
+            f"""SELECT DISTINCT ds.signer_name, ds.signer_email, ds.sign_type, ds.signed_at, ds.hash, ds.ip_address
+                FROM {SCHEMA}.document_signatures ds
+                JOIN {SCHEMA}.user_documents ud ON ud.id = ds.document_id
+                WHERE ud.file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
+                  AND ds.status = 'signed'
+                ORDER BY ds.signed_at""",
             (doc_id,)
         )
         sigs = cur.fetchall()

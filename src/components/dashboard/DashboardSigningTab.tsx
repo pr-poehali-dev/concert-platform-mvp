@@ -73,6 +73,35 @@ function StatusBadge({ req }: { req: SignRequest }) {
   return <span className="text-xs text-neon-purple bg-neon-purple/10 border border-neon-purple/20 px-2.5 py-1 rounded-full">Ожидает</span>;
 }
 
+// Кнопка скачать подписанный с двух сторон документ
+function DownloadSignedBtn({ documentId, documentName }: { documentId: string; documentName: string }) {
+  const [loading, setLoading] = useState(false);
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setLoading(true);
+    try {
+      const r = await fetch(`${SIGN_URL}?action=download_signed&document_id=${documentId}`, {
+        headers: { "X-Session-Id": session() },
+      });
+      const d = await r.json();
+      if (d.url) window.open(d.url, "_blank");
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  };
+  return (
+    <button
+      onClick={handleDownload}
+      disabled={loading}
+      title="Скачать документ с подписями обеих сторон"
+      className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-green/10 border border-neon-green/25 text-neon-green text-xs font-oswald font-semibold rounded-lg hover:bg-neon-green/20 transition-all disabled:opacity-50 shrink-0"
+    >
+      {loading
+        ? <><Icon name="Loader2" size={12} className="animate-spin" />Формирую...</>
+        : <><Icon name="Download" size={12} />Скачать PDF</>}
+    </button>
+  );
+}
+
 // Секция контрагента
 function CounterpartySection({
   name, requests, isIncoming, onSign, onRefresh,
@@ -152,14 +181,17 @@ function CounterpartySection({
               </div>
 
               {/* Действия */}
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                 <StatusBadge req={req} />
-                {req.fileUrl && (
+                {req.fileUrl && !req.allSigned && (
                   <a href={req.fileUrl} target="_blank" rel="noreferrer"
                     className="w-8 h-8 flex items-center justify-center bg-white/5 border border-white/10 text-white/40 hover:text-neon-cyan hover:border-neon-cyan/30 rounded-lg transition-all"
-                    title="Открыть документ">
+                    title="Открыть оригинал">
                     <Icon name="Eye" size={14} />
                   </a>
+                )}
+                {req.allSigned && (
+                  <DownloadSignedBtn documentId={req.documentId} documentName={req.documentName} />
                 )}
                 {isIncoming && req.status === "pending" && !req.allSigned && onSign && (
                   <button
