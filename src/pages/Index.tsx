@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import SharedProjectPage from "./SharedProjectPage";
 import Navbar from "@/components/Navbar";
 import HomePage from "@/components/HomePage";
 import SearchPage from "@/components/SearchPage";
@@ -15,6 +16,14 @@ const PAGE_KEY = "gl_active_page";
 const CONV_KEY = "gl_chat_conv";
 
 export default function Index() {
+  // Публичная ссылка на проект: /?share=linkId
+  const shareId = new URLSearchParams(window.location.search).get("share");
+  if (shareId) return <SharedProjectPage linkId={shareId} />;
+
+  return <IndexInner />;
+}
+
+function IndexInner() {
   const { user } = useAuth();
   const [activePage, setActivePage] = useState<Page>("home");
   const [openChatConvId, setOpenChatConvId] = useState<string | null>(null);

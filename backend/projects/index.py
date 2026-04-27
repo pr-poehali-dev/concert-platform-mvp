@@ -1297,14 +1297,15 @@ def handler(event: dict, context) -> dict:
             (pid,))
         project["expenses"] = [{"id":str(r[0]),"category":r[1],"title":r[2],"amountPlan":float(r[3]),"amountFact":float(r[4]),"note":r[5],"sortOrder":r[6]} for r in cur.fetchall()]
         cur.execute(
-            f"SELECT id,category,ticket_count,ticket_price,sold_count,note FROM {SCHEMA}.project_income WHERE project_id=%s ORDER BY created_at",
+            f"SELECT id,category,ticket_count,ticket_price,sold_count,note FROM {SCHEMA}.project_income_lines WHERE project_id=%s ORDER BY created_at",
             (pid,))
         project["incomeLines"] = [{"id":str(r[0]),"category":r[1],"ticketCount":r[2],"ticketPrice":float(r[3]),"soldCount":r[4],"note":r[5],"totalPlan":r[2]*float(r[3]),"totalFact":r[4]*float(r[3])} for r in cur.fetchall()]
         if show_files:
             cur.execute(
                 f"""SELECT d.id, d.file_name, d.file_url, d.file_size, d.mime_type, d.created_at
-                    FROM {SCHEMA}.project_documents d
-                    WHERE d.project_id=%s ORDER BY d.created_at DESC""", (pid,))
+                    FROM {SCHEMA}.user_documents d
+                    WHERE d.user_id=(SELECT user_id FROM {SCHEMA}.projects WHERE id=%s)
+                    ORDER BY d.created_at DESC""", (pid,))
             project["documents"] = [
                 {"id":str(r[0]),"fileName":r[1],"fileUrl":r[2],"fileSize":r[3],"mimeType":r[4],"createdAt":str(r[5])}
                 for r in cur.fetchall()
