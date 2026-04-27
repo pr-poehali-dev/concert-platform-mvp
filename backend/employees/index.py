@@ -7,7 +7,7 @@ POST ?action=update_permissions       — обновить только прав
 POST ?action=deactivate               — деактивировать
 POST ?action=activate                 — восстановить
 """
-import json, os, hashlib, random
+import json, os, hashlib, random, urllib.request
 import psycopg2
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
@@ -55,6 +55,70 @@ def ok(data, status=200):
 def err(msg, status=400):
     return {"statusCode": status, "headers": {**cors(), "Content-Type": "application/json"},
             "body": json.dumps({"error": msg}, ensure_ascii=False)}
+
+
+def send_employee_invite(to_email: str, emp_name: str, company_name: str, password: str):
+    """Отправляет письмо сотруднику с логином и паролем."""
+    api_key = os.environ.get("RESEND_API_KEY", "")
+    app_url = os.environ.get("APP_URL", "https://globallink.ru")
+    if not api_key or not to_email:
+        return
+    html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+  <tr><td style="padding-bottom:24px;text-align:center;">
+    <span style="font-family:Arial,sans-serif;font-size:22px;font-weight:bold;color:#fff;letter-spacing:2px;">GLOBAL LINK</span>
+  </td></tr>
+  <tr><td style="background:#15152a;border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:32px;">
+    <h2 style="color:#fff;font-size:20px;margin:0 0 8px;">Привет, {emp_name}!</h2>
+    <p style="color:rgba(255,255,255,0.6);font-size:14px;margin:0 0 24px;line-height:1.6;">
+      Тебя добавили в команду <strong style="color:#fff;">{company_name}</strong> на платформе GLOBAL LINK.
+    </p>
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(168,85,247,0.1);border:1px solid rgba(168,85,247,0.3);border-radius:12px;padding:20px;margin-bottom:24px;">
+      <tr><td>
+        <p style="color:rgba(255,255,255,0.5);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px;">Данные для входа</p>
+        <table width="100%" cellpadding="4" cellspacing="0">
+          <tr>
+            <td style="color:rgba(255,255,255,0.4);font-size:13px;width:80px;">Логин:</td>
+            <td style="color:#22d3ee;font-size:14px;font-weight:bold;">{to_email}</td>
+          </tr>
+          <tr>
+            <td style="color:rgba(255,255,255,0.4);font-size:13px;">Пароль:</td>
+            <td style="color:#a855f7;font-size:14px;font-weight:bold;">{password}</td>
+          </tr>
+        </table>
+      </td></tr>
+    </table>
+    <a href="{app_url}" style="display:inline-block;background:linear-gradient(135deg,#a855f7,#22d3ee);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;font-size:14px;">
+      Войти в GLOBAL LINK
+    </a>
+    <p style="color:rgba(255,255,255,0.3);font-size:12px;margin-top:24px;line-height:1.5;">
+      Рекомендуем сменить пароль после первого входа.<br>
+      Если вы не ожидали это письмо — просто проигнорируйте его.
+    </p>
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+    payload = json.dumps({
+        "from": "GLOBAL LINK <noreply@globallink.art>",
+        "to": [to_email],
+        "subject": f"Вас добавили в команду {company_name} — GLOBAL LINK",
+        "html": html,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception as ex:
+        print(f"[Email invite] {to_email}: {ex}")
 
 
 def row_to_emp(row) -> dict:
@@ -148,7 +212,13 @@ def handler(event: dict, context) -> dict:
             (cid, name, email, pw_hash, role_c, avatar, avatar_color, json.dumps(perms)),
         )
         emp_id = str(cur.fetchone()[0])
+        # Получаем название компании для письма
+        cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id = %s", (cid,))
+        owner_row = cur.fetchone()
+        company_name = owner_row[0] if owner_row else "компании"
         conn.commit(); conn.close()
+        # Отправляем письмо сотруднику
+        send_employee_invite(email, name, company_name, password)
         return ok({"id": emp_id}, 201)
 
     # ── POST update ───────────────────────────────────────────────────────
