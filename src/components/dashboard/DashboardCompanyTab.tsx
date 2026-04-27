@@ -14,6 +14,8 @@ interface CompanyMessage {
   createdAt: string;
 }
 
+type ChatMode = "group" | string; // "group" или employeeId для личного чата
+
 function formatTime(dateStr: string) {
   const d = new Date(dateStr);
   const now = new Date();
@@ -32,18 +34,47 @@ export default function DashboardCompanyTab() {
   const [sending, setSending] = useState(false);
   const [loadingEmps, setLoadingEmps] = useState(true);
   const [loadingMsgs, setLoadingMsgs] = useState(true);
+  const [chatMode, setChatMode] = useState<ChatMode>("group");
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const companyId = user?.id ?? "";
 
-  const loadMessages = useCallback(async () => {
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
+  const scrollToBottom = useCallback((force = false) => {
+    if (force || isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, []);
+
+  const loadMessages = useCallback(async (silent = false) => {
     if (!companyId) return;
+    if (!silent) setLoadingMsgs(true);
     try {
-      const res = await fetch(`${EMPLOYEES_URL}?action=company_messages&company_user_id=${companyId}`);
+      let url = "";
+      if (chatMode === "group") {
+        url = `${EMPLOYEES_URL}?action=company_messages&company_user_id=${companyId}`;
+      } else {
+        url = `${EMPLOYEES_URL}?action=dm_messages&company_user_id=${companyId}&employee_id=${chatMode}`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
-      setMessages(data.messages || []);
-    } catch { /* silent */ } finally { setLoadingMsgs(false); }
-  }, [companyId]);
+      setMessages(prev => {
+        const next = data.messages || [];
+        const changed = next.length !== prev.length || (next[next.length - 1]?.id !== prev[prev.length - 1]?.id);
+        if (changed) setTimeout(() => scrollToBottom(), 50);
+        return next;
+      });
+    } catch { /* silent */ }
+    finally { if (!silent) setLoadingMsgs(false); }
+  }, [companyId, chatMode, scrollToBottom]);
 
   const loadEmployees = useCallback(async () => {
     if (!companyId) return;
@@ -51,21 +82,23 @@ export default function DashboardCompanyTab() {
       const res = await fetch(`${EMPLOYEES_URL}?action=list&company_user_id=${companyId}`);
       const data = await res.json();
       setEmployees(data.employees || []);
-    } catch { /* silent */ } finally { setLoadingEmps(false); }
+    } catch { /* silent */ }
+    finally { setLoadingEmps(false); }
   }, [companyId]);
 
+  // При смене чата — сбрасываем и грузим
   useEffect(() => {
     if (!companyId) return;
-    loadEmployees();
+    setMessages([]);
+    setLoadingMsgs(true);
+    isAtBottomRef.current = true;
     loadMessages();
     if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(loadMessages, 5000);
+    pollingRef.current = setInterval(() => loadMessages(true), 5000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
-  }, [loadEmployees, loadMessages, companyId]);
+  }, [companyId, chatMode, loadMessages]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  useEffect(() => { loadEmployees(); }, [loadEmployees]);
 
   if (!user) return null;
 
@@ -74,6 +107,7 @@ export default function DashboardCompanyTab() {
     if (!text || sending) return;
     setSending(true);
     setInputText("");
+
     const optimistic: CompanyMessage = {
       id: `opt-${Date.now()}`,
       senderId: user.id, senderType: "user",
@@ -82,53 +116,84 @@ export default function DashboardCompanyTab() {
       text, createdAt: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimistic]);
+    isAtBottomRef.current = true;
+    setTimeout(() => scrollToBottom(true), 50);
+
     try {
-      await fetch(`${EMPLOYEES_URL}?action=company_send`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          companyUserId: companyId, senderId: user.id,
-          senderType: "user", text,
-        }),
-      });
+      if (chatMode === "group") {
+        await fetch(`${EMPLOYEES_URL}?action=company_send`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ companyUserId: companyId, senderId: user.id, senderType: "user", text }),
+        });
+      } else {
+        await fetch(`${EMPLOYEES_URL}?action=dm_send`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            companyUserId: companyId, senderId: user.id,
+            senderType: "user", recipientId: chatMode, text,
+          }),
+        });
+      }
+      await loadMessages(true);
     } catch { /* silent */ }
     setSending(false);
   };
 
   const activeEmps = employees.filter(e => e.isActive);
+  const selectedEmp = activeEmps.find(e => e.id === chatMode);
+
+  const chatTitle = chatMode === "group"
+    ? "Общий чат компании"
+    : selectedEmp?.name ?? "Личный чат";
+  const chatSubtitle = chatMode === "group"
+    ? `${activeEmps.length + 1} участников`
+    : (selectedEmp ? ROLE_LABELS[selectedEmp.roleInCompany] || selectedEmp.roleInCompany : "");
 
   return (
     <div className="flex gap-4 h-[calc(100vh-16rem)] min-h-[400px] animate-fade-in">
-      {/* Список участников */}
+
+      {/* Левая панель — список чатов */}
       <div className="w-60 shrink-0 flex flex-col glass rounded-2xl overflow-hidden border border-white/10">
         <div className="px-4 py-3 border-b border-white/10 shrink-0">
           <h3 className="font-oswald font-bold text-white text-sm flex items-center gap-2">
-            <Icon name="Users" size={15} className="text-neon-purple" />
-            Участники
-            <span className="ml-auto text-white/30 text-xs font-normal">{activeEmps.length + 1}</span>
+            <Icon name="MessageSquare" size={15} className="text-neon-purple" />
+            Чаты
           </h3>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
-          {/* Владелец */}
-          <div className="flex items-center gap-2.5 px-3 py-2 rounded-xl">
-            <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${user.avatarColor || "from-neon-purple to-neon-cyan"} flex items-center justify-center text-white font-bold text-xs shrink-0`}>
-              {user.avatar || user.name?.[0]?.toUpperCase() || "?"}
+          {/* Общий чат */}
+          <button
+            onClick={() => setChatMode("group")}
+            className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left ${chatMode === "group" ? "bg-neon-purple/20 border border-neon-purple/30" : "hover:bg-white/5"}`}
+          >
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center shrink-0">
+              <Icon name="Users" size={14} className="text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-medium truncate">{user.name}</p>
-              <p className="text-neon-purple text-[10px]">Владелец</p>
+              <p className="text-white text-xs font-medium truncate">Общий чат</p>
+              <p className="text-white/35 text-[10px]">{activeEmps.length + 1} участников</p>
             </div>
-            <div className="w-2 h-2 rounded-full bg-neon-green shrink-0" />
-          </div>
+          </button>
 
+          {/* Разделитель */}
+          {activeEmps.length > 0 && (
+            <p className="text-white/20 text-[10px] uppercase tracking-wider px-3 pt-2 pb-1">Личные чаты</p>
+          )}
+
+          {/* Сотрудники */}
           {loadingEmps ? (
-            <div className="space-y-1 px-2">
+            <div className="space-y-1 px-1">
               {[1, 2].map(i => <div key={i} className="h-10 glass rounded-xl animate-pulse" />)}
             </div>
           ) : activeEmps.length === 0 ? (
-            <p className="text-white/25 text-xs text-center py-4 px-3">Нет активных сотрудников</p>
+            <p className="text-white/25 text-xs text-center py-4 px-3">Нет сотрудников</p>
           ) : (
             activeEmps.map(emp => (
-              <div key={emp.id} className="flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 transition-colors">
+              <button
+                key={emp.id}
+                onClick={() => setChatMode(emp.id)}
+                className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left ${chatMode === emp.id ? "bg-neon-purple/20 border border-neon-purple/30" : "hover:bg-white/5"}`}
+              >
                 <div className={`w-8 h-8 rounded-full bg-gradient-to-br ${emp.avatarColor} flex items-center justify-center text-white font-bold text-xs shrink-0`}>
                   {emp.avatar || emp.name?.[0]?.toUpperCase() || "?"}
                 </div>
@@ -136,27 +201,34 @@ export default function DashboardCompanyTab() {
                   <p className="text-white text-xs font-medium truncate">{emp.name}</p>
                   <p className="text-white/35 text-[10px]">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</p>
                 </div>
-              </div>
+              </button>
             ))
           )}
         </div>
       </div>
 
-      {/* Чат */}
+      {/* Правая часть — чат */}
       <div className="flex-1 flex flex-col glass rounded-2xl overflow-hidden border border-white/10">
         {/* Заголовок */}
         <div className="flex items-center gap-3 px-5 py-3 border-b border-white/10 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center">
-            <Icon name="MessageSquare" size={15} className="text-white" />
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${chatMode === "group" ? "bg-gradient-to-br from-neon-purple to-neon-cyan" : `bg-gradient-to-br ${selectedEmp?.avatarColor || "from-neon-purple to-neon-cyan"}`}`}>
+            {chatMode === "group"
+              ? <Icon name="Users" size={15} className="text-white" />
+              : <span className="text-white font-bold text-xs">{selectedEmp?.avatar || selectedEmp?.name?.[0]?.toUpperCase() || "?"}</span>
+            }
           </div>
           <div>
-            <p className="font-oswald font-semibold text-white text-sm">Чат компании</p>
-            <p className="text-white/40 text-xs">Только для сотрудников</p>
+            <p className="font-oswald font-semibold text-white text-sm">{chatTitle}</p>
+            <p className="text-white/40 text-xs">{chatSubtitle}</p>
           </div>
         </div>
 
         {/* Сообщения */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-4 space-y-4"
+        >
           {loadingMsgs ? (
             <div className="flex items-center justify-center h-full">
               <Icon name="Loader2" size={20} className="text-white/30 animate-spin" />
@@ -164,8 +236,9 @@ export default function DashboardCompanyTab() {
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
               <Icon name="MessageCircle" size={36} className="text-white/15" />
-              <p className="text-white/40 text-sm">Начните общение с командой</p>
-              <p className="text-white/20 text-xs">Сообщения видны только участникам компании</p>
+              <p className="text-white/40 text-sm">
+                {chatMode === "group" ? "Начните общение с командой" : `Напишите ${selectedEmp?.name ?? "сотруднику"}`}
+              </p>
             </div>
           ) : (
             messages.map((msg, idx) => {
@@ -175,8 +248,7 @@ export default function DashboardCompanyTab() {
 
               return (
                 <div key={msg.id} className={`flex items-end gap-2 ${isMe ? "flex-row-reverse" : ""}`}>
-                  {/* Аватар */}
-                  {(!isMe) && (
+                  {!isMe && (
                     <div className={`w-7 h-7 rounded-full bg-gradient-to-br ${msg.senderColor} flex items-center justify-center text-white text-xs font-bold shrink-0 mb-0.5 ${showName ? "" : "opacity-0"}`}>
                       {msg.senderAvatar || msg.senderName?.[0]?.toUpperCase() || "?"}
                     </div>
@@ -186,11 +258,14 @@ export default function DashboardCompanyTab() {
                       <span className="text-white/40 text-[10px] mb-0.5 px-1">{msg.senderName}</span>
                     )}
                     <div className={`px-3.5 py-2.5 rounded-2xl ${isMe
-                      ? "bg-neon-purple/30 border border-neon-purple/30 rounded-br-sm"
-                      : "bg-white/8 border border-white/10 rounded-bl-sm"}`}>
-                      <p className="text-white text-sm leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                      ? "bg-neon-purple/30 border border-neon-purple/30 text-white"
+                      : "glass border border-white/10 text-white"
+                    } ${msg.id.startsWith("opt-") ? "opacity-60" : ""}`}>
+                      <p className="text-xs leading-relaxed break-words">{msg.text}</p>
                     </div>
-                    <span className="text-white/20 text-[10px] mt-0.5 px-1">{formatTime(msg.createdAt)}</span>
+                    {showName && (
+                      <span className="text-[10px] text-white/30 mt-0.5 px-1">{formatTime(msg.createdAt)}</span>
+                    )}
                   </div>
                 </div>
               );
@@ -199,26 +274,29 @@ export default function DashboardCompanyTab() {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Ввод */}
-        <div className="flex items-end gap-3 p-4 border-t border-white/10 shrink-0">
-          <textarea
-            value={inputText}
-            onChange={e => setInputText(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Сообщение команде..."
-            rows={1}
-            className="flex-1 bg-white/5 rounded-xl px-4 py-2.5 text-white placeholder:text-white/30 outline-none border border-white/10 focus:border-neon-purple/40 text-sm resize-none"
-            style={{ maxHeight: "100px" }}
-          />
-          <button
-            onClick={send}
-            disabled={!inputText.trim() || sending}
-            className="w-10 h-10 flex items-center justify-center bg-neon-purple rounded-xl hover:bg-neon-purple/80 disabled:opacity-40 transition-all shrink-0"
-          >
-            {sending
-              ? <Icon name="Loader2" size={16} className="animate-spin text-white" />
-              : <Icon name="Send" size={16} className="text-white" />}
-          </button>
+        {/* Поле ввода */}
+        <div className="px-4 py-3 border-t border-white/10 shrink-0">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={inputText}
+              onChange={e => setInputText(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") send(); }}
+              placeholder={chatMode === "group" ? "Написать всей команде..." : `Написать ${selectedEmp?.name ?? "сотруднику"}...`}
+              disabled={sending}
+              className="flex-1 glass rounded-xl px-3 py-2.5 text-white text-sm placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 transition-colors disabled:opacity-50"
+            />
+            <button
+              onClick={send}
+              disabled={!inputText.trim() || sending}
+              className="w-10 h-10 flex items-center justify-center rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan text-white hover:opacity-90 transition-opacity disabled:opacity-30 shrink-0"
+            >
+              {sending
+                ? <Icon name="Loader2" size={16} className="animate-spin" />
+                : <Icon name="Send" size={16} />
+              }
+            </button>
+          </div>
         </div>
       </div>
     </div>

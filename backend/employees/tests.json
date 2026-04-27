@@ -24,6 +24,23 @@
       "expectedStatus": 400,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "DM messages missing params",
+      "method": "GET",
+      "path": "/?action=dm_messages",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "DM send missing fields",
+      "method": "POST",
+      "path": "/?action=dm_send",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -258,4 +258,62 @@ def handler(event: dict, context) -> dict:
             "text": text, "createdAt": str(row[1]),
         }, 201)
 
+    # ── GET dm_messages — личные сообщения между владельцем и сотрудником ──
+    if method == "GET" and action == "dm_messages":
+        company_user_id = params.get("company_user_id", "")
+        employee_id     = params.get("employee_id", "")
+        if not company_user_id or not employee_id: return err("company_user_id и employee_id обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, sender_id, sender_type, sender_name, sender_avatar,
+                       sender_color, text, created_at
+                FROM {SCHEMA}.direct_messages
+                WHERE company_user_id = %s
+                  AND (
+                    (sender_id = %s AND recipient_id = %s)
+                    OR (sender_id = %s AND recipient_id = %s)
+                  )
+                ORDER BY created_at ASC LIMIT 200""",
+            (company_user_id, company_user_id, employee_id, employee_id, company_user_id))
+        rows = cur.fetchall(); conn.close()
+        return ok({"messages": [
+            {"id": str(r[0]), "senderId": str(r[1]), "senderType": r[2],
+             "senderName": r[3], "senderAvatar": r[4], "senderColor": r[5],
+             "text": r[6], "createdAt": str(r[7])}
+            for r in rows
+        ]})
+
+    # ── POST dm_send — отправить личное сообщение ───────────────────────────
+    if method == "POST" and action == "dm_send":
+        b = json.loads(event.get("body") or "{}")
+        company_user_id = b.get("companyUserId", "")
+        sender_id       = b.get("senderId", "")
+        sender_type     = b.get("senderType", "user")
+        recipient_id    = b.get("recipientId", "")
+        text            = (b.get("text") or "").strip()
+        if not company_user_id or not sender_id or not recipient_id or not text:
+            return err("companyUserId, senderId, recipientId, text обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        sender_name = ""; sender_avatar = ""; sender_color = "from-neon-purple to-neon-cyan"
+        if sender_type == "employee":
+            cur.execute(f"SELECT name, avatar, avatar_color FROM {SCHEMA}.employees WHERE id=%s", (sender_id,))
+            row = cur.fetchone()
+            if row: sender_name, sender_avatar, sender_color = row[0], row[1], row[2]
+        else:
+            cur.execute(f"SELECT name, avatar, avatar_color FROM {SCHEMA}.users WHERE id=%s", (sender_id,))
+            row = cur.fetchone()
+            if row: sender_name, sender_avatar, sender_color = row[0], row[1], row[2]
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.direct_messages
+                (company_user_id, sender_id, sender_type, sender_name, sender_avatar, sender_color, recipient_id, text)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id, created_at""",
+            (company_user_id, sender_id, sender_type, sender_name, sender_avatar, sender_color, recipient_id, text))
+        row = cur.fetchone()
+        conn.commit(); conn.close()
+        return ok({
+            "id": str(row[0]), "senderId": sender_id, "senderType": sender_type,
+            "senderName": sender_name, "senderAvatar": sender_avatar, "senderColor": sender_color,
+            "text": text, "createdAt": str(row[1]),
+        }, 201)
+
     return err("Not found", 404)

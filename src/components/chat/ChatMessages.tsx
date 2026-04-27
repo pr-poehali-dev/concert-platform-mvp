@@ -11,16 +11,29 @@ interface Props {
 
 export default function ChatMessages({ messages, loadingMsgs, userId, dragOver }: Props) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
 
+  // Следим — находится ли пользователь внизу
+  const handleScroll = () => {
+    const el = containerRef.current;
+    if (!el) return;
+    const threshold = 80;
+    isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < threshold;
+  };
+
+  // Скроллим вниз только если пользователь уже был внизу
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (isAtBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
   }, [messages]);
 
   let lastDate = "";
 
   return (
     <>
-      <div className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-1">
+      <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scrollbar-thin p-4 space-y-1">
         {loadingMsgs ? (
           <div className="flex justify-center pt-8">
             <Icon name="Loader2" size={24} className="text-white/30 animate-spin" />
