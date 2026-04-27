@@ -10,7 +10,7 @@ GET  ?action=my_requests              — входящие запросы на �
 GET  ?action=download_signed          — сформировать страницу с печатью подписи и вернуть URL
 POST ?action=send_internal            — отправить документ контрагенту внутри платформы
 """
-import json, os, random, hashlib, string, uuid
+import json, os, random, hashlib, string, uuid, tempfile
 import psycopg2, boto3
 import urllib.request
 from datetime import datetime, timezone
@@ -136,9 +136,12 @@ def send_request_email(to_email: str, recipient_name: str, sender_name: str, doc
       <strong style="color:#22d3ee;">«{doc_name}»</strong>
     </p>
     {msg_block}
-    <a href="{app_url}/documents" style="display:inline-block;background:linear-gradient(135deg,#a855f7,#22d3ee);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;font-size:14px;margin-bottom:20px;">
-      Перейти к документу
+    <a href="{app_url}" style="display:inline-block;background:linear-gradient(135deg,#a855f7,#22d3ee);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;font-size:14px;margin-bottom:20px;">
+      Войти и подписать документ
     </a>
+    <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:8px 0 0;">
+      После входа перейдите в раздел <b style="color:#fff;">«Подписание»</b> в личном кабинете.
+    </p>
     <p style="color:rgba(255,255,255,0.25);font-size:12px;margin:0;">
       Если вы не ожидали это письмо — проигнорируйте его.
     </p>
@@ -429,6 +432,11 @@ def handler(event: dict, context) -> dict:
     # ── GET my_requests — входящие запросы на подпись ─────────────────────
     if method == "GET" and action == "my_requests":
         conn = get_conn(); cur = conn.cursor()
+        # Получаем актуальный email из таблицы users (на случай расхождения с сессией)
+        cur.execute(f"SELECT email FROM {SCHEMA}.users WHERE id = %s", (user_id,))
+        urow = cur.fetchone()
+        actual_email = urow[0].strip().lower() if urow else user_email.strip().lower()
+
         cur.execute(
             f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.status, sr.created_at,
                        ud.name, ud.file_url, ud.category, ud.mime_type,
@@ -436,21 +444,27 @@ def handler(event: dict, context) -> dict:
                 FROM {SCHEMA}.signature_requests sr
                 JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
                 JOIN {SCHEMA}.users u ON u.id = sr.sender_user_id
-                WHERE LOWER(sr.recipient_email) = LOWER(%s)
+                WHERE LOWER(TRIM(sr.recipient_email)) = LOWER(TRIM(%s))
+                   OR LOWER(TRIM(sr.recipient_email)) = LOWER(TRIM(%s))
                 ORDER BY sr.created_at DESC""",
-            (user_email,)
+            (actual_email, user_email)
         )
         rows = cur.fetchall()
         conn.close()
-        return ok({"requests": [
-            {
-                "id": str(r[0]), "documentId": str(r[1]),
-                "recipientEmail": r[2], "status": r[3], "createdAt": str(r[4]),
-                "documentName": r[5], "fileUrl": r[6], "category": r[7],
-                "mimeType": r[8] or "application/pdf",
-                "senderName": r[9],
-            } for r in rows
-        ]})
+        # Убираем дубли по id
+        seen = set()
+        result = []
+        for r in rows:
+            if r[0] not in seen:
+                seen.add(r[0])
+                result.append({
+                    "id": str(r[0]), "documentId": str(r[1]),
+                    "recipientEmail": r[2], "status": r[3], "createdAt": str(r[4]),
+                    "documentName": r[5], "fileUrl": r[6], "category": r[7],
+                    "mimeType": r[8] or "application/pdf",
+                    "senderName": r[9],
+                })
+        return ok({"requests": result})
 
     # ── GET download_signed — PDF оригинал + лист подписей → S3 → URL ───────
     if method == "GET" and action == "download_signed":
@@ -461,7 +475,34 @@ def handler(event: dict, context) -> dict:
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
         from pypdf import PdfWriter, PdfReader
+
+        # ── Регистрируем TTF-шрифт с кириллицей (DejaVu) ─────────────────
+        FONT_URLS = {
+            "DejaVu":      "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
+            "DejaVu-Bold": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
+        }
+        fonts_ok = False
+        try:
+            tmpdir = tempfile.mkdtemp()
+            for fname, furl in FONT_URLS.items():
+                fpath = os.path.join(tmpdir, f"{fname}.ttf")
+                r = urllib.request.Request(furl, headers={"User-Agent": "GLOBALLINK/1.0"})
+                with urllib.request.urlopen(r, timeout=15) as resp:
+                    with open(fpath, "wb") as f:
+                        f.write(resp.read())
+                pdfmetrics.registerFont(TTFont(fname, fpath))
+            F_NORMAL = "DejaVu"
+            F_BOLD   = "DejaVu-Bold"
+            F_MONO   = "Courier"
+            fonts_ok = True
+        except Exception as e:
+            print(f"[sign] font load error: {e}")
+            F_NORMAL = "Helvetica"
+            F_BOLD   = "Helvetica-Bold"
+            F_MONO   = "Courier"
 
         doc_id = params.get("document_id", "")
         if not doc_id:
@@ -503,25 +544,27 @@ def handler(event: dict, context) -> dict:
         styles = getSampleStyleSheet()
         story  = []
 
-        # Стили
+        # Стили с кириллическим шрифтом
         title_style = ParagraphStyle("title", parent=styles["Normal"],
-            fontSize=18, fontName="Helvetica-Bold", textColor=colors.HexColor("#1a1a2e"),
+            fontSize=18, fontName=F_BOLD, textColor=colors.HexColor("#1a1a2e"),
             spaceAfter=4, alignment=TA_CENTER)
         sub_style = ParagraphStyle("sub", parent=styles["Normal"],
-            fontSize=11, fontName="Helvetica", textColor=colors.HexColor("#555577"),
+            fontSize=11, fontName=F_NORMAL, textColor=colors.HexColor("#555577"),
             spaceAfter=2, alignment=TA_CENTER)
         label_style = ParagraphStyle("label", parent=styles["Normal"],
-            fontSize=8, fontName="Helvetica", textColor=colors.HexColor("#888899"),
+            fontSize=8, fontName=F_NORMAL, textColor=colors.HexColor("#888899"),
             spaceAfter=1)
         value_style = ParagraphStyle("value", parent=styles["Normal"],
-            fontSize=10, fontName="Helvetica-Bold", textColor=colors.HexColor("#1a1a2e"),
+            fontSize=10, fontName=F_BOLD, textColor=colors.HexColor("#1a1a2e"),
             spaceAfter=2)
         mono_style = ParagraphStyle("mono", parent=styles["Normal"],
-            fontSize=7, fontName="Courier", textColor=colors.HexColor("#888899"),
+            fontSize=7, fontName=F_MONO, textColor=colors.HexColor("#888899"),
             spaceAfter=6, wordWrap="CJK")
         footer_style = ParagraphStyle("footer", parent=styles["Normal"],
-            fontSize=7, fontName="Helvetica", textColor=colors.HexColor("#aaaacc"),
+            fontSize=7, fontName=F_NORMAL, textColor=colors.HexColor("#aaaacc"),
             alignment=TA_CENTER)
+        header_sig_style = ParagraphStyle("sh", parent=styles["Normal"],
+            fontSize=9, fontName=F_BOLD, textColor=colors.HexColor("#4444aa"))
 
         # Заголовок
         story.append(Paragraph("GLOBAL LINK", title_style))
@@ -534,37 +577,35 @@ def handler(event: dict, context) -> dict:
         # Блок каждой подписи
         for i, s in enumerate(sigs, 1):
             s_name, s_email, s_type, s_at, s_hash, s_ip = s
-            s_dt = s_at.strftime("%d.%m.%Y %H:%M:%S UTC") if s_at else "—"
+            s_dt = s_at.strftime("%d.%m.%Y %H:%M:%S UTC") if s_at else "-"
             sign_label = "Простая электронная подпись (ПЭП)" if s_type == "pep" else "Квалифицированная ЭП (КЭП)"
 
-            # Таблица-блок подписи
             data = [
-                [Paragraph(f"Подпись #{i} — {sign_label}", ParagraphStyle("sh", parent=styles["Normal"],
-                    fontSize=9, fontName="Helvetica-Bold", textColor=colors.HexColor("#4444aa")))],
+                [Paragraph(f"Подпись #{i} — {sign_label}", header_sig_style)],
                 [Table([
                     [Paragraph("Подписант:", label_style), Paragraph(s_name, value_style)],
                     [Paragraph("Email:", label_style),     Paragraph(s_email, value_style)],
                     [Paragraph("Дата и время:", label_style), Paragraph(s_dt, value_style)],
-                    [Paragraph("IP-адрес:", label_style),  Paragraph(s_ip or "—", value_style)],
+                    [Paragraph("IP-адрес:", label_style),  Paragraph(s_ip or "-", value_style)],
                     [Paragraph("Контрольная сумма SHA-256:", label_style),
                      Paragraph(s_hash, mono_style)],
                 ], colWidths=[45*mm, None],
                    style=TableStyle([
-                       ("VALIGN", (0,0), (-1,-1), "TOP"),
-                       ("LEFTPADDING", (0,0), (-1,-1), 0),
+                       ("VALIGN",       (0,0), (-1,-1), "TOP"),
+                       ("LEFTPADDING",  (0,0), (-1,-1), 0),
                        ("RIGHTPADDING", (0,0), (-1,-1), 0),
-                       ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+                       ("BOTTOMPADDING",(0,0), (-1,-1), 2),
                    ]))],
             ]
             tbl = Table(data, colWidths=["100%"],
                 style=TableStyle([
-                    ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#ccccee")),
-                    ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f0fa")),
-                    ("BACKGROUND", (0,1), (-1,1), colors.HexColor("#fafafa")),
-                    ("LEFTPADDING", (0,0), (-1,-1), 6),
-                    ("RIGHTPADDING", (0,0), (-1,-1), 6),
-                    ("TOPPADDING", (0,0), (-1,-1), 5),
-                    ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                    ("BOX",         (0,0), (-1,-1), 0.5, colors.HexColor("#ccccee")),
+                    ("BACKGROUND",  (0,0), (-1,0),  colors.HexColor("#f0f0fa")),
+                    ("BACKGROUND",  (0,1), (-1,1),  colors.HexColor("#fafafa")),
+                    ("LEFTPADDING", (0,0), (-1,-1),  6),
+                    ("RIGHTPADDING",(0,0), (-1,-1),  6),
+                    ("TOPPADDING",  (0,0), (-1,-1),  5),
+                    ("BOTTOMPADDING",(0,0),(-1,-1),  5),
                 ]))
             story.append(tbl)
             story.append(Spacer(1, 3*mm))
@@ -573,13 +614,13 @@ def handler(event: dict, context) -> dict:
         story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#ddddee")))
         story.append(Spacer(1, 3*mm))
         story.append(Paragraph(
-            f"Сформировано платформой GLOBAL LINK &bull; {generated_at} &bull; ID документа: {doc_id}",
+            f"Сформировано платформой GLOBAL LINK | {generated_at} | ID: {doc_id}",
             footer_style
         ))
         story.append(Paragraph(
             "Настоящий лист является неотъемлемой частью документа и подтверждает факт подписания "
-            "простой электронной подписью в соответствии с ФЗ-63 «Об электронной подписи».",
-            ParagraphStyle("law", parent=footer_style, fontSize=6, spaceAfter=0)
+            "простой электронной подписью в соответствии с ФЗ-63 Об электронной подписи.",
+            ParagraphStyle("law", parent=footer_style, fontName=F_NORMAL, fontSize=6, spaceAfter=0)
         ))
 
         doc_rl.build(story)
