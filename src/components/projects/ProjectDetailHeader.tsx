@@ -1,7 +1,7 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-import { STATUS_CONFIG, fmt, type Project } from "@/hooks/useProjects";
+import { STATUS_CONFIG, fmt, type Project, PROJECTS_URL } from "@/hooks/useProjects";
 import { exportCSV, exportExcel, exportPDF, companyInfoFromUser } from "@/lib/exportProject";
 import { useAuth } from "@/context/AuthContext";
 
@@ -20,6 +20,41 @@ export default function ProjectDetailHeader({
 }: Props) {
   const { user } = useAuth();
   const exportRef = useRef<HTMLDivElement>(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareLoading, setShareLoading] = useState(false);
+  const [shareLink, setShareLink] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+
+  const createShareLink = async (showFiles: boolean) => {
+    setShareLoading(true);
+    try {
+      const res = await fetch(`${PROJECTS_URL}?action=create_share_link`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: project.id, showFiles }),
+      });
+      const data = await res.json();
+      if (data.linkId) {
+        const url = `${window.location.origin}/share/${data.linkId}`;
+        setShareLink(url);
+      }
+    } finally {
+      setShareLoading(false);
+    }
+  };
+
+  const copyLink = () => {
+    if (!shareLink) return;
+    navigator.clipboard.writeText(shareLink);
+    setShareCopied(true);
+    setTimeout(() => setShareCopied(false), 2000);
+  };
+
+  const closeShare = () => {
+    setShareOpen(false);
+    setShareLink(null);
+    setShareCopied(false);
+  };
 
   useEffect(() => {
     if (!exportOpen) return;
@@ -39,6 +74,7 @@ export default function ProjectDetailHeader({
   const profitPlan = f.profitPlan, profitFact = f.profitFact;
 
   return (
+    <>
     <div className="relative py-10 overflow-hidden">
       <div className="absolute inset-0 gradient-bg-purple opacity-30" />
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
@@ -49,6 +85,12 @@ export default function ProjectDetailHeader({
           </button>
 
           <div className="flex items-center gap-2">
+            {/* Share button */}
+            <button onClick={() => setShareOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/15 hover:border-neon-cyan/40 text-white/60 hover:text-neon-cyan transition-all text-sm">
+              <Icon name="Share2" size={15}/>Поделиться
+            </button>
+
             {/* Delete button */}
             <button onClick={onDeleteClick}
               className="flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/10 hover:border-neon-pink/40 text-white/40 hover:text-neon-pink transition-all text-sm">
@@ -130,5 +172,85 @@ export default function ProjectDetailHeader({
         </div>
       </div>
     </div>
+
+    {/* Share modal */}
+    {shareOpen && (
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={closeShare}>
+        <div className="glass-strong rounded-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-oswald font-bold text-xl text-white">Поделиться проектом</h2>
+            <button onClick={closeShare} className="text-white/30 hover:text-white transition-colors">
+              <Icon name="X" size={20} />
+            </button>
+          </div>
+
+          {!shareLink ? (
+            <>
+              <p className="text-white/50 text-sm mb-5">
+                Выберите, что будет видно по ссылке. Получатель не сможет ничего редактировать.
+              </p>
+              <div className="space-y-3">
+                <button
+                  onClick={() => createShareLink(false)}
+                  disabled={shareLoading}
+                  className="w-full flex items-center gap-4 p-4 glass rounded-xl border border-white/10 hover:border-neon-cyan/40 transition-all text-left group disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-neon-cyan/10 flex items-center justify-center shrink-0">
+                    <Icon name="BarChart3" size={18} className="text-neon-cyan" />
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm group-hover:text-neon-cyan transition-colors">Без файлов</p>
+                    <p className="text-white/40 text-xs">Только данные проекта: бюджет, доходы, P&L</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => createShareLink(true)}
+                  disabled={shareLoading}
+                  className="w-full flex items-center gap-4 p-4 glass rounded-xl border border-white/10 hover:border-neon-purple/40 transition-all text-left group disabled:opacity-50"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-neon-purple/10 flex items-center justify-center shrink-0">
+                    <Icon name="FileArchive" size={18} className="text-neon-purple" />
+                  </div>
+                  <div>
+                    <p className="text-white font-medium text-sm group-hover:text-neon-purple transition-colors">С файлами</p>
+                    <p className="text-white/40 text-xs">Данные проекта + все прикреплённые документы</p>
+                  </div>
+                </button>
+              </div>
+
+              {shareLoading && (
+                <div className="flex items-center justify-center gap-2 mt-4 text-white/40 text-sm">
+                  <Icon name="Loader2" size={16} className="animate-spin" />
+                  Создаю ссылку...
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              <p className="text-white/50 text-sm mb-4">Ссылка готова. Отправьте её — человек увидит проект без входа в кабинет.</p>
+              <div className="flex gap-2">
+                <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white/70 text-sm truncate">
+                  {shareLink}
+                </div>
+                <button
+                  onClick={copyLink}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium transition-all shrink-0 ${shareCopied ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20"}`}
+                >
+                  {shareCopied ? "Скопировано!" : "Копировать"}
+                </button>
+              </div>
+              <button
+                onClick={() => { setShareLink(null); }}
+                className="mt-3 text-white/30 hover:text-white/60 text-xs transition-colors"
+              >
+                ← Создать другую ссылку
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    )}
+    </>
   );
 }

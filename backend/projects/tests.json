@@ -71,6 +71,23 @@
       "expectedStatus": 400,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create share link no projectId",
+      "method": "POST",
+      "path": "/?action=create_share_link",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Get shared project not found",
+      "method": "GET",
+      "path": "/?action=get_shared_project&link_id=nonexistentlink",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

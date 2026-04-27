@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS share_links (
+  id          TEXT PRIMARY KEY,
+  project_id  TEXT NOT NULL,
+  show_files  BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

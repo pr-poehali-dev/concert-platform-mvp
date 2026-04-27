@@ -14,6 +14,7 @@ import OrganizerLoginPage from "./pages/OrganizerLoginPage";
 import VenueLoginPage from "./pages/VenueLoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
+import SharedProjectPage from "./pages/SharedProjectPage";
 
 const queryClient = new QueryClient();
 
@@ -34,6 +35,7 @@ const App = () => (
             <Route path="/login/venue" element={<VenueLoginPage />} />
             <Route path="/login/admin" element={<AdminLoginPage />} />
             <Route path="/verify" element={<VerifyEmailPage />} />
+            <Route path="/share/:linkId" element={<SharedProjectPage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

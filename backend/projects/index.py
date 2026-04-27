@@ -1259,4 +1259,59 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"success": True})
 
+    # POST create_share_link — создать публичную ссылку на проект
+    if method == "POST" and action == "create_share_link":
+        b = json.loads(event.get("body") or "{}")
+        project_id = b.get("projectId", "")
+        show_files  = bool(b.get("showFiles", False))
+        if not project_id: return err("projectId required")
+        link_id = uuid.uuid4().hex
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO share_links (id, project_id, show_files) VALUES (%s, %s, %s)",
+            (link_id, project_id, show_files))
+        conn.commit(); conn.close()
+        return ok({"linkId": link_id}, 201)
+
+    # GET get_shared_project — публичные данные проекта по share link
+    if method == "GET" and action == "get_shared_project":
+        link_id = params.get("link_id", "")
+        if not link_id: return err("link_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            "SELECT project_id, show_files FROM share_links WHERE id=%s",
+            (link_id,))
+        link_row = cur.fetchone()
+        if not link_row: conn.close(); return err("Ссылка не найдена", 404)
+        pid, show_files = str(link_row[0]), bool(link_row[1])
+        cur.execute(
+            f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
+                       city,venue_name,description,tax_system,total_expenses_plan,
+                       total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
+                FROM {SCHEMA}.projects WHERE id=%s""", (pid,))
+        row = cur.fetchone()
+        if not row: conn.close(); return err("Проект не найден", 404)
+        project = row_to_project(row)
+        cur.execute(
+            f"SELECT id,category,title,amount_plan,amount_fact,note,sort_order FROM {SCHEMA}.project_expenses WHERE project_id=%s ORDER BY sort_order,created_at",
+            (pid,))
+        project["expenses"] = [{"id":str(r[0]),"category":r[1],"title":r[2],"amountPlan":float(r[3]),"amountFact":float(r[4]),"note":r[5],"sortOrder":r[6]} for r in cur.fetchall()]
+        cur.execute(
+            f"SELECT id,category,ticket_count,ticket_price,sold_count,note FROM {SCHEMA}.project_income WHERE project_id=%s ORDER BY created_at",
+            (pid,))
+        project["incomeLines"] = [{"id":str(r[0]),"category":r[1],"ticketCount":r[2],"ticketPrice":float(r[3]),"soldCount":r[4],"note":r[5],"totalPlan":r[2]*float(r[3]),"totalFact":r[4]*float(r[3])} for r in cur.fetchall()]
+        if show_files:
+            cur.execute(
+                f"""SELECT d.id, d.file_name, d.file_url, d.file_size, d.mime_type, d.created_at
+                    FROM {SCHEMA}.project_documents d
+                    WHERE d.project_id=%s ORDER BY d.created_at DESC""", (pid,))
+            project["documents"] = [
+                {"id":str(r[0]),"fileName":r[1],"fileUrl":r[2],"fileSize":r[3],"mimeType":r[4],"createdAt":str(r[5])}
+                for r in cur.fetchall()
+            ]
+        else:
+            project["documents"] = []
+        conn.close()
+        return ok({"project": project, "showFiles": show_files})
+
     return err("Not found", 404)
