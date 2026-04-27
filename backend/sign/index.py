@@ -7,9 +7,11 @@ POST ?action=confirm                  — подтвердить подпись 
 POST ?action=decline                  — отклонить подпись
 POST ?action=send_request             — отправить запрос на подпись другому пользователю
 GET  ?action=my_requests              — входящие запросы на подпись
+GET  ?action=download_signed          — сформировать страницу с печатью подписи и вернуть URL
+POST ?action=send_internal            — отправить документ контрагенту внутри платформы
 """
-import json, os, random, hashlib, string
-import psycopg2
+import json, os, random, hashlib, string, uuid
+import psycopg2, boto3
 import urllib.request
 from datetime import datetime, timezone
 
@@ -402,5 +404,249 @@ def handler(event: dict, context) -> dict:
                 "senderName": r[8],
             } for r in rows
         ]})
+
+    # ── GET download_signed — HTML-страница с печатью подписей → S3 → URL ──
+    if method == "GET" and action == "download_signed":
+        doc_id = params.get("document_id", "")
+        if not doc_id:
+            return err("document_id required")
+
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"SELECT name, file_url, mime_type FROM {SCHEMA}.user_documents WHERE id = %s",
+            (doc_id,)
+        )
+        doc_row = cur.fetchone()
+        if not doc_row:
+            conn.close(); return err("Документ не найден", 404)
+        doc_name, file_url, mime_type = doc_row
+
+        cur.execute(
+            f"""SELECT signer_name, signer_email, sign_type, status, signed_at, hash, ip_address
+                FROM {SCHEMA}.document_signatures
+                WHERE document_id = %s AND status = 'signed'
+                ORDER BY signed_at""",
+            (doc_id,)
+        )
+        sigs = cur.fetchall()
+        conn.close()
+
+        if not sigs:
+            return err("Документ ещё не подписан")
+
+        # Формируем HTML-страницу с печатью подписей
+        sigs_html = ""
+        for s in sigs:
+            s_name, s_email, s_type, s_status, s_at, s_hash, s_ip = s
+            s_dt = s_at.strftime("%d.%m.%Y %H:%M:%S UTC") if s_at else "—"
+            sigs_html += f"""
+            <div class="sig-block">
+              <div class="sig-icon">✓</div>
+              <div class="sig-info">
+                <div class="sig-name">{s_name}</div>
+                <div class="sig-email">{s_email}</div>
+                <div class="sig-meta">
+                  <span class="sig-type">{'Простая ЭП (ПЭП)' if s_type == 'pep' else 'КЭП'}</span>
+                  <span>·</span>
+                  <span>{s_dt}</span>
+                  {'<span>· IP: ' + s_ip + '</span>' if s_ip else ''}
+                </div>
+                <div class="sig-hash">SHA-256: {s_hash}</div>
+              </div>
+            </div>"""
+
+        generated_at = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S UTC")
+        is_image = mime_type.startswith("image/")
+        is_pdf   = mime_type == "application/pdf"
+
+        preview_block = ""
+        if is_pdf:
+            preview_block = f'<div class="preview-link"><a href="{file_url}" target="_blank">📄 Открыть оригинальный документ</a></div>'
+        elif is_image:
+            preview_block = f'<img src="{file_url}" class="preview-img" alt="Документ" />'
+        else:
+            preview_block = f'<div class="preview-link"><a href="{file_url}" target="_blank">📎 Скачать оригинальный файл: {doc_name}</a></div>'
+
+        html = f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Подписанный документ — {doc_name}</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Arial', sans-serif; background: #0d0d1a; color: #fff; padding: 40px 20px; }}
+  .container {{ max-width: 760px; margin: 0 auto; }}
+  .header {{ text-align: center; margin-bottom: 32px; }}
+  .brand {{ font-size: 22px; font-weight: bold; letter-spacing: 3px; color: #fff; margin-bottom: 8px; }}
+  .title {{ font-size: 20px; color: #e2e2ff; margin-bottom: 4px; }}
+  .doc-name {{ font-size: 16px; color: rgba(255,255,255,0.5); word-break: break-word; }}
+  .badge {{ display: inline-flex; align-items: center; gap: 6px; background: rgba(34,211,238,0.1);
+            border: 1px solid rgba(34,211,238,0.3); color: #22d3ee; border-radius: 20px;
+            padding: 4px 14px; font-size: 13px; margin-top: 12px; }}
+  .section {{ background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+              border-radius: 16px; padding: 24px; margin-bottom: 20px; }}
+  .section-title {{ font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
+                    color: rgba(255,255,255,0.35); margin-bottom: 16px; }}
+  .sig-block {{ display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }}
+  .sig-block:last-child {{ border-bottom: none; padding-bottom: 0; }}
+  .sig-icon {{ width: 36px; height: 36px; border-radius: 10px; background: rgba(34,211,238,0.15);
+               border: 1px solid rgba(34,211,238,0.3); display: flex; align-items: center;
+               justify-content: center; color: #22d3ee; font-size: 18px; flex-shrink: 0; }}
+  .sig-name {{ font-size: 15px; font-weight: bold; color: #fff; }}
+  .sig-email {{ font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 2px; }}
+  .sig-meta {{ font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }}
+  .sig-type {{ background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3);
+               color: #a855f7; border-radius: 6px; padding: 1px 8px; font-size: 11px; }}
+  .sig-hash {{ font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.2);
+               margin-top: 6px; word-break: break-all; }}
+  .preview-link {{ text-align: center; padding: 16px; }}
+  .preview-link a {{ color: #22d3ee; text-decoration: none; font-size: 15px; }}
+  .preview-img {{ width: 100%; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }}
+  .footer {{ text-align: center; color: rgba(255,255,255,0.2); font-size: 12px; margin-top: 24px; }}
+  .seal {{ border: 2px solid rgba(34,211,238,0.4); border-radius: 50%; width: 120px; height: 120px;
+           display: flex; flex-direction: column; align-items: center; justify-content: center;
+           margin: 0 auto 24px; text-align: center; color: rgba(34,211,238,0.8); }}
+  .seal-top {{ font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }}
+  .seal-check {{ font-size: 36px; line-height: 1; margin: 4px 0; }}
+  .seal-bottom {{ font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="brand">GLOBAL LINK</div>
+    <div class="title">Подписанный документ</div>
+    <div class="doc-name">{doc_name}</div>
+    <div class="badge">✓ Электронная подпись действительна</div>
+  </div>
+
+  <div class="seal">
+    <div class="seal-top">GLOBAL</div>
+    <div class="seal-check">✓</div>
+    <div class="seal-bottom">LINK · ПЭП</div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Подписи ({len(sigs)})</div>
+    {sigs_html}
+  </div>
+
+  <div class="section">
+    <div class="section-title">Документ</div>
+    {preview_block}
+  </div>
+
+  <div class="footer">
+    Сформировано платформой GLOBAL LINK · {generated_at}<br>
+    Документ ID: {doc_id}
+  </div>
+</div>
+</body>
+</html>"""
+
+        # Сохраняем в S3
+        s3 = boto3.client("s3",
+            endpoint_url="https://bucket.poehali.dev",
+            aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+        )
+        key = f"signed/{doc_id}/{uuid.uuid4()}.html"
+        s3.put_object(Bucket="files", Key=key, Body=html.encode("utf-8"), ContentType="text/html; charset=utf-8")
+        cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
+        return ok({"url": cdn, "signaturesCount": len(sigs)})
+
+    # ── POST send_internal — отправить документ контрагенту внутри платформы
+    if method == "POST" and action == "send_internal":
+        b = json.loads(event.get("body") or "{}")
+        doc_id          = b.get("documentId", "")
+        recipient_email = b.get("recipientEmail", "").strip().lower()
+        recipient_name  = b.get("recipientName", "").strip()
+        message         = b.get("message", "").strip()[:500]
+
+        if not doc_id:                 return err("documentId required")
+        if "@" not in recipient_email: return err("Некорректный email получателя")
+
+        conn = get_conn(); cur = conn.cursor()
+        # Получаем данные документа
+        cur.execute(
+            f"SELECT name, file_url, file_size, mime_type, category FROM {SCHEMA}.user_documents WHERE id = %s",
+            (doc_id,)
+        )
+        doc_row = cur.fetchone()
+        if not doc_row:
+            conn.close(); return err("Документ не найден", 404)
+        doc_name, file_url, file_size, mime_type, category = doc_row
+
+        # Находим получателя внутри платформы
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE email = %s", (recipient_email,))
+        recipient = cur.fetchone()
+
+        # Копируем документ получателю (если он есть в системе)
+        if recipient:
+            rec_id, rec_name = str(recipient[0]), recipient[1]
+            new_doc_id = str(uuid.uuid4())
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.user_documents
+                    (id, user_id, user_role, category, name, file_url, file_size, mime_type, note)
+                    VALUES (%s, %s, 'organizer', %s, %s, %s, %s, %s, %s)""",
+                (new_doc_id, rec_id, category, doc_name, file_url, file_size, mime_type,
+                 f"Получен от {user_name}" + (f": {message}" if message else ""))
+            )
+            recipient_name = rec_name
+        else:
+            recipient_name = recipient_name or recipient_email
+
+        conn.commit(); conn.close()
+
+        # Отправляем email
+        app_url = os.environ.get("APP_URL", "https://globallink.art")
+        api_key = os.environ.get("RESEND_API_KEY", "")
+        msg_block = f'<p style="color:rgba(255,255,255,0.5);font-size:14px;margin:0 0 16px;font-style:italic;">«{message}»</p>' if message else ""
+        platform_note = '<p style="color:rgba(34,211,238,0.8);font-size:13px;margin-top:12px;">✓ Документ добавлен в ваш раздел «Документы» на платформе</p>' if recipient else ""
+        if api_key:
+            html_email = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+<tr><td align="center"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+  <tr><td style="padding-bottom:20px;text-align:center;">
+    <span style="font-size:20px;font-weight:bold;color:#fff;letter-spacing:2px;">GLOBAL LINK</span>
+  </td></tr>
+  <tr><td style="background:#15152a;border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:32px;">
+    <h2 style="color:#fff;font-size:18px;margin:0 0 8px;">Вам отправили документ</h2>
+    <p style="color:rgba(255,255,255,0.5);font-size:14px;margin:0 0 16px;line-height:1.6;">
+      <strong style="color:#fff;">{user_name}</strong> поделился документом с вами:<br>
+      <strong style="color:#22d3ee;">«{doc_name}»</strong>
+    </p>
+    {msg_block}
+    <a href="{file_url}" style="display:inline-block;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;text-decoration:none;padding:10px 20px;border-radius:10px;font-size:14px;margin-bottom:16px;">
+      📎 Открыть документ
+    </a>
+    {platform_note}
+    <a href="{app_url}" style="display:block;margin-top:16px;text-align:center;background:linear-gradient(135deg,#a855f7,#22d3ee);color:#fff;text-decoration:none;padding:12px 28px;border-radius:10px;font-weight:bold;font-size:14px;">
+      Перейти в GLOBAL LINK
+    </a>
+  </td></tr>
+</table></td></tr>
+</table></body></html>"""
+            payload = json.dumps({
+                "from": "GLOBAL LINK <noreply@globallink.art>",
+                "to": [recipient_email],
+                "subject": f"{user_name} поделился документом «{doc_name}»",
+                "html": html_email,
+            }).encode("utf-8")
+            req_http = urllib.request.Request(
+                "https://api.resend.com/emails", data=payload,
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                method="POST",
+            )
+            try: urllib.request.urlopen(req_http, timeout=10)
+            except Exception as ex: print(f"[sign] send_internal email: {ex}")
+
+        return ok({
+            "sent": True,
+            "recipientName": recipient_name,
+            "isRegistered": bool(recipient),
+        })
 
     return err("Неизвестный action", 400)

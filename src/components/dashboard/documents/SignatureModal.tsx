@@ -20,7 +20,7 @@ interface SignRequest {
   status: string;
 }
 
-type Step = "overview" | "sign_choose" | "sign_code" | "send_request";
+type Step = "overview" | "sign_choose" | "sign_code" | "send_request" | "send_internal";
 
 interface Props {
   doc: Doc;
@@ -43,12 +43,22 @@ export default function SignatureModal({ doc, onClose }: Props) {
   const [codeLoading, setCodeLoading] = useState(false);
   const [confirmLoading, setConfirmLoading] = useState(false);
 
-  // Отправка запроса
+  // Запрос на подпись
   const [reqEmail, setReqEmail]       = useState("");
   const [reqName, setReqName]         = useState("");
   const [reqMsg, setReqMsg]           = useState("");
   const [reqLoading, setReqLoading]   = useState(false);
   const [reqSent, setReqSent]         = useState(false);
+
+  // Скачать с подписью
+  const [dlLoading, setDlLoading]     = useState(false);
+
+  // Отправка документа контрагенту
+  const [sendEmail, setSendEmail]     = useState("");
+  const [sendName, setSendName]       = useState("");
+  const [sendMsg, setSendMsg]         = useState("");
+  const [sendLoading, setSendLoading] = useState(false);
+  const [sendSent, setSendSent]       = useState<{name: string; registered: boolean} | null>(null);
 
   const loadStatus = async () => {
     setLoading(true);
@@ -140,6 +150,38 @@ export default function SignatureModal({ doc, onClose }: Props) {
       await loadStatus();
     } catch { setError("Ошибка соединения"); }
     finally { setReqLoading(false); }
+  };
+
+  // ── Скачать с подписью ───────────────────────────────────────────────
+  const handleDownloadSigned = async () => {
+    setDlLoading(true); setError("");
+    try {
+      const r = await fetch(`${SIGN_URL}?action=download_signed&document_id=${doc.id}`, {
+        headers: { "X-Session-Id": session() },
+      });
+      const d = await r.json();
+      if (!r.ok) { setError(d.error || "Ошибка"); return; }
+      window.open(d.url, "_blank");
+    } catch { setError("Ошибка соединения"); }
+    finally { setDlLoading(false); }
+  };
+
+  // ── Отправить документ контрагенту ───────────────────────────────────
+  const handleSendInternal = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!sendEmail.includes("@")) { setError("Введите корректный email"); return; }
+    setSendLoading(true); setError("");
+    try {
+      const r = await fetch(`${SIGN_URL}?action=send_internal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+        body: JSON.stringify({ documentId: doc.id, recipientEmail: sendEmail, recipientName: sendName, message: sendMsg }),
+      });
+      const d = await r.json();
+      if (!r.ok) { setError(d.error || "Ошибка"); return; }
+      setSendSent({ name: d.recipientName, registered: d.isRegistered });
+    } catch { setError("Ошибка соединения"); }
+    finally { setSendLoading(false); }
   };
 
   const statusBadge = (status: string) => {
@@ -234,9 +276,21 @@ export default function SignatureModal({ doc, onClose }: Props) {
                     <Icon name="PenLine" size={16} />Подписать документ
                   </button>
                 )}
+                {signatures.some(s => s.status === "signed") && (
+                  <button onClick={handleDownloadSigned} disabled={dlLoading}
+                    className="w-full py-2.5 border border-neon-green/30 bg-neon-green/5 text-neon-green hover:bg-neon-green/10 rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+                    {dlLoading
+                      ? <><Icon name="Loader2" size={14} className="animate-spin" />Формирую страницу...</>
+                      : <><Icon name="Download" size={14} />Скачать документ с подписью</>}
+                  </button>
+                )}
                 <button onClick={() => { setStep("send_request"); setError(""); setReqSent(false); }}
                   className="w-full py-2.5 border border-white/10 text-white/60 hover:text-white rounded-xl text-sm transition-all flex items-center justify-center gap-2">
-                  <Icon name="Send" size={15} />Запросить подпись у другой стороны
+                  <Icon name="FilePen" size={15} />Запросить подпись у другой стороны
+                </button>
+                <button onClick={() => { setStep("send_internal"); setError(""); setSendSent(null); }}
+                  className="w-full py-2.5 border border-white/10 text-white/60 hover:text-white rounded-xl text-sm transition-all flex items-center justify-center gap-2">
+                  <Icon name="Send" size={15} />Отправить документ контрагенту
                 </button>
               </div>
             </div>
@@ -329,6 +383,71 @@ export default function SignatureModal({ doc, onClose }: Props) {
                 className="text-white/30 hover:text-white/60 text-sm transition-colors">
                 {codeLoading ? "Отправка..." : "Отправить код повторно"}
               </button>
+            </div>
+          )}
+
+          {/* ── ОТПРАВИТЬ ДОКУМЕНТ КОНТРАГЕНТУ ── */}
+          {step === "send_internal" && (
+            <div>
+              {sendSent ? (
+                <div className="text-center py-6 space-y-3">
+                  <div className="w-12 h-12 rounded-xl bg-neon-green/20 border border-neon-green/20 flex items-center justify-center mx-auto">
+                    <Icon name="CheckCircle2" size={22} className="text-neon-green" />
+                  </div>
+                  <p className="text-white font-semibold">Документ отправлен</p>
+                  <p className="text-white/40 text-sm">
+                    {sendSent.registered
+                      ? <>Документ добавлен в раздел «Документы» пользователя <span className="text-white/70">{sendSent.name}</span></>
+                      : <>Письмо со ссылкой отправлено на <span className="text-white/70">{sendEmail}</span></>}
+                  </p>
+                  <button onClick={() => { setStep("overview"); setSendSent(null); setSendEmail(""); setSendName(""); setSendMsg(""); }}
+                    className="mt-2 text-neon-cyan text-sm hover:opacity-80 transition-opacity">
+                    Вернуться
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleSendInternal} className="space-y-3">
+                  <p className="text-white/50 text-sm mb-3">Отправить документ контрагенту:</p>
+                  <div>
+                    <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Icon name="Mail" size={10} />Email получателя
+                    </label>
+                    <input type="email" value={sendEmail} onChange={e => setSendEmail(e.target.value)}
+                      placeholder="partner@example.com" className="gl-input" required />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Icon name="User" size={10} />Имя получателя (необязательно)
+                    </label>
+                    <input type="text" value={sendName} onChange={e => setSendName(e.target.value)}
+                      placeholder="Иван Иванов" className="gl-input" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                      <Icon name="MessageSquare" size={10} />Сообщение (необязательно)
+                    </label>
+                    <textarea value={sendMsg} onChange={e => setSendMsg(e.target.value)}
+                      placeholder="Направляю вам договор для ознакомления..." rows={2}
+                      className="gl-input resize-none" />
+                  </div>
+                  <div className="bg-neon-cyan/5 border border-neon-cyan/15 rounded-xl px-3.5 py-2.5 flex gap-2">
+                    <Icon name="Info" size={13} className="text-neon-cyan/50 mt-0.5 shrink-0" />
+                    <p className="text-xs text-white/35 leading-relaxed">
+                      Если получатель зарегистрирован в GLOBAL LINK — документ автоматически появится в его разделе «Документы». Иначе — придёт письмо со ссылкой.
+                    </p>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button type="button" onClick={() => setStep("overview")}
+                      className="px-4 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all flex items-center">
+                      <Icon name="ArrowLeft" size={14} />
+                    </button>
+                    <button type="submit" disabled={sendLoading}
+                      className="flex-1 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2">
+                      {sendLoading ? <><Icon name="Loader2" size={14} className="animate-spin" />Отправка...</> : <><Icon name="Send" size={14} />Отправить</>}
+                    </button>
+                  </div>
+                </form>
+              )}
             </div>
           )}
 
