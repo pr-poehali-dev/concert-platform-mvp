@@ -10,10 +10,16 @@ interface SignRequest {
   fileUrl: string;
   category: string;
   mimeType: string;
-  senderName: string;
+  senderName?: string;
+  senderEmail?: string;
+  recipientName?: string;
   recipientEmail: string;
+  counterpartyName: string;
   status: "pending" | "signed" | "declined";
   createdAt: string;
+  allSigned: boolean;
+  signedCount: number;
+  message?: string;
 }
 
 const session = () => localStorage.getItem(SESSION_KEY) || "";
@@ -31,38 +37,166 @@ const fakeDoc = (req: SignRequest) => ({
   createdAt: req.createdAt,
 });
 
+const formatDate = (iso: string) => {
+  try { return new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" }); }
+  catch { return iso; }
+};
+
+// Группировка по контрагенту
+function groupByCounterparty(requests: SignRequest[]): Record<string, SignRequest[]> {
+  return requests.reduce((acc, req) => {
+    const key = req.counterpartyName || req.recipientEmail || "Неизвестный";
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(req);
+    return acc;
+  }, {} as Record<string, SignRequest[]>);
+}
+
+// Инициалы для аватара контрагента
+function initials(name: string): string {
+  return name.trim().split(/\s+/).map(w => w[0]?.toUpperCase() || "").slice(0, 2).join("") || "?";
+}
+
+// Статус-бейдж
+function StatusBadge({ req }: { req: SignRequest }) {
+  if (req.allSigned)
+    return <span className="flex items-center gap-1 text-xs text-neon-green bg-neon-green/10 border border-neon-green/20 px-2.5 py-1 rounded-full font-medium">
+      <Icon name="ShieldCheck" size={11} />Все подписали
+    </span>;
+  if (req.status === "signed")
+    return <span className="flex items-center gap-1 text-xs text-neon-green bg-neon-green/10 border border-neon-green/20 px-2.5 py-1 rounded-full">
+      <Icon name="Check" size={11} />Подписан
+    </span>;
+  if (req.status === "declined")
+    return <span className="text-xs text-neon-pink bg-neon-pink/10 border border-neon-pink/20 px-2.5 py-1 rounded-full">Отклонён</span>;
+  return <span className="text-xs text-neon-purple bg-neon-purple/10 border border-neon-purple/20 px-2.5 py-1 rounded-full">Ожидает</span>;
+}
+
+// Секция контрагента
+function CounterpartySection({
+  name, requests, isIncoming, onSign, onRefresh,
+}: {
+  name: string;
+  requests: SignRequest[];
+  isIncoming: boolean;
+  onSign?: (req: SignRequest) => void;
+  onRefresh: () => void;
+}) {
+  const [open, setOpen] = useState(true);
+  const allDone = requests.every(r => r.allSigned || r.status !== "pending");
+  const pendingCount = requests.filter(r => r.status === "pending" && !r.allSigned).length;
+
+  return (
+    <div className={`glass rounded-2xl overflow-hidden border transition-all ${allDone ? "border-neon-green/20" : "border-white/10"}`}>
+      {/* Заголовок секции — контрагент */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-white/3 transition-colors"
+      >
+        <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-oswald font-bold text-sm shrink-0 ${
+          allDone
+            ? "bg-neon-green/15 border border-neon-green/30 text-neon-green"
+            : "bg-neon-purple/10 border border-neon-purple/20 text-neon-purple"
+        }`}>
+          {allDone ? <Icon name="ShieldCheck" size={18} /> : initials(name)}
+        </div>
+        <div className="flex-1 text-left min-w-0">
+          <p className="text-white font-semibold text-sm truncate">{name}</p>
+          <p className={`text-xs mt-0.5 ${allDone ? "text-neon-green/70" : "text-white/40"}`}>
+            {allDone
+              ? "Все документы подписаны обеими сторонами"
+              : `${requests.length} ${requests.length === 1 ? "документ" : requests.length < 5 ? "документа" : "документов"}${pendingCount > 0 ? ` · ${pendingCount} ожидает` : ""}`}
+          </p>
+        </div>
+        {pendingCount > 0 && (
+          <span className="w-5 h-5 bg-neon-purple rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+            {pendingCount}
+          </span>
+        )}
+        <Icon name={open ? "ChevronUp" : "ChevronDown"} size={16} className="text-white/30 shrink-0" />
+      </button>
+
+      {/* Список документов */}
+      {open && (
+        <div className="border-t border-white/5 divide-y divide-white/5">
+          {requests.map(req => (
+            <div key={req.id} className={`flex items-center gap-3 px-5 py-3.5 transition-colors ${req.allSigned ? "bg-neon-green/3" : "hover:bg-white/2"}`}>
+              {/* Иконка файла */}
+              <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                req.allSigned ? "bg-neon-green/10 border border-neon-green/20" : "bg-white/5 border border-white/8"
+              }`}>
+                <Icon name="FileText" size={16} className={req.allSigned ? "text-neon-green" : "text-white/40"} />
+              </div>
+
+              {/* Инфо */}
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm font-medium truncate">{req.documentName}</p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  <span className="text-white/30 text-xs">{formatDate(req.createdAt)}</span>
+                  {req.signedCount > 0 && (
+                    <span className="text-white/25 text-xs">· {req.signedCount} {req.signedCount === 1 ? "подпись" : "подписи"}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Действия */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <StatusBadge req={req} />
+                {req.fileUrl && (
+                  <a href={req.fileUrl} target="_blank" rel="noreferrer"
+                    className="w-8 h-8 flex items-center justify-center bg-white/5 border border-white/10 text-white/40 hover:text-neon-cyan hover:border-neon-cyan/30 rounded-lg transition-all"
+                    title="Открыть документ">
+                    <Icon name="Eye" size={14} />
+                  </a>
+                )}
+                {isIncoming && req.status === "pending" && !req.allSigned && onSign && (
+                  <button
+                    onClick={() => onSign(req)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white text-xs font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    <Icon name="PenLine" size={12} />Подписать
+                  </button>
+                )}
+                {!isIncoming && req.status === "pending" && !req.allSigned && (
+                  <span className="text-xs text-white/25 italic">Ждём подпись</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function DashboardSigningTab() {
-  const [requests, setRequests] = useState<SignRequest[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [signDoc, setSignDoc]   = useState<SignRequest | null>(null);
+  const [incoming, setIncoming]   = useState<SignRequest[]>([]);
+  const [outgoing, setOutgoing]   = useState<SignRequest[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [signDoc, setSignDoc]     = useState<SignRequest | null>(null);
+  const [activeTab, setActiveTab] = useState<"incoming" | "outgoing">("incoming");
 
   const load = async () => {
     setLoading(true);
     try {
-      const r = await fetch(`${SIGN_URL}?action=my_requests`, {
-        headers: { "X-Session-Id": session() },
-      });
-      const d = await r.json();
-      setRequests(d.requests || []);
+      const [rIn, rOut] = await Promise.all([
+        fetch(`${SIGN_URL}?action=my_requests`, { headers: { "X-Session-Id": session() } }),
+        fetch(`${SIGN_URL}?action=my_sent_requests`, { headers: { "X-Session-Id": session() } }),
+      ]);
+      const [dIn, dOut] = await Promise.all([rIn.json(), rOut.json()]);
+      setIncoming(dIn.requests || []);
+      setOutgoing(dOut.requests || []);
     } catch { /* silent */ }
     finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, []);
 
-  const pending  = requests.filter(r => r.status === "pending");
-  const finished = requests.filter(r => r.status !== "pending");
+  const incomingGroups = groupByCounterparty(incoming);
+  const outgoingGroups = groupByCounterparty(outgoing);
 
-  const statusBadge = (status: string) => {
-    if (status === "signed")   return <span className="text-xs text-neon-green bg-neon-green/10 border border-neon-green/20 px-2.5 py-1 rounded-full">Подписан</span>;
-    if (status === "declined") return <span className="text-xs text-neon-pink bg-neon-pink/10 border border-neon-pink/20 px-2.5 py-1 rounded-full">Отклонён</span>;
-    return <span className="text-xs text-neon-purple bg-neon-purple/10 border border-neon-purple/20 px-2.5 py-1 rounded-full">Ожидает подписи</span>;
-  };
-
-  const formatDate = (iso: string) => {
-    try { return new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" }); }
-    catch { return iso; }
-  };
+  const incomingPending = incoming.filter(r => r.status === "pending" && !r.allSigned).length;
+  const outgoingPending = outgoing.filter(r => r.status === "pending" && !r.allSigned).length;
 
   if (loading) {
     return (
@@ -73,98 +207,99 @@ export default function DashboardSigningTab() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center">
           <Icon name="PenLine" size={18} className="text-neon-purple" />
         </div>
         <div>
-          <h2 className="font-oswald font-bold text-xl text-white">Входящие запросы на подпись</h2>
-          <p className="text-white/40 text-sm">Документы, которые вас просят подписать</p>
+          <h2 className="font-oswald font-bold text-xl text-white">Электронное подписание</h2>
+          <p className="text-white/40 text-sm">Документы сгруппированы по контрагентам</p>
         </div>
-        <button onClick={load} className="ml-auto text-white/30 hover:text-white/60 transition-colors">
+        <button onClick={load} className="ml-auto text-white/30 hover:text-white/60 transition-colors" title="Обновить">
           <Icon name="RefreshCw" size={16} />
         </button>
       </div>
 
-      {/* Ожидают подписи */}
-      {pending.length > 0 && (
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-white/50 text-xs uppercase tracking-wider">Требуют подписи</span>
-            <span className="w-5 h-5 bg-neon-purple rounded-full text-white text-[10px] font-bold flex items-center justify-center">{pending.length}</span>
-          </div>
-          <div className="space-y-3">
-            {pending.map(req => (
-              <div key={req.id} className="glass rounded-2xl border border-neon-purple/20 p-4 hover:border-neon-purple/40 transition-all">
-                <div className="flex items-center gap-4">
-                  <div className="w-11 h-11 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center shrink-0">
-                    <Icon name="FileText" size={20} className="text-neon-purple" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-white font-medium text-sm truncate">{req.documentName}</p>
-                    <p className="text-white/40 text-xs mt-0.5">
-                      От <span className="text-white/60">{req.senderName}</span> · {formatDate(req.createdAt)}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {statusBadge(req.status)}
-                    {req.fileUrl && (
-                      <a href={req.fileUrl} target="_blank" rel="noreferrer"
-                        className="flex items-center gap-1 px-2.5 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan text-xs rounded-lg hover:bg-neon-cyan/20 transition-colors"
-                        title="Открыть документ">
-                        <Icon name="Eye" size={12} />
-                      </a>
-                    )}
-                    <button
-                      onClick={() => setSignDoc(req)}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white text-xs font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity"
-                    >
-                      <Icon name="PenLine" size={12} />Подписать
-                    </button>
-                  </div>
-                </div>
+      {/* Табы: входящие / исходящие */}
+      <div className="flex gap-1 glass rounded-xl p-1 w-fit">
+        <button
+          onClick={() => setActiveTab("incoming")}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab === "incoming" ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
+        >
+          <Icon name="Download" size={14} />Входящие
+          {incomingPending > 0 && (
+            <span className="w-4 h-4 bg-neon-pink rounded-full text-white text-[10px] font-bold flex items-center justify-center">
+              {incomingPending}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("outgoing")}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab === "outgoing" ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
+        >
+          <Icon name="Upload" size={14} />Исходящие
+          {outgoingPending > 0 && (
+            <span className="w-4 h-4 bg-neon-pink rounded-full text-white text-[10px] font-bold flex items-center justify-center">
+              {outgoingPending}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Входящие — документы от контрагентов на подпись */}
+      {activeTab === "incoming" && (
+        <div className="space-y-3">
+          {Object.keys(incomingGroups).length === 0 ? (
+            <div className="text-center py-16 glass rounded-2xl border border-white/5">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <Icon name="Download" size={24} className="text-white/20" />
               </div>
-            ))}
-          </div>
+              <p className="text-white/40 font-medium mb-1">Нет входящих запросов</p>
+              <p className="text-white/20 text-sm">Когда другая сторона попросит подписать документ — он появится здесь</p>
+            </div>
+          ) : (
+            Object.entries(incomingGroups).map(([name, reqs]) => (
+              <CounterpartySection
+                key={name}
+                name={name}
+                requests={reqs}
+                isIncoming={true}
+                onSign={setSignDoc}
+                onRefresh={load}
+              />
+            ))
+          )}
         </div>
       )}
 
-      {/* Пусто */}
-      {pending.length === 0 && (
-        <div className="text-center py-16 glass rounded-2xl border border-white/5">
-          <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
-            <Icon name="PenLine" size={24} className="text-white/20" />
-          </div>
-          <p className="text-white/40 font-medium mb-1">Нет входящих запросов</p>
-          <p className="text-white/20 text-sm">Когда другая сторона попросит вас подписать документ — он появится здесь</p>
-        </div>
-      )}
-
-      {/* История */}
-      {finished.length > 0 && (
-        <div>
-          <p className="text-white/40 text-xs uppercase tracking-wider mb-3">История</p>
-          <div className="space-y-2">
-            {finished.map(req => (
-              <div key={req.id} className="flex items-center gap-4 glass rounded-xl border border-white/5 px-4 py-3">
-                <div className="w-9 h-9 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                  <Icon name={req.status === "signed" ? "ShieldCheck" : "XCircle"} size={16}
-                    className={req.status === "signed" ? "text-neon-green" : "text-neon-pink"} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-white/70 text-sm truncate">{req.documentName}</p>
-                  <p className="text-white/30 text-xs">От {req.senderName} · {formatDate(req.createdAt)}</p>
-                </div>
-                {statusBadge(req.status)}
+      {/* Исходящие — документы которые я отправил на подпись */}
+      {activeTab === "outgoing" && (
+        <div className="space-y-3">
+          {Object.keys(outgoingGroups).length === 0 ? (
+            <div className="text-center py-16 glass rounded-2xl border border-white/5">
+              <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
+                <Icon name="Upload" size={24} className="text-white/20" />
               </div>
-            ))}
-          </div>
+              <p className="text-white/40 font-medium mb-1">Нет исходящих запросов</p>
+              <p className="text-white/20 text-sm">Отправьте документ на подпись через раздел «Документы»</p>
+            </div>
+          ) : (
+            Object.entries(outgoingGroups).map(([name, reqs]) => (
+              <CounterpartySection
+                key={name}
+                name={name}
+                requests={reqs}
+                isIncoming={false}
+                onRefresh={load}
+              />
+            ))
+          )}
         </div>
       )}
 
-      {/* Модал подписания — открываем сразу на шаге выбора типа подписи */}
+      {/* Модал подписания */}
       {signDoc && (
         <SignatureModal
           doc={fakeDoc(signDoc)}

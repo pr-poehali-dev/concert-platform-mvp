@@ -310,11 +310,21 @@ def handler(event: dict, context) -> dict:
         # Отмечаем код использованным
         cur.execute(f"UPDATE {SCHEMA}.signature_codes SET used = true WHERE id = %s", (code_row[0],))
 
-        # Получаем document_id для хеша
-        cur.execute(f"SELECT document_id FROM {SCHEMA}.document_signatures WHERE id = %s", (sig_id,))
+        # Получаем document_id и данные документа для хеша и уведомлений
+        cur.execute(
+            f"""SELECT ds.document_id, ud.name, ud.user_id as owner_id
+                FROM {SCHEMA}.document_signatures ds
+                JOIN {SCHEMA}.user_documents ud ON ud.id = ds.document_id
+                WHERE ds.id = %s""",
+            (sig_id,)
+        )
         doc_row = cur.fetchone()
+        doc_id_signed = str(doc_row[0])
+        doc_name_signed = doc_row[1]
+        doc_owner_id = str(doc_row[2])
+
         signed_at = datetime.now(timezone.utc).isoformat()
-        h = doc_hash(str(doc_row[0]), user_id, signed_at)
+        h = doc_hash(doc_id_signed, user_id, signed_at)
 
         cur.execute(
             f"""UPDATE {SCHEMA}.document_signatures
@@ -325,11 +335,38 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""UPDATE {SCHEMA}.signature_requests
                 SET status = 'signed'
-                WHERE document_id = %s AND recipient_email = %s""",
-            (str(doc_row[0]), user_email)
+                WHERE document_id = %s AND LOWER(TRIM(recipient_email)) = LOWER(TRIM(%s))""",
+            (doc_id_signed, user_email)
         )
+
+        # Проверяем — все ли стороны подписали (считаем подписи + запросы)
+        cur.execute(
+            f"""SELECT COUNT(*) FROM {SCHEMA}.signature_requests
+                WHERE document_id = %s""",
+            (doc_id_signed,)
+        )
+        total_requests = cur.fetchone()[0]
+        cur.execute(
+            f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
+                WHERE document_id = %s AND status = 'signed'""",
+            (doc_id_signed,)
+        )
+        total_signed = cur.fetchone()[0]
+        all_signed = (total_requests > 0 and total_signed >= total_requests + 1)  # +1 владелец
+
+        # Уведомляем владельца документа что подписание выполнено
+        if doc_owner_id != user_id:
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.notifications
+                    (user_id, type, title, body, link_page)
+                    VALUES (%s, 'signing', %s, %s, 'signing')""",
+                (doc_owner_id,
+                 "Документ подписан",
+                 f"{user_name} подписал документ \"{doc_name_signed}\"")
+            )
+
         conn.commit(); conn.close()
-        return ok({"signed": True, "signedAt": signed_at, "hash": h})
+        return ok({"signed": True, "signedAt": signed_at, "hash": h, "allSigned": all_signed})
 
     # ── POST decline ──────────────────────────────────────────────────────
     if method == "POST" and action == "decline":
@@ -440,7 +477,6 @@ def handler(event: dict, context) -> dict:
     # ── GET my_requests — входящие запросы на подпись ─────────────────────
     if method == "GET" and action == "my_requests":
         conn = get_conn(); cur = conn.cursor()
-        # Получаем актуальный email из таблицы users (на случай расхождения с сессией)
         cur.execute(f"SELECT email FROM {SCHEMA}.users WHERE id = %s", (user_id,))
         urow = cur.fetchone()
         actual_email = urow[0].strip().lower() if urow else user_email.strip().lower()
@@ -448,7 +484,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.status, sr.created_at,
                        ud.name, ud.file_url, ud.category, ud.mime_type,
-                       u.name as sender_name
+                       u.name as sender_name, u.email as sender_email
                 FROM {SCHEMA}.signature_requests sr
                 JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
                 JOIN {SCHEMA}.users u ON u.id = sr.sender_user_id
@@ -458,20 +494,76 @@ def handler(event: dict, context) -> dict:
             (actual_email, user_email)
         )
         rows = cur.fetchall()
-        conn.close()
-        # Убираем дубли по id
+
+        # Для каждого документа считаем сколько всего подписей и сколько сделано
         seen = set()
         result = []
         for r in rows:
-            if r[0] not in seen:
-                seen.add(r[0])
-                result.append({
-                    "id": str(r[0]), "documentId": str(r[1]),
-                    "recipientEmail": r[2], "status": r[3], "createdAt": str(r[4]),
-                    "documentName": r[5], "fileUrl": r[6], "category": r[7],
-                    "mimeType": r[8] or "application/pdf",
-                    "senderName": r[9],
-                })
+            if r[0] in seen:
+                continue
+            seen.add(r[0])
+            doc_id_r = str(r[1])
+            # all_signed: все участники подписали
+            cur.execute(
+                f"""SELECT COUNT(*) FROM {SCHEMA}.signature_requests WHERE document_id = %s""",
+                (doc_id_r,)
+            )
+            total_req = cur.fetchone()[0]
+            cur.execute(
+                f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
+                    WHERE document_id = %s AND status = 'signed'""",
+                (doc_id_r,)
+            )
+            signed_count = cur.fetchone()[0]
+            all_signed = (signed_count >= 2)  # минимум 2 подписи = обе стороны
+            result.append({
+                "id": str(r[0]), "documentId": doc_id_r,
+                "recipientEmail": r[2], "status": r[3], "createdAt": str(r[4]),
+                "documentName": r[5], "fileUrl": r[6], "category": r[7],
+                "mimeType": r[8] or "application/pdf",
+                "senderName": r[9], "senderEmail": r[10],
+                "counterpartyName": r[9],  # для входящих — контрагент = отправитель
+                "allSigned": all_signed,
+                "signedCount": signed_count,
+            })
+        conn.close()
+        return ok({"requests": result})
+
+    # ── GET my_sent_requests — исходящие запросы (я отправил) ─────────────
+    if method == "GET" and action == "my_sent_requests":
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.recipient_name,
+                       sr.status, sr.created_at, sr.message,
+                       ud.name, ud.file_url, ud.category, ud.mime_type
+                FROM {SCHEMA}.signature_requests sr
+                JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
+                WHERE sr.sender_user_id = %s
+                ORDER BY sr.created_at DESC""",
+            (user_id,)
+        )
+        rows = cur.fetchall()
+        result = []
+        for r in rows:
+            doc_id_r = str(r[1])
+            cur.execute(
+                f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
+                    WHERE document_id = %s AND status = 'signed'""",
+                (doc_id_r,)
+            )
+            signed_count = cur.fetchone()[0]
+            all_signed = (signed_count >= 2)
+            result.append({
+                "id": str(r[0]), "documentId": doc_id_r,
+                "recipientEmail": r[2], "recipientName": r[3] or r[2],
+                "status": r[4], "createdAt": str(r[5]), "message": r[6] or "",
+                "documentName": r[7], "fileUrl": r[8], "category": r[9],
+                "mimeType": r[10] or "application/pdf",
+                "counterpartyName": r[3] or r[2],
+                "allSigned": all_signed,
+                "signedCount": signed_count,
+            })
+        conn.close()
         return ok({"requests": result})
 
     # ── GET download_signed — PDF оригинал + лист подписей → S3 → URL ───────
@@ -761,19 +853,8 @@ def handler(event: dict, context) -> dict:
   </td></tr>
 </table></td></tr>
 </table></body></html>"""
-            payload = json.dumps({
-                "from": "GLOBAL LINK <noreply@globallink.art>",
-                "to": [recipient_email],
-                "subject": f"{user_name} поделился документом «{doc_name}»",
-                "html": html_email,
-            }).encode("utf-8")
-            req_http = urllib.request.Request(
-                "https://api.resend.com/emails", data=payload,
-                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-                method="POST",
-            )
-            try: urllib.request.urlopen(req_http, timeout=10)
-            except Exception as ex: print(f"[sign] send_internal email: {ex}")
+            resend_send(api_key, recipient_email,
+                        f"{user_name} поделился документом «{doc_name}»", html_email)
 
         return ok({
             "sent": True,
