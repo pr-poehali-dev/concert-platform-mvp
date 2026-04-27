@@ -2,49 +2,14 @@ import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import SendToConversationModal from "@/components/chat/SendToConversationModal";
-
-const DOCS_URL = "https://functions.poehali.dev/b805f044-ba82-4db5-a2a5-7a88dfbfce4a";
-
-// Категории по ролям
-const CATEGORIES_ORGANIZER = [
-  { value: "technical_rider", label: "Технический райдер", icon: "Settings2", color: "text-neon-cyan" },
-  { value: "domestic_rider",  label: "Бытовой райдер",     icon: "Coffee",    color: "text-neon-purple" },
-  { value: "artist_contract", label: "Договор с артистом", icon: "FileText",  color: "text-neon-pink" },
-  { value: "other",           label: "Прочее",             icon: "File",      color: "text-white/40" },
-];
-
-const CATEGORIES_VENUE = [
-  { value: "technical_rider", label: "Технический райдер", icon: "Settings2",  color: "text-neon-cyan" },
-  { value: "domestic_rider",  label: "Бытовой райдер",     icon: "Coffee",     color: "text-neon-purple" },
-  { value: "venue_contract",  label: "Договор с площадкой",icon: "Building2",  color: "text-neon-pink" },
-  { value: "other",           label: "Прочее",             icon: "File",       color: "text-white/40" },
-];
-
-const MIME_ICONS: Record<string, string> = {
-  "application/pdf":   "FileText",
-  "application/msword": "FileText",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "FileText",
-  "application/vnd.ms-excel": "Table",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "Table",
-  "image/jpeg": "Image",
-  "image/png":  "Image",
-  "text/plain": "AlignLeft",
-};
-
-interface Doc {
-  id: string;
-  category: string;
-  categoryLabel: string;
-  name: string;
-  fileUrl: string;
-  fileSize: number;
-  fileSizeHuman: string;
-  mimeType: string;
-  note: string;
-  createdAt: string;
-}
-
-const SESSION_KEY = "tourlink_session";
+import {
+  DOCS_URL, SESSION_KEY,
+  CATEGORIES_ORGANIZER, CATEGORIES_VENUE,
+  type Doc, type Category,
+} from "./documents/docTypes";
+import DocUploadModal from "./documents/DocUploadModal";
+import DocDeleteModal from "./documents/DocDeleteModal";
+import DocCard from "./documents/DocCard";
 
 export default function DashboardDocumentsTab() {
   const { user } = useAuth();
@@ -76,7 +41,7 @@ export default function DashboardDocumentsTab() {
   const [sendChatFile, setSendChatFile] = useState<{ url: string; name: string; size: number; mime: string } | null>(null);
 
   const isVenue = user?.role === "venue";
-  const categories = isVenue ? CATEGORIES_VENUE : CATEGORIES_ORGANIZER;
+  const categories: Category[] = isVenue ? CATEGORIES_VENUE : CATEGORIES_ORGANIZER;
 
   const session = () => localStorage.getItem(SESSION_KEY) || "";
 
@@ -105,7 +70,6 @@ export default function DashboardDocumentsTab() {
     setUploadFile(f);
     setUploadError("");
     setUploadModal(true);
-    // Reset input
     e.target.value = "";
   };
 
@@ -180,18 +144,13 @@ export default function DashboardDocumentsTab() {
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────
-  const catMeta = (cat: string) =>
-    categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/40", label: "Прочее" };
-
-  const mimeIcon = (mime: string) => MIME_ICONS[mime] || "File";
+  const catMeta = (cat: string): Category =>
+    categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/40", label: "Прочее", value: "other" };
 
   const filtered = filterCat === "all" ? docs : docs.filter(d => d.category === filterCat);
 
-  const formatDate = (iso: string) => {
-    try {
-      return new Date(iso).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" });
-    } catch { return iso; }
-  };
+  // suppress unused warning — uploading used implicitly via uploadProgress
+  void uploading;
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
@@ -269,244 +228,51 @@ export default function DashboardDocumentsTab() {
         </div>
       ) : (
         <div className="grid gap-3">
-          {filtered.map(doc => {
-            const cat = catMeta(doc.category);
-            return (
-              <div
-                key={doc.id}
-                className="glass rounded-2xl border border-white/10 p-4 hover:border-white/20 transition-all group"
-              >
-                <div className="flex items-start gap-4">
-                  {/* Icon */}
-                  <div className={`w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0`}>
-                    <Icon name={mimeIcon(doc.mimeType) as never} size={22} className={cat.color} />
-                  </div>
-
-                  {/* Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-2 flex-wrap">
-                      <span className="text-white font-medium text-sm truncate max-w-[300px]">
-                        {doc.name}
-                      </span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full bg-white/5 border border-white/10 ${cat.color} flex-shrink-0`}>
-                        {doc.categoryLabel}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-white/30 text-xs">
-                      <span>{doc.fileSizeHuman}</span>
-                      <span>•</span>
-                      <span>{formatDate(doc.createdAt)}</span>
-                    </div>
-
-                    {/* Note */}
-                    {editNoteId === doc.id ? (
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={editNoteText}
-                          onChange={e => setEditNoteText(e.target.value)}
-                          placeholder="Добавить заметку..."
-                          className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-white/70 text-xs outline-none focus:border-neon-cyan/40 transition-colors"
-                          onKeyDown={e => { if (e.key === "Enter") saveNote(); if (e.key === "Escape") setEditNoteId(null); }}
-                          autoFocus
-                        />
-                        <button onClick={saveNote} disabled={savingNote}
-                          className="text-neon-cyan text-xs px-3 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg hover:bg-neon-cyan/20 disabled:opacity-50">
-                          {savingNote ? <Icon name="Loader2" size={12} className="animate-spin" /> : "Сохранить"}
-                        </button>
-                        <button onClick={() => setEditNoteId(null)}
-                          className="text-white/30 hover:text-white/60 text-xs px-2 py-1.5">
-                          Отмена
-                        </button>
-                      </div>
-                    ) : doc.note ? (
-                      <div
-                        className="mt-1.5 flex items-center gap-1.5 text-white/40 text-xs cursor-pointer hover:text-white/60 transition-colors w-fit"
-                        onClick={() => { setEditNoteId(doc.id); setEditNoteText(doc.note); }}
-                      >
-                        <Icon name="MessageSquare" size={11} />
-                        <span className="italic">{doc.note}</span>
-                        <Icon name="Pencil" size={10} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => { setEditNoteId(doc.id); setEditNoteText(""); }}
-                        className="mt-1.5 flex items-center gap-1 text-white/20 hover:text-white/40 text-xs transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <Icon name="Plus" size={11} />добавить заметку
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => setSendChatFile({ url: doc.fileUrl, name: doc.name, size: doc.fileSize, mime: doc.mimeType })}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
-                      title="Отправить в чат"
-                    >
-                      <Icon name="Send" size={16} />
-                    </button>
-                    <a
-                      href={doc.fileUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
-                      title="Открыть"
-                    >
-                      <Icon name="ExternalLink" size={16} />
-                    </a>
-                    <a
-                      href={doc.fileUrl}
-                      download={doc.name}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
-                      title="Скачать"
-                    >
-                      <Icon name="Download" size={16} />
-                    </a>
-                    <button
-                      onClick={() => setDeleteId(doc.id)}
-                      className="w-9 h-9 rounded-xl flex items-center justify-center text-white/20 hover:text-neon-pink hover:bg-neon-pink/10 transition-all"
-                      title="Удалить"
-                    >
-                      <Icon name="Trash2" size={16} />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {filtered.map(doc => (
+            <DocCard
+              key={doc.id}
+              doc={doc}
+              catMeta={catMeta}
+              editNoteId={editNoteId}
+              editNoteText={editNoteText}
+              savingNote={savingNote}
+              onEditNote={(id, text) => { setEditNoteId(id); setEditNoteText(text); }}
+              onCancelNote={() => setEditNoteId(null)}
+              onNoteTextChange={setEditNoteText}
+              onSaveNote={saveNote}
+              onSendToChat={setSendChatFile}
+              onDelete={setDeleteId}
+            />
+          ))}
         </div>
       )}
 
-      {/* ── Upload Modal ──────────────────────────────────────────────────── */}
+      {/* Upload Modal */}
       {uploadModal && uploadFile && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80" onClick={() => !uploadProgress && setUploadModal(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl border border-white/15 shadow-2xl overflow-hidden"
-               style={{ background: "#15152a" }}>
-            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple/60 to-transparent" />
-
-            {/* Header */}
-            <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-white/10">
-              <div className="w-9 h-9 rounded-xl bg-neon-purple/20 flex items-center justify-center flex-shrink-0">
-                <Icon name="Upload" size={16} className="text-neon-purple" />
-              </div>
-              <div className="flex-1">
-                <h3 className="font-oswald font-bold text-base text-white">Загрузка документа</h3>
-                <p className="text-white/40 text-xs truncate">{uploadFile.name}</p>
-              </div>
-              <span className="text-white/25 text-xs flex-shrink-0">
-                {uploadFile.size > 1024 * 1024
-                  ? `${(uploadFile.size / 1024 / 1024).toFixed(1)} МБ`
-                  : `${Math.round(uploadFile.size / 1024)} КБ`}
-              </span>
-            </div>
-
-            <div className="px-5 py-4 space-y-4">
-              {/* Category */}
-              <div>
-                <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Категория</label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {categories.map(c => (
-                    <button
-                      key={c.value}
-                      type="button"
-                      onClick={() => setUploadCategory(c.value)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
-                        uploadCategory === c.value
-                          ? "border-neon-purple/60 bg-neon-purple/20 text-white"
-                          : "border-white/10 bg-white/5 text-white/50 hover:text-white hover:border-white/20"
-                      }`}
-                    >
-                      <Icon name={c.icon as never} size={13} className={uploadCategory === c.value ? c.color : ""} />
-                      <span className="truncate">{c.label}</span>
-                      {uploadCategory === c.value && <Icon name="Check" size={11} className="ml-auto text-neon-purple flex-shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Note */}
-              <div>
-                <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">
-                  Заметка <span className="normal-case text-white/20">(необязательно)</span>
-                </label>
-                <input
-                  type="text"
-                  value={uploadNote}
-                  onChange={e => setUploadNote(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && !uploadProgress && doUpload()}
-                  placeholder="Например: версия от апреля 2025"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white text-sm placeholder:text-white/20 outline-none focus:border-neon-purple/40 transition-colors"
-                />
-              </div>
-
-              {uploadError && (
-                <div className="flex items-center gap-2 text-neon-pink text-xs bg-neon-pink/10 border border-neon-pink/20 rounded-xl px-3 py-2">
-                  <Icon name="AlertCircle" size={13} />
-                  {uploadError}
-                </div>
-              )}
-
-              {/* Buttons */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => setUploadModal(false)}
-                  disabled={uploadProgress}
-                  className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all disabled:opacity-40"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={doUpload}
-                  disabled={uploadProgress}
-                  className="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-sm hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
-                >
-                  {uploadProgress
-                    ? <><Icon name="Loader2" size={14} className="animate-spin" />Загружаю...</>
-                    : <><Icon name="Upload" size={14} />Загрузить</>
-                  }
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <DocUploadModal
+          file={uploadFile}
+          categories={categories}
+          uploadCategory={uploadCategory}
+          uploadNote={uploadNote}
+          uploadProgress={uploadProgress}
+          uploadError={uploadError}
+          onCategoryChange={setUploadCategory}
+          onNoteChange={setUploadNote}
+          onUpload={doUpload}
+          onClose={() => setUploadModal(false)}
+        />
       )}
 
-      {/* ── Delete Confirm Modal ──────────────────────────────────────────── */}
+      {/* Delete Modal */}
       {deleteId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !deleting && setDeleteId(null)} />
-          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl border border-white/10 p-6 shadow-2xl text-center">
-            <div className="w-14 h-14 rounded-2xl bg-neon-pink/10 flex items-center justify-center mx-auto mb-4">
-              <Icon name="Trash2" size={24} className="text-neon-pink" />
-            </div>
-            <h3 className="font-oswald font-bold text-lg text-white mb-2">Удалить документ?</h3>
-            <p className="text-white/40 text-sm mb-6">Это действие необратимо</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeleteId(null)}
-                disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all disabled:opacity-40"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={doDelete}
-                disabled={deleting}
-                className="flex-1 py-2.5 rounded-xl bg-neon-pink/20 border border-neon-pink/30 text-neon-pink font-semibold text-sm hover:bg-neon-pink/30 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
-              >
-                {deleting
-                  ? <><Icon name="Loader2" size={15} className="animate-spin" /> Удаляю...</>
-                  : <><Icon name="Trash2" size={15} /> Удалить</>
-                }
-              </button>
-            </div>
-          </div>
-        </div>
+        <DocDeleteModal
+          deleting={deleting}
+          onConfirm={doDelete}
+          onCancel={() => setDeleteId(null)}
+        />
       )}
-      {/* ── Send to Chat Modal ───────────────────────────────────────────── */}
+
+      {/* Send to Chat Modal */}
       {sendChatFile && (
         <SendToConversationModal
           file={sendChatFile}
