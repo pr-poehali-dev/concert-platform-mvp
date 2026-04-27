@@ -1,0 +1,12 @@
+{
+  "tests": [
+    {
+      "name": "No auth",
+      "method": "GET",
+      "path": "/?action=status&document_id=00000000-0000-0000-0000-000000000000",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Требуется авторизация"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

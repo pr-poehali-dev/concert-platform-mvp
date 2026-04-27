@@ -1,5 +1,7 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { type Doc, type Category, mimeIcon, formatDate } from "./docTypes";
+import SignatureModal from "./SignatureModal";
 
 interface Props {
   doc: Doc;
@@ -28,9 +30,11 @@ export default function DocCard({
   onSendToChat,
   onDelete,
 }: Props) {
+  const [showSign, setShowSign] = useState(false);
   const cat = catMeta(doc.category);
 
   return (
+    <>
     <div className="glass rounded-2xl border border-white/10 p-4 hover:border-white/20 transition-all group">
       <div className="flex items-start gap-4">
         {/* Icon */}
@@ -102,6 +106,13 @@ export default function DocCard({
         {/* Actions */}
         <div className="flex items-center gap-1 flex-shrink-0">
           <button
+            onClick={() => setShowSign(true)}
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
+            title="Подписать / ЭДО"
+          >
+            <Icon name="PenLine" size={16} />
+          </button>
+          <button
             onClick={() => onSendToChat({ url: doc.fileUrl, name: doc.name, size: doc.fileSize, mime: doc.mimeType })}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
             title="Отправить в чат"
@@ -135,5 +146,8 @@ export default function DocCard({
         </div>
       </div>
     </div>
+
+    {showSign && <SignatureModal doc={doc} onClose={() => setShowSign(false)} />}
+    </>
   );
 }

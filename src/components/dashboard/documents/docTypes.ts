@@ -1,4 +1,5 @@
 export const DOCS_URL = "https://functions.poehali.dev/b805f044-ba82-4db5-a2a5-7a88dfbfce4a";
+export const SIGN_URL = "https://functions.poehali.dev/0a28b06e-96bf-401a-92d5-cba7cabeb44b";
 export const SESSION_KEY = "tourlink_session";
 
 export const CATEGORIES_ORGANIZER = [
