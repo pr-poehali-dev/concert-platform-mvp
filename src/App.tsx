@@ -3,7 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { HashRouter, Routes, Route, useParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/context/AuthContext";
 import { NotificationsProvider } from "@/context/NotificationsContext";
 import Index from "./pages/Index";
@@ -14,59 +14,33 @@ import OrganizerLoginPage from "./pages/OrganizerLoginPage";
 import VenueLoginPage from "./pages/VenueLoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
-import SharedProjectPage from "./pages/SharedProjectPage";
-
-function SharedProjectRoute() {
-  const { linkId } = useParams<{ linkId: string }>();
-  return <SharedProjectPage linkId={linkId || ""} />;
-}
 
 const queryClient = new QueryClient();
 
-const App = () => {
-  // Публичные share-ссылки рендерим без провайдеров авторизации
-  const isShare = window.location.hash.startsWith("#/share/");
-  if (isShare) {
-    const m = window.location.hash.match(/^#\/share\/([^/?]+)/);
-    const linkId = m ? m[1] : "";
-    return (
-      <QueryClientProvider client={queryClient}>
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <AuthProvider>
+      <NotificationsProvider>
         <TooltipProvider>
           <Toaster />
           <Sonner />
-          <SharedProjectPage linkId={linkId} />
-        </TooltipProvider>
-      </QueryClientProvider>
-    );
-  }
-
-  return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <NotificationsProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <HashRouter>
+          <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/admin" element={<AdminPage />} />
-              {/* ── Login routes ── */}
               <Route path="/login" element={<LoginSelectPage />} />
               <Route path="/login/organizer" element={<OrganizerLoginPage />} />
               <Route path="/login/venue" element={<VenueLoginPage />} />
               <Route path="/login/admin" element={<AdminLoginPage />} />
               <Route path="/verify" element={<VerifyEmailPage />} />
-              <Route path="/share/:linkId" element={<SharedProjectRoute />} />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>
-          </HashRouter>
+          </BrowserRouter>
         </TooltipProvider>
-        </NotificationsProvider>
-      </AuthProvider>
-    </QueryClientProvider>
-  );
-};
+      </NotificationsProvider>
+    </AuthProvider>
+  </QueryClientProvider>
+);
 
 export default App;
