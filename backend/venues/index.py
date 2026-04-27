@@ -398,6 +398,42 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"success": True})
 
+    # ── POST update_busy_dates — обновить только занятые даты площадки ──────
+    if method == "POST" and action == "update_busy_dates":
+        body     = json.loads(event.get("body") or "{}")
+        venue_id = body.get("venueId", "")
+        user_id  = body.get("userId", "")
+        busy_dates = body.get("busyDates") or []
+
+        if not venue_id:
+            return err("venueId required")
+
+        conn = get_conn(); cur = conn.cursor()
+        # Проверяем владение
+        if user_id:
+            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s", (venue_id, user_id))
+        else:
+            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+        if not cur.fetchone():
+            conn.close(); return err("Площадка не найдена или нет прав", 403)
+
+        # Получаем текущие даты чтобы вернуть актуальный список
+        cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
+        saved = []
+        for bd in busy_dates:
+            date_str = bd.get("date", "")
+            note     = (bd.get("note") or "").strip()
+            if not date_str:
+                continue
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
+                (venue_id, date_str, note)
+            )
+            saved.append({"date": date_str, "note": note})
+
+        conn.commit(); conn.close()
+        return ok({"success": True, "busyDates": saved, "count": len(saved)})
+
     # ── GET home_stats — реальная статистика для главной страницы ─────────
     if method == "GET" and action == "home_stats":
         conn = get_conn(); cur = conn.cursor()
