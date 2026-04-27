@@ -59,7 +59,9 @@ export default function RegisterScreen({
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${regStep === s ? "bg-gradient-to-br from-neon-cyan to-neon-purple text-white" : regStep > s ? "bg-neon-cyan/20 text-neon-cyan" : "bg-white/5 text-white/30"}`}>
                     {regStep > s ? <Icon name="Check" size={11} /> : s}
                   </div>
-                  <span className={`text-xs ${regStep === s ? "text-white/70" : "text-white/30"}`}>{s === 1 ? "Основное" : "Реквизиты"}</span>
+                  <span className={`text-xs ${regStep === s ? "text-white/70" : "text-white/30"}`}>
+                    {s === 1 ? "Основное" : <span>Реквизиты <span className="text-white/20">(необязательно)</span></span>}
+                  </span>
                   {s < 2 && <div className={`h-px w-6 ${regStep > s ? "bg-neon-cyan/40" : "bg-white/10"}`} />}
                 </div>
               ))}
@@ -85,7 +87,7 @@ export default function RegisterScreen({
                   </div>
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Телефон" icon="Phone">
+                  <Field label="Телефон (необязательно)" icon="Phone">
                     <input type="tel" value={regData.phone} onChange={e => onSetReg("phone", e.target.value)} placeholder="+7 (999) 000-00-00" className="gl-input" />
                   </Field>
                   <Field label="Город" icon="MapPin">
@@ -101,6 +103,7 @@ export default function RegisterScreen({
                     ))}
                   </select>
                 </Field>
+
                 {/* Согласие на обработку ПДн */}
                 <label className="flex items-start gap-3 cursor-pointer group">
                   <div
@@ -123,9 +126,18 @@ export default function RegisterScreen({
               </form>
             )}
 
-            {/* Step 2 */}
+            {/* Step 2 — реквизиты (необязательно) */}
             {regStep === 2 && (
               <form onSubmit={onStep2} className="space-y-3">
+
+                {/* Подсказка */}
+                <div className="flex gap-2.5 bg-neon-cyan/5 border border-neon-cyan/15 rounded-xl px-3.5 py-3">
+                  <Icon name="Info" size={15} className="text-neon-cyan/60 mt-0.5 shrink-0" />
+                  <p className="text-xs text-white/40 leading-relaxed">
+                    Реквизиты нужны для оформления договоров и счетов. Вы можете заполнить их сейчас или позже — в разделе <span className="text-white/60">«Профиль»</span>.
+                  </p>
+                </div>
+
                 {needsCompany ? (
                   <>
                     <Field label="Юридическое название" icon="Building">
@@ -152,17 +164,26 @@ export default function RegisterScreen({
                     Для физических лиц реквизиты не требуются
                   </div>
                 )}
+
                 <div className="flex gap-3 pt-1">
                   <button type="button" onClick={onBackStep}
-                    className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/60 hover:text-white text-sm transition-all flex items-center justify-center gap-2">
-                    <Icon name="ArrowLeft" size={15} />Назад
+                    className="py-2.5 px-4 rounded-xl border border-white/10 text-white/60 hover:text-white text-sm transition-all flex items-center justify-center gap-2">
+                    <Icon name="ArrowLeft" size={15} />
                   </button>
                   <button type="submit" disabled={isLoading}
-                    className={`flex-1 py-2.5 bg-gradient-to-r ${meta.gradient} text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2`}>
+                    className="flex-1 py-2.5 border border-white/10 text-white/50 hover:text-white/80 text-sm rounded-xl transition-all flex items-center justify-center gap-2">
                     {isLoading
                       ? <><Icon name="Loader2" size={15} className="animate-spin" />Регистрация...</>
-                      : <><Icon name="UserPlus" size={15} />Зарегистрироваться</>}
+                      : <>Пропустить <Icon name="ArrowRight" size={15} /></>}
                   </button>
+                  {needsCompany && (
+                    <button type="submit" disabled={isLoading}
+                      className={`flex-1 py-2.5 bg-gradient-to-r ${meta.gradient} text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2`}>
+                      {isLoading
+                        ? <><Icon name="Loader2" size={15} className="animate-spin" />Сохранение...</>
+                        : <><Icon name="UserPlus" size={15} />Сохранить</>}
+                    </button>
+                  )}
                 </div>
               </form>
             )}

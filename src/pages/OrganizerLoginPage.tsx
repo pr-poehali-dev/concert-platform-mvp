@@ -132,7 +132,6 @@ export default function OrganizerLoginPage({ initialRole = "organizer" }: Props)
     if (!regData.name.trim())         return setError("Введите имя");
     if (!regData.email.includes("@")) return setError("Введите корректный email");
     if (regData.password.length < 6)  return setError("Пароль минимум 6 символов");
-    if (!regData.phone.trim())        return setError("Введите телефон");
     setRegStep(2);
   };
 
@@ -140,8 +139,7 @@ export default function OrganizerLoginPage({ initialRole = "organizer" }: Props)
   const handleRegSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (needsCompany && !regData.legalName.trim()) return setError("Введите юридическое название");
-    if (needsCompany && regData.inn.length < 10)   return setError("Введите корректный ИНН");
+    // Реквизиты необязательны при регистрации — можно заполнить в профиле
     const msg = await register({ ...regData, role });
     if (!msg) {
       setVerifyName(regData.name.trim().split(" ")[0]);
