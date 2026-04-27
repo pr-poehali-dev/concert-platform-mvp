@@ -233,7 +233,7 @@ def handler(event: dict, context) -> dict:
             return err("documentId required")
 
         conn = get_conn(); cur = conn.cursor()
-        # Проверяем что документ существует
+        # Документ может существовать у отправителя или получателя (через signature_requests)
         cur.execute(f"SELECT name FROM {SCHEMA}.user_documents WHERE id = %s", (doc_id,))
         row = cur.fetchone()
         if not row:
@@ -257,13 +257,18 @@ def handler(event: dict, context) -> dict:
                 (sig_id,)
             )
         else:
+            ip = ""
+            try:
+                rc = event.get("requestContext") or {}
+                ip = (rc.get("identity") or {}).get("sourceIp", "")
+            except Exception:
+                pass
             cur.execute(
                 f"""INSERT INTO {SCHEMA}.document_signatures
                     (document_id, signer_user_id, signer_name, signer_email, sign_type, status,
                      ip_address, user_agent)
                     VALUES (%s, %s, %s, %s, 'pep', 'pending', %s, %s) RETURNING id""",
-                (doc_id, user_id, user_name, user_email,
-                 (event.get("requestContext") or {}).get("identity", {}).get("sourceIp", ""),
+                (doc_id, user_id, user_name, user_email, ip,
                  (headers.get("User-Agent") or "")[:200])
             )
             sig_id = str(cur.fetchone()[0])
@@ -273,10 +278,11 @@ def handler(event: dict, context) -> dict:
             f"UPDATE {SCHEMA}.signature_codes SET used = true WHERE signature_id = %s AND used = false",
             (sig_id,)
         )
-        # Создаём новый код
+        # Создаём новый код (expires_at явно ставим +15 минут)
         code = gen_code()
         cur.execute(
-            f"INSERT INTO {SCHEMA}.signature_codes (signature_id, code) VALUES (%s, %s)",
+            f"""INSERT INTO {SCHEMA}.signature_codes (signature_id, code, expires_at)
+                VALUES (%s, %s, NOW() + INTERVAL '15 minutes')""",
             (sig_id, code)
         )
         conn.commit(); conn.close()
@@ -361,11 +367,41 @@ def handler(event: dict, context) -> dict:
         if doc_owner != user_id:
             conn.close(); return err("Нет прав на этот документ", 403)
 
-        # Находим получателя в системе если есть
-        if not recipient_name:
-            cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE email = %s", (recipient_email,))
-            u = cur.fetchone()
-            recipient_name = u[0] if u else recipient_email
+        # Находим получателя в системе (регистронезависимо)
+        cur.execute(
+            f"SELECT id, name FROM {SCHEMA}.users WHERE LOWER(email) = LOWER(%s)",
+            (recipient_email,)
+        )
+        recipient_row = cur.fetchone()
+        if recipient_row:
+            rec_user_id, rec_name = str(recipient_row[0]), recipient_row[1]
+            if not recipient_name:
+                recipient_name = rec_name
+            # Копируем документ получателю если у него его ещё нет
+            cur.execute(
+                f"""SELECT id FROM {SCHEMA}.user_documents
+                    WHERE file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
+                      AND user_id = %s""",
+                (doc_id, rec_user_id)
+            )
+            if not cur.fetchone():
+                cur.execute(
+                    f"""SELECT category, name, file_url, file_size, mime_type
+                        FROM {SCHEMA}.user_documents WHERE id = %s""",
+                    (doc_id,)
+                )
+                orig = cur.fetchone()
+                if orig:
+                    cur.execute(
+                        f"""INSERT INTO {SCHEMA}.user_documents
+                            (user_id, user_role, category, name, file_url, file_size, mime_type, note)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                        (rec_user_id, 'organizer', orig[0], orig[1], orig[2], orig[3], orig[4],
+                         f"Получен от {user_name} для подписания" + (f": {message}" if message else ""))
+                    )
+        else:
+            if not recipient_name:
+                recipient_name = recipient_email
 
         cur.execute(
             f"""INSERT INTO {SCHEMA}.signature_requests
@@ -378,19 +414,19 @@ def handler(event: dict, context) -> dict:
 
         app_url = os.environ.get("APP_URL", "https://globallink.art")
         send_request_email(recipient_email, recipient_name, user_name, doc_name, message, app_url)
-        return ok({"requestId": req_id})
+        return ok({"requestId": req_id, "recipientIsRegistered": bool(recipient_row)})
 
     # ── GET my_requests — входящие запросы на подпись ─────────────────────
     if method == "GET" and action == "my_requests":
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
             f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.status, sr.created_at,
-                       ud.name, ud.file_url, ud.category,
+                       ud.name, ud.file_url, ud.category, ud.mime_type,
                        u.name as sender_name
                 FROM {SCHEMA}.signature_requests sr
                 JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
                 JOIN {SCHEMA}.users u ON u.id = sr.sender_user_id
-                WHERE sr.recipient_email = %s
+                WHERE LOWER(sr.recipient_email) = LOWER(%s)
                 ORDER BY sr.created_at DESC""",
             (user_email,)
         )
@@ -401,7 +437,8 @@ def handler(event: dict, context) -> dict:
                 "id": str(r[0]), "documentId": str(r[1]),
                 "recipientEmail": r[2], "status": r[3], "createdAt": str(r[4]),
                 "documentName": r[5], "fileUrl": r[6], "category": r[7],
-                "senderName": r[8],
+                "mimeType": r[8] or "application/pdf",
+                "senderName": r[9],
             } for r in rows
         ]})
 
@@ -597,18 +634,20 @@ def handler(event: dict, context) -> dict:
         if "@" not in recipient_email: return err("Некорректный email получателя")
 
         conn = get_conn(); cur = conn.cursor()
-        # Получаем данные документа
+        # Получаем данные документа — проверяем владение
         cur.execute(
-            f"SELECT name, file_url, file_size, mime_type, category FROM {SCHEMA}.user_documents WHERE id = %s",
+            f"SELECT name, file_url, file_size, mime_type, category, user_id FROM {SCHEMA}.user_documents WHERE id = %s",
             (doc_id,)
         )
         doc_row = cur.fetchone()
         if not doc_row:
             conn.close(); return err("Документ не найден", 404)
-        doc_name, file_url, file_size, mime_type, category = doc_row
+        doc_name, file_url, file_size, mime_type, category, doc_owner = doc_row
+        if str(doc_owner) != user_id:
+            conn.close(); return err("Нет прав на этот документ", 403)
 
-        # Находим получателя внутри платформы
-        cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE email = %s", (recipient_email,))
+        # Находим получателя внутри платформы (регистронезависимо)
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE LOWER(email) = LOWER(%s)", (recipient_email,))
         recipient = cur.fetchone()
 
         # Копируем документ получателю (если он есть в системе)

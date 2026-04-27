@@ -9,6 +9,7 @@ interface SignRequest {
   documentName: string;
   fileUrl: string;
   category: string;
+  mimeType: string;
   senderName: string;
   recipientEmail: string;
   status: "pending" | "signed" | "declined";
@@ -25,7 +26,7 @@ const fakeDoc = (req: SignRequest) => ({
   categoryLabel: req.category,
   fileSize: 0,
   fileSizeHuman: "",
-  mimeType: "application/pdf",
+  mimeType: req.mimeType || "application/pdf",
   note: "",
   createdAt: req.createdAt,
 });
@@ -156,10 +157,11 @@ export default function DashboardSigningTab() {
         </div>
       )}
 
-      {/* Модал подписания */}
+      {/* Модал подписания — открываем сразу на шаге выбора типа подписи */}
       {signDoc && (
         <SignatureModal
           doc={fakeDoc(signDoc)}
+          initialStep="sign_choose"
           onClose={() => { setSignDoc(null); load(); }}
         />
       )}

@@ -25,12 +25,13 @@ type Step = "overview" | "sign_choose" | "sign_code" | "send_request" | "send_in
 interface Props {
   doc: Doc;
   onClose: () => void;
+  initialStep?: Step;
 }
 
 const session = () => localStorage.getItem(SESSION_KEY) || "";
 
-export default function SignatureModal({ doc, onClose }: Props) {
-  const [step, setStep]               = useState<Step>("overview");
+export default function SignatureModal({ doc, onClose, initialStep = "overview" }: Props) {
+  const [step, setStep]               = useState<Step>(initialStep);
   const [signatures, setSignatures]   = useState<Signature[]>([]);
   const [requests, setRequests]       = useState<SignRequest[]>([]);
   const [loading, setLoading]         = useState(true);
