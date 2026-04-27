@@ -11,7 +11,34 @@ GET  ?action=status             — проверить статус верифи
 import json, os, hashlib, secrets, random, base64, uuid
 import psycopg2
 import boto3
-import urllib.request
+import urllib.request, urllib.error
+
+
+def resend_send(api_key: str, to: str, subject: str, html: str, from_addr: str = "GLOBAL LINK <noreply@globallink.art>") -> bool:
+    """Отправляет письмо через Resend API с корректными заголовками."""
+    payload = json.dumps({"from": from_addr, "to": [to], "subject": subject, "html": html}).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails",
+        data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; GLOBALLINK/2.0)",
+            "Accept": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        print(f"[Resend] OK status={resp.status} to={to}")
+        return True
+    except urllib.error.HTTPError as e:
+        body = e.read().decode("utf-8", errors="replace")
+        print(f"[Resend] HTTPError {e.code}: {body}")
+        return False
+    except Exception as ex:
+        print(f"[Resend] Exception: {ex}")
+        return False
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826"
@@ -160,24 +187,7 @@ def send_2fa_email(email: str, name: str, code: str) -> bool:
 </body>
 </html>"""
 
-    payload = json.dumps({
-        "from": "GLOBAL LINK <noreply@globallink.art>",
-        "to": [email],
-        "subject": f"Код входа: {code}",
-        "html": html,
-    }).encode()
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-        return True
-    except Exception as e:
-        print(f"[auth] 2FA email error: {e}")
-        return False
+    return resend_send(api_key, email, f"Код входа: {code}", html)
 
 
 def send_verification_email(email: str, name: str, token: str) -> bool:
@@ -230,33 +240,7 @@ def send_verification_email(email: str, name: str, token: str) -> bool:
 </body>
 </html>"""
 
-    payload = json.dumps({
-        "from": "GLOBAL LINK <noreply@globallink.art>",
-        "to": [email],
-        "subject": "Подтвердите ваш email — GLOBAL LINK",
-        "html": html,
-    }).encode("utf-8")
-
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        resp = urllib.request.urlopen(req, timeout=10)
-        print(f"[Resend] OK status={resp.status} email={email}")
-        return True
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        print(f"[Resend] HTTPError {e.code}: {body}")
-        return False
-    except Exception as ex:
-        print(f"[Resend] Exception: {ex}")
-        return False
+    return resend_send(api_key, email, "Подтвердите ваш email — GLOBAL LINK", html)
 
 
 def create_verification_token(conn, user_id: str, email: str) -> str:

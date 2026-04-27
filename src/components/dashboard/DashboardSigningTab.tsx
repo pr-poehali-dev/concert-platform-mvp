@@ -110,6 +110,13 @@ export default function DashboardSigningTab() {
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {statusBadge(req.status)}
+                    {req.fileUrl && (
+                      <a href={req.fileUrl} target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1 px-2.5 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan text-xs rounded-lg hover:bg-neon-cyan/20 transition-colors"
+                        title="Открыть документ">
+                        <Icon name="Eye" size={12} />
+                      </a>
+                    )}
                     <button
                       onClick={() => setSignDoc(req)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white text-xs font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity"

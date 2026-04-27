@@ -219,6 +219,28 @@ export default function SignatureModal({ doc, onClose, initialStep = "overview" 
           {/* ── OVERVIEW ── */}
           {step === "overview" && (
             <div className="space-y-4">
+
+              {/* Блок документа — скачать/открыть перед подписью */}
+              <div className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl px-4 py-3">
+                <div className="w-9 h-9 rounded-lg bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center shrink-0">
+                  <Icon name="FileText" size={16} className="text-neon-cyan" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium truncate">{doc.name}</p>
+                  <p className="text-white/30 text-xs">{doc.fileSizeHuman || "Документ"}</p>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <a href={doc.fileUrl} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan text-xs rounded-lg hover:bg-neon-cyan/20 transition-colors">
+                    <Icon name="Eye" size={13} />Открыть
+                  </a>
+                  <a href={doc.fileUrl} download={doc.name}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white/5 border border-white/10 text-white/50 text-xs rounded-lg hover:bg-white/10 hover:text-white transition-all">
+                    <Icon name="Download" size={13} />
+                  </a>
+                </div>
+              </div>
+
               {/* Текущие подписи */}
               <div>
                 <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Подписи</p>
@@ -300,7 +322,16 @@ export default function SignatureModal({ doc, onClose, initialStep = "overview" 
           {/* ── ВЫБОР ТИПА ПОДПИСИ ── */}
           {step === "sign_choose" && !codeSent && (
             <div className="space-y-3">
-              <p className="text-white/50 text-sm mb-4">Выберите способ подписания:</p>
+              {/* Документ для ознакомления */}
+              <div className="flex items-center gap-3 bg-white/3 border border-white/8 rounded-xl px-4 py-3 mb-1">
+                <Icon name="FileText" size={15} className="text-neon-cyan shrink-0" />
+                <p className="text-white/60 text-sm truncate flex-1">{doc.name}</p>
+                <a href={doc.fileUrl} target="_blank" rel="noreferrer"
+                  className="flex items-center gap-1 px-3 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan text-xs rounded-lg hover:bg-neon-cyan/20 transition-colors shrink-0">
+                  <Icon name="Eye" size={12} />Открыть
+                </a>
+              </div>
+              <p className="text-white/50 text-sm">Выберите способ подписания:</p>
 
               {/* ПЭП */}
               <button onClick={handleRequestCode} disabled={codeLoading}

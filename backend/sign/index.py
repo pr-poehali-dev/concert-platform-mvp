@@ -12,8 +12,33 @@ POST ?action=send_internal            — отправить документ к
 """
 import json, os, random, hashlib, string, uuid, tempfile
 import psycopg2, boto3
-import urllib.request
+import urllib.request, urllib.error
 from datetime import datetime, timezone
+
+
+def resend_send(api_key: str, to: str, subject: str, html: str) -> bool:
+    payload = json.dumps({
+        "from": "GLOBAL LINK <noreply@globallink.art>",
+        "to": [to], "subject": subject, "html": html,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.resend.com/emails", data=payload,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "User-Agent": "Mozilla/5.0 (compatible; GLOBALLINK/2.0)",
+            "Accept": "application/json",
+        }, method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=15)
+        return True
+    except urllib.error.HTTPError as e:
+        print(f"[sign] resend {e.code}: {e.read().decode('utf-8','replace')}")
+        return False
+    except Exception as ex:
+        print(f"[sign] resend exc: {ex}")
+        return False
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 
@@ -98,22 +123,7 @@ def send_code_email(to_email: str, name: str, doc_name: str, code: str):
 </td></tr>
 </table>
 </body></html>"""
-    payload = json.dumps({
-        "from": "GLOBAL LINK <noreply@globallink.art>",
-        "to": [to_email],
-        "subject": f"Код подписания документа «{doc_name}» — {code}",
-        "html": html,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as ex:
-        print(f"[sign] email error: {ex}")
+    resend_send(api_key, to_email, f"Код подписания документа «{doc_name}» — {code}", html)
 
 
 def send_request_email(to_email: str, recipient_name: str, sender_name: str, doc_name: str, message: str, app_url: str):
@@ -150,22 +160,7 @@ def send_request_email(to_email: str, recipient_name: str, sender_name: str, doc
 </td></tr>
 </table>
 </body></html>"""
-    payload = json.dumps({
-        "from": "GLOBAL LINK <noreply@globallink.art>",
-        "to": [to_email],
-        "subject": f"{sender_name} просит подписать документ «{doc_name}»",
-        "html": html,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as ex:
-        print(f"[sign] request email error: {ex}")
+    resend_send(api_key, to_email, f"{sender_name} просит подписать документ «{doc_name}»", html)
 
 
 def handler(event: dict, context) -> dict:
