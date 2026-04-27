@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import type { RegisterData, UserRole } from "@/context/AuthContext";
 import { CITIES, COMPANY_TYPES, ROLE_META, Bg, BackBtn, Field, ErrorBox } from "./loginShared";
@@ -23,6 +25,7 @@ export default function RegisterScreen({
   role, regStep, regData, showRegPassword, isLoading, error, needsCompany,
   onSetReg, onTogglePassword, onStep1, onStep2, onBackStep, onSwitchRole, onGoLogin,
 }: Props) {
+  const [agreed, setAgreed] = useState(false);
   const meta = ROLE_META[role];
 
   return (
@@ -98,7 +101,23 @@ export default function RegisterScreen({
                     ))}
                   </select>
                 </Field>
-                <button type="submit" className={`w-full py-3 bg-gradient-to-r ${meta.gradient} text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity flex items-center justify-center gap-2`}>
+                {/* Согласие на обработку ПДн */}
+                <label className="flex items-start gap-3 cursor-pointer group">
+                  <div
+                    onClick={() => setAgreed(v => !v)}
+                    className={`mt-0.5 w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${agreed ? "bg-neon-cyan border-neon-cyan" : "border-white/20 bg-white/5 group-hover:border-white/40"}`}>
+                    {agreed && <Icon name="Check" size={11} className="text-background" />}
+                  </div>
+                  <span className="text-xs text-white/40 leading-relaxed">
+                    Я даю согласие на обработку персональных данных в соответствии с{" "}
+                    <Link to="/privacy" target="_blank" className="text-neon-cyan/80 hover:text-neon-cyan underline underline-offset-2 transition-colors">
+                      Политикой конфиденциальности
+                    </Link>
+                    {" "}платформы GLOBAL LINK (152-ФЗ)
+                  </span>
+                </label>
+
+                <button type="submit" disabled={!agreed} className={`w-full py-3 bg-gradient-to-r ${meta.gradient} text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-30 transition-opacity flex items-center justify-center gap-2`}>
                   Далее <Icon name="ArrowRight" size={16} />
                 </button>
               </form>
