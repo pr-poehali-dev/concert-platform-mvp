@@ -1268,7 +1268,7 @@ def handler(event: dict, context) -> dict:
         link_id = uuid.uuid4().hex
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
-            "INSERT INTO share_links (id, project_id, show_files) VALUES (%s, %s, %s)",
+            f"INSERT INTO {SCHEMA}.share_links (id, project_id, show_files) VALUES (%s, %s, %s)",
             (link_id, project_id, show_files))
         conn.commit(); conn.close()
         return ok({"linkId": link_id}, 201)
@@ -1279,7 +1279,7 @@ def handler(event: dict, context) -> dict:
         if not link_id: return err("link_id required")
         conn = get_conn(); cur = conn.cursor()
         cur.execute(
-            "SELECT project_id, show_files FROM share_links WHERE id=%s",
+            f"SELECT project_id, show_files FROM {SCHEMA}.share_links WHERE id=%s",
             (link_id,))
         link_row = cur.fetchone()
         if not link_row: conn.close(); return err("Ссылка не найдена", 404)
