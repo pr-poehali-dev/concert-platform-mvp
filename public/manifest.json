@@ -1,0 +1,36 @@
+{
+  "name": "GLOBAL LINK — платформа для музыкантов и площадок",
+  "short_name": "GLOBAL LINK",
+  "description": "Соединяем организаторов туров и концертные площадки по всей стране",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0d0d1a",
+  "theme_color": "#0d0d1a",
+  "orientation": "any",
+  "lang": "ru",
+  "icons": [
+    {
+      "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "GLOBAL LINK — главная страница"
+    }
+  ],
+  "categories": ["business", "music"],
+  "scope": "/"
+}
