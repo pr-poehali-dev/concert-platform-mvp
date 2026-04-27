@@ -191,17 +191,45 @@ def handler(event: dict, context) -> dict:
             return err("document_id required")
         conn = get_conn(); cur = conn.cursor()
 
-        # Получаем подписи со ВСЕХ копий документа (один file_url = один документ)
-        # Это позволяет видеть подпись контрагента даже если он подписал свою копию
+        # Собираем все document_id связанные с этим документом:
+        # 1. Сам doc_id (оригинал у отправителя или копия у получателя)
+        # 2. Если это оригинал — все копии у получателей (через signature_requests.original_document_id)
+        # 3. Если это копия — оригинал (через signature_requests.document_id → original_document_id)
+        cur.execute(
+            f"""SELECT DISTINCT unnested FROM (
+                -- сам документ
+                SELECT %s::uuid AS unnested
+                UNION
+                -- копии получателей (doc_id — оригинал)
+                SELECT document_id FROM {SCHEMA}.signature_requests
+                WHERE original_document_id = %s
+                UNION
+                -- оригинал (doc_id — копия получателя)
+                SELECT original_document_id FROM {SCHEMA}.signature_requests
+                WHERE document_id = %s AND original_document_id IS NOT NULL
+                UNION
+                -- другие копии того же оригинала
+                SELECT document_id FROM {SCHEMA}.signature_requests
+                WHERE original_document_id IN (
+                    SELECT original_document_id FROM {SCHEMA}.signature_requests
+                    WHERE document_id = %s AND original_document_id IS NOT NULL
+                )
+            ) t WHERE unnested IS NOT NULL""",
+            (doc_id, doc_id, doc_id, doc_id)
+        )
+        all_doc_ids = [str(r[0]) for r in cur.fetchall()]
+        if not all_doc_ids:
+            all_doc_ids = [doc_id]
+
+        placeholders = ",".join(["%s"] * len(all_doc_ids))
         cur.execute(
             f"""SELECT DISTINCT ON (ds.signer_user_id)
                        ds.id, ds.signer_user_id, ds.signer_name, ds.signer_email, ds.sign_type,
                        ds.status, ds.signed_at, ds.hash, ds.created_at
                 FROM {SCHEMA}.document_signatures ds
-                JOIN {SCHEMA}.user_documents ud ON ud.id = ds.document_id
-                WHERE ud.file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
+                WHERE ds.document_id IN ({placeholders})
                 ORDER BY ds.signer_user_id, ds.created_at""",
-            (doc_id,)
+            all_doc_ids
         )
         sigs = []
         for r in cur.fetchall():
@@ -213,23 +241,24 @@ def handler(event: dict, context) -> dict:
                 "hash": r[7], "createdAt": str(r[8]),
                 "isMe": str(r[1]) == user_id,
             })
-        # Запросы на подпись (по текущему doc_id и по связанным через file_url)
+
+        # Запросы на подпись — все связанные с оригиналом
         cur.execute(
             f"""SELECT id, recipient_email, recipient_name, status, created_at
                 FROM {SCHEMA}.signature_requests
-                WHERE document_id IN (
-                    SELECT id FROM {SCHEMA}.user_documents
-                    WHERE file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
-                )
+                WHERE original_document_id = %s OR document_id = %s
                 ORDER BY created_at""",
-            (doc_id,)
+            (doc_id, doc_id)
         )
         reqs = []
+        seen_req = set()
         for r in cur.fetchall():
-            reqs.append({
-                "id": str(r[0]), "recipientEmail": r[1],
-                "recipientName": r[2], "status": r[3], "createdAt": str(r[4]),
-            })
+            if str(r[0]) not in seen_req:
+                seen_req.add(str(r[0]))
+                reqs.append({
+                    "id": str(r[0]), "recipientEmail": r[1],
+                    "recipientName": r[2], "status": r[3], "createdAt": str(r[4]),
+                })
         conn.close()
         return ok({"signatures": sigs, "requests": reqs})
 
@@ -349,33 +378,103 @@ def handler(event: dict, context) -> dict:
             (doc_id_signed, user_email)
         )
 
-        # Проверяем — все ли стороны подписали (считаем подписи + запросы)
+        # Собираем все связанные document_id для правильного подсчёта
         cur.execute(
-            f"""SELECT COUNT(*) FROM {SCHEMA}.signature_requests
-                WHERE document_id = %s""",
-            (doc_id_signed,)
+            f"""SELECT DISTINCT unnested FROM (
+                SELECT %s::uuid AS unnested
+                UNION
+                SELECT document_id FROM {SCHEMA}.signature_requests
+                WHERE original_document_id = %s
+                UNION
+                SELECT original_document_id FROM {SCHEMA}.signature_requests
+                WHERE document_id = %s AND original_document_id IS NOT NULL
+                UNION
+                SELECT document_id FROM {SCHEMA}.signature_requests
+                WHERE original_document_id IN (
+                    SELECT original_document_id FROM {SCHEMA}.signature_requests
+                    WHERE document_id = %s AND original_document_id IS NOT NULL
+                )
+            ) t WHERE unnested IS NOT NULL""",
+            (doc_id_signed, doc_id_signed, doc_id_signed, doc_id_signed)
         )
-        total_requests = cur.fetchone()[0]
+        all_doc_ids_confirm = [str(r[0]) for r in cur.fetchall()] or [doc_id_signed]
+        ph_confirm = ",".join(["%s"] * len(all_doc_ids_confirm))
+
+        # Уникальные подписанты
         cur.execute(
-            f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
-                WHERE document_id = %s AND status = 'signed'""",
-            (doc_id_signed,)
+            f"""SELECT COUNT(DISTINCT signer_user_id) FROM {SCHEMA}.document_signatures
+                WHERE document_id IN ({ph_confirm}) AND status = 'signed'""",
+            all_doc_ids_confirm
         )
         total_signed = cur.fetchone()[0]
-        all_signed = (total_requests > 0 and total_signed >= total_requests + 1)  # +1 владелец
 
-        # Уведомляем владельца документа что подписание выполнено
+        # Уникальные запросы на подпись (кол-во нужных подписей помимо отправителя)
+        cur.execute(
+            f"""SELECT COUNT(*) FROM {SCHEMA}.signature_requests
+                WHERE (original_document_id = %s OR document_id = %s)""",
+            (doc_id_signed, doc_id_signed)
+        )
+        total_requests = cur.fetchone()[0]
+        all_signed = (total_requests > 0 and total_signed >= total_requests + 1)
+
+        # Уведомление внутри платформы владельцу
         if doc_owner_id != user_id:
             cur.execute(
                 f"""INSERT INTO {SCHEMA}.notifications
                     (user_id, type, title, body, link_page)
                     VALUES (%s, 'signing', %s, %s, 'signing')""",
                 (doc_owner_id,
-                 "Документ подписан",
+                 "Документ подписан" if not all_signed else "Документ подписан с обеих сторон",
                  f"{user_name} подписал документ \"{doc_name_signed}\"")
             )
 
-        conn.commit(); conn.close()
+        conn.commit()
+
+        # Если все подписали — отправляем email обеим сторонам с итоговым PDF
+        if all_signed:
+            api_key  = os.environ.get("RESEND_API_KEY", "")
+            app_url  = os.environ.get("APP_URL", "https://globallink.art")
+            if api_key:
+                # Собираем email подписантов
+                cur.execute(
+                    f"""SELECT DISTINCT u.name, u.email
+                        FROM {SCHEMA}.document_signatures ds
+                        JOIN {SCHEMA}.users u ON u.id = ds.signer_user_id
+                        WHERE ds.document_id IN ({ph_confirm}) AND ds.status = 'signed'""",
+                    all_doc_ids_confirm
+                )
+                all_signers = cur.fetchall()
+                for s_name, s_email in all_signers:
+                    html_notify = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:40px 20px;">
+<tr><td align="center"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+  <tr><td style="padding-bottom:20px;text-align:center;">
+    <span style="font-size:20px;font-weight:bold;color:#fff;letter-spacing:2px;">GLOBAL LINK</span>
+  </td></tr>
+  <tr><td style="background:#15152a;border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:32px;">
+    <div style="text-align:center;margin-bottom:20px;">
+      <div style="width:56px;height:56px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.3);border-radius:16px;display:inline-flex;align-items:center;justify-content:center;font-size:28px;">✅</div>
+    </div>
+    <h2 style="color:#22c55e;font-size:20px;margin:0 0 8px;text-align:center;">Документ подписан с обеих сторон</h2>
+    <p style="color:rgba(255,255,255,0.5);font-size:14px;margin:0 0 20px;line-height:1.6;text-align:center;">
+      Документ <strong style="color:#fff;">«{doc_name_signed}»</strong><br>
+      подписан всеми участниками
+    </p>
+    <p style="color:rgba(255,255,255,0.4);font-size:13px;margin:0 0 20px;text-align:center;">
+      Скачайте итоговый PDF с подписями обеих сторон в разделе «Подписание»
+    </p>
+    <a href="{app_url}" style="display:block;text-align:center;background:linear-gradient(135deg,#22c55e,#16a34a);color:#fff;text-decoration:none;padding:14px 28px;border-radius:10px;font-weight:bold;font-size:14px;">
+      Открыть GLOBAL LINK → Скачать PDF
+    </a>
+  </td></tr>
+</table></td></tr>
+</table></body></html>"""
+                    resend_send(api_key, s_email,
+                                f"✅ Документ «{doc_name_signed}» подписан с обеих сторон",
+                                html_notify)
+
+        conn.close()
         return ok({"signed": True, "signedAt": signed_at, "hash": h, "allSigned": all_signed})
 
     # ── POST decline ──────────────────────────────────────────────────────
@@ -460,9 +559,9 @@ def handler(event: dict, context) -> dict:
 
         cur.execute(
             f"""INSERT INTO {SCHEMA}.signature_requests
-                (document_id, sender_user_id, recipient_email, recipient_name, message)
-                VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-            (sig_doc_id, user_id, recipient_email, recipient_name, message)
+                (document_id, original_document_id, sender_user_id, recipient_email, recipient_name, message)
+                VALUES (%s, %s, %s, %s, %s, %s) RETURNING id""",
+            (sig_doc_id, doc_id, user_id, recipient_email, recipient_name, message)
         )
         req_id = str(cur.fetchone()[0])
 
@@ -512,10 +611,18 @@ def handler(event: dict, context) -> dict:
                 continue
             seen.add(r[0])
             doc_id_r = str(r[1])
+            # Считаем подписи через все связанные копии
             cur.execute(
-                f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
-                    WHERE document_id = %s AND status = 'signed'""",
-                (doc_id_r,)
+                f"""SELECT COUNT(DISTINCT ds.signer_user_id)
+                    FROM {SCHEMA}.document_signatures ds
+                    WHERE ds.document_id IN (
+                        SELECT DISTINCT unnested FROM (
+                            SELECT %s::uuid AS unnested
+                            UNION SELECT document_id FROM {SCHEMA}.signature_requests WHERE original_document_id = %s
+                            UNION SELECT COALESCE(original_document_id, document_id) FROM {SCHEMA}.signature_requests WHERE document_id = %s
+                        ) t WHERE unnested IS NOT NULL
+                    ) AND ds.status = 'signed'""",
+                (doc_id_r, doc_id_r, doc_id_r)
             )
             signed_count = cur.fetchone()[0]
             all_signed = (signed_count >= 2)
@@ -553,10 +660,17 @@ def handler(event: dict, context) -> dict:
         result = []
         for r in rows:
             doc_id_r = str(r[1])
+            # original_document_id = doc_id_r для исходящих (отправитель = владелец оригинала)
             cur.execute(
-                f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
-                    WHERE document_id = %s AND status = 'signed'""",
-                (doc_id_r,)
+                f"""SELECT COUNT(DISTINCT ds.signer_user_id)
+                    FROM {SCHEMA}.document_signatures ds
+                    WHERE ds.document_id IN (
+                        SELECT DISTINCT unnested FROM (
+                            SELECT %s::uuid AS unnested
+                            UNION SELECT document_id FROM {SCHEMA}.signature_requests WHERE original_document_id = %s
+                        ) t WHERE unnested IS NOT NULL
+                    ) AND ds.status = 'signed'""",
+                (doc_id_r, doc_id_r)
             )
             signed_count = cur.fetchone()[0]
             all_signed = (signed_count >= 2)
@@ -632,18 +746,42 @@ def handler(event: dict, context) -> dict:
             conn.close(); return err("Документ не найден", 404)
         doc_name, file_url, mime_type = doc_row
 
-        # Собираем подписи со ВСЕХ копий документа (один и тот же file_url)
-        # Это позволяет объединить подписи владельца и получателя в одном PDF
+        # Собираем все связанные document_id (оригинал + копии через signature_requests)
         cur.execute(
-            f"""SELECT DISTINCT ds.signer_name, ds.signer_email, ds.sign_type, ds.signed_at, ds.hash, ds.ip_address
+            f"""SELECT DISTINCT unnested FROM (
+                SELECT %s::uuid AS unnested
+                UNION
+                SELECT document_id FROM {SCHEMA}.signature_requests
+                WHERE original_document_id = %s
+                UNION
+                SELECT original_document_id FROM {SCHEMA}.signature_requests
+                WHERE document_id = %s AND original_document_id IS NOT NULL
+                UNION
+                SELECT document_id FROM {SCHEMA}.signature_requests
+                WHERE original_document_id IN (
+                    SELECT original_document_id FROM {SCHEMA}.signature_requests
+                    WHERE document_id = %s AND original_document_id IS NOT NULL
+                )
+            ) t WHERE unnested IS NOT NULL""",
+            (doc_id, doc_id, doc_id, doc_id)
+        )
+        all_doc_ids = [str(r[0]) for r in cur.fetchall()] or [doc_id]
+        placeholders_dl = ",".join(["%s"] * len(all_doc_ids))
+
+        # По одной подписи на подписанта (последняя по времени)
+        cur.execute(
+            f"""SELECT DISTINCT ON (ds.signer_user_id)
+                       ds.signer_name, ds.signer_email, ds.sign_type, ds.signed_at, ds.hash, ds.ip_address
                 FROM {SCHEMA}.document_signatures ds
-                JOIN {SCHEMA}.user_documents ud ON ud.id = ds.document_id
-                WHERE ud.file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
-                  AND ds.status = 'signed'
-                ORDER BY ds.signed_at""",
-            (doc_id,)
+                WHERE ds.document_id IN ({placeholders_dl}) AND ds.status = 'signed'
+                ORDER BY ds.signer_user_id, ds.signed_at""",
+            all_doc_ids
         )
         sigs = cur.fetchall()
+
+        # email-адреса подписантов для уведомления
+        signer_contacts = [(s[0], s[1]) for s in sigs]
+
         conn.close()
 
         if not sigs:
