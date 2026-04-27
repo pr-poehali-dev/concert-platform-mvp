@@ -484,7 +484,7 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.status, sr.created_at,
                        ud.name, ud.file_url, ud.category, ud.mime_type,
-                       u.name as sender_name, u.email as sender_email
+                       u.name as sender_name, u.email as sender_email, u.role as sender_role
                 FROM {SCHEMA}.signature_requests sr
                 JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
                 JOIN {SCHEMA}.users u ON u.id = sr.sender_user_id
@@ -495,7 +495,6 @@ def handler(event: dict, context) -> dict:
         )
         rows = cur.fetchall()
 
-        # Для каждого документа считаем сколько всего подписей и сколько сделано
         seen = set()
         result = []
         for r in rows:
@@ -503,26 +502,21 @@ def handler(event: dict, context) -> dict:
                 continue
             seen.add(r[0])
             doc_id_r = str(r[1])
-            # all_signed: все участники подписали
-            cur.execute(
-                f"""SELECT COUNT(*) FROM {SCHEMA}.signature_requests WHERE document_id = %s""",
-                (doc_id_r,)
-            )
-            total_req = cur.fetchone()[0]
             cur.execute(
                 f"""SELECT COUNT(*) FROM {SCHEMA}.document_signatures
                     WHERE document_id = %s AND status = 'signed'""",
                 (doc_id_r,)
             )
             signed_count = cur.fetchone()[0]
-            all_signed = (signed_count >= 2)  # минимум 2 подписи = обе стороны
+            all_signed = (signed_count >= 2)
             result.append({
                 "id": str(r[0]), "documentId": doc_id_r,
                 "recipientEmail": r[2], "status": r[3], "createdAt": str(r[4]),
                 "documentName": r[5], "fileUrl": r[6], "category": r[7],
                 "mimeType": r[8] or "application/pdf",
                 "senderName": r[9], "senderEmail": r[10],
-                "counterpartyName": r[9],  # для входящих — контрагент = отправитель
+                "counterpartyName": r[9],
+                "counterpartyRole": r[11] or "organizer",
                 "allSigned": all_signed,
                 "signedCount": signed_count,
             })
@@ -535,9 +529,12 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT sr.id, sr.document_id, sr.recipient_email, sr.recipient_name,
                        sr.status, sr.created_at, sr.message,
-                       ud.name, ud.file_url, ud.category, ud.mime_type
+                       ud.name, ud.file_url, ud.category, ud.mime_type,
+                       COALESCE(u.role, 'organizer') as recipient_role,
+                       COALESCE(u.name, sr.recipient_name, sr.recipient_email) as recipient_resolved_name
                 FROM {SCHEMA}.signature_requests sr
                 JOIN {SCHEMA}.user_documents ud ON ud.id = sr.document_id
+                LEFT JOIN {SCHEMA}.users u ON LOWER(u.email) = LOWER(sr.recipient_email)
                 WHERE sr.sender_user_id = %s
                 ORDER BY sr.created_at DESC""",
             (user_id,)
@@ -553,13 +550,15 @@ def handler(event: dict, context) -> dict:
             )
             signed_count = cur.fetchone()[0]
             all_signed = (signed_count >= 2)
+            display_name = r[12] or r[3] or r[2]
             result.append({
                 "id": str(r[0]), "documentId": doc_id_r,
-                "recipientEmail": r[2], "recipientName": r[3] or r[2],
+                "recipientEmail": r[2], "recipientName": display_name,
                 "status": r[4], "createdAt": str(r[5]), "message": r[6] or "",
                 "documentName": r[7], "fileUrl": r[8], "category": r[9],
                 "mimeType": r[10] or "application/pdf",
-                "counterpartyName": r[3] or r[2],
+                "counterpartyName": display_name,
+                "counterpartyRole": r[11] or "organizer",
                 "allSigned": all_signed,
                 "signedCount": signed_count,
             })
@@ -861,5 +860,41 @@ def handler(event: dict, context) -> dict:
             "recipientName": recipient_name,
             "isRegistered": bool(recipient),
         })
+
+    # ── GET search_users — поиск пользователей платформы для автодополнения ──
+    if method == "GET" and action == "search_users":
+        q = (params.get("q") or "").strip()
+        if len(q) < 2:
+            return ok({"users": []})
+        conn = get_conn(); cur = conn.cursor()
+        like = f"%{q}%"
+        cur.execute(
+            f"""SELECT id, name, email, role, company_type, legal_name, logo_url
+                FROM {SCHEMA}.users
+                WHERE id != %s
+                  AND status != 'blocked'
+                  AND (LOWER(name) LIKE LOWER(%s) OR LOWER(email) LIKE LOWER(%s) OR LOWER(legal_name) LIKE LOWER(%s))
+                ORDER BY name
+                LIMIT 10""",
+            (user_id, like, like, like)
+        )
+        rows = cur.fetchall()
+        conn.close()
+        result = []
+        for r in rows:
+            role_label = "Площадка" if r[3] == "venue" else "Организатор"
+            display_name = r[1]
+            if r[4] == "legal" and r[5]:
+                display_name = r[5]
+            result.append({
+                "id": str(r[0]),
+                "name": r[1],
+                "displayName": display_name,
+                "email": r[2],
+                "role": r[3],
+                "roleLabel": role_label,
+                "logoUrl": r[6] or "",
+            })
+        return ok({"users": result})
 
     return err("Неизвестный action", 400)

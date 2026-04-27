@@ -15,6 +15,7 @@ interface SignRequest {
   recipientName?: string;
   recipientEmail: string;
   counterpartyName: string;
+  counterpartyRole?: string;
   status: "pending" | "signed" | "declined";
   createdAt: string;
   allSigned: boolean;
@@ -101,7 +102,18 @@ function CounterpartySection({
           {allDone ? <Icon name="ShieldCheck" size={18} /> : initials(name)}
         </div>
         <div className="flex-1 text-left min-w-0">
-          <p className="text-white font-semibold text-sm truncate">{name}</p>
+          <div className="flex items-center gap-2">
+            <p className="text-white font-semibold text-sm truncate">{name}</p>
+            {requests[0]?.counterpartyRole && (
+              <span className={`text-[10px] px-1.5 py-0.5 rounded border shrink-0 ${
+                requests[0].counterpartyRole === "venue"
+                  ? "text-neon-cyan/70 border-neon-cyan/20 bg-neon-cyan/5"
+                  : "text-neon-purple/70 border-neon-purple/20 bg-neon-purple/5"
+              }`}>
+                {requests[0].counterpartyRole === "venue" ? "Площадка" : "Организатор"}
+              </span>
+            )}
+          </div>
           <p className={`text-xs mt-0.5 ${allDone ? "text-neon-green/70" : "text-white/40"}`}>
             {allDone
               ? "Все документы подписаны обеими сторонами"
