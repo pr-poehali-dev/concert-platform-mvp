@@ -338,6 +338,21 @@ export default function HomePage({ onNavigate }: HomePageProps) {
         onClose={() => setAuthModal({ ...authModal, open: false })}
         defaultTab="register"
       />
+
+      {/* Footer */}
+      <footer className="border-t border-white/5 py-6">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <span className="font-oswald font-bold text-white/20 tracking-widest text-sm">GLOBAL LINK</span>
+          <div className="flex items-center gap-5 text-xs text-white/25">
+            <a href="/privacy" target="_blank" rel="noopener noreferrer"
+              className="hover:text-white/60 transition-colors">
+              Политика конфиденциальности
+            </a>
+            <span>·</span>
+            <span>© 2025 GLOBAL LINK</span>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }
