@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_URL, type Stats, type AdminUser, type PendingUser, type AdminVenue } from "./admin/types";
 import AdminOverviewTab from "./admin/AdminOverviewTab";
@@ -84,8 +84,13 @@ interface AdminPageProps {
 }
 
 export default function AdminPage({ externalToken, onExternalLogout }: AdminPageProps = {}) {
+  const PRESENTATION_URL = "https://functions.poehali.dev/3a1c12fb-cacd-4731-961b-2f37badc2c08";
+
   const [token, setToken] = useState(() => externalToken || localStorage.getItem("gl_admin_token") || "");
   const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import">("overview");
+  const [presMenuOpen, setPresMenuOpen] = useState(false);
+  const [presLoading, setPresLoading]   = useState<string | null>(null);
+  const presRef = useRef<HTMLDivElement>(null);
   const [supportUnread, setSupportUnread] = useState(0);
 
   const [stats, setStats] = useState<Stats | null>(null);
@@ -159,6 +164,18 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
   useEffect(() => { if (token && tab === "pending") loadPending(); }, [token, tab, loadPending]);
   useEffect(() => { if (token && tab === "users") loadUsers(); }, [token, tab, loadUsers]);
   useEffect(() => { if (token && tab === "venues") loadVenues(); }, [token, tab, loadVenues]);
+
+  // Закрытие меню презентаций при клике вне
+  useEffect(() => {
+    if (!presMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (presRef.current && !presRef.current.contains(e.target as Node)) {
+        setPresMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [presMenuOpen]);
 
   // Polling непрочитанных сообщений поддержки
   useEffect(() => {
@@ -237,16 +254,68 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
             </div>
             <span className="font-oswald font-bold text-white">GLOBAL LINK <span className="text-neon-purple">ADMIN</span></span>
           </div>
-          <button
-            onClick={() => {
-              setToken("");
-              localStorage.removeItem("gl_admin_token");
-              if (onExternalLogout) onExternalLogout();
-            }}
-            className="flex items-center gap-1.5 text-white/40 hover:text-neon-pink transition-colors text-sm"
-          >
-            <Icon name="LogOut" size={14} />Выйти
-          </button>
+          <div className="flex items-center gap-3">
+            {/* Кнопка скачать презентацию */}
+            <div className="relative" ref={presRef}>
+              <button
+                onClick={() => setPresMenuOpen(v => !v)}
+                className="flex items-center gap-1.5 text-sm px-3 py-1.5 bg-neon-purple/10 border border-neon-purple/30 text-neon-purple hover:bg-neon-purple/20 rounded-lg transition-all"
+              >
+                <Icon name="FileDown" size={14} />
+                Презентация
+                <Icon name="ChevronDown" size={12} className={`transition-transform ${presMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {presMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-64 glass-strong border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
+                  <div className="px-4 py-2.5 border-b border-white/5">
+                    <p className="text-white/40 text-xs uppercase tracking-wider">Скачать презентацию</p>
+                  </div>
+                  {[
+                    { type: "investors", label: "Для инвесторов",   icon: "TrendingUp",  color: "text-neon-purple", desc: "Метрики, рынок, монетизация" },
+                    { type: "users",     label: "Для пользователей", icon: "Users",       color: "text-neon-cyan",   desc: "Функции для организаторов и площадок" },
+                    { type: "partners",  label: "Для партнёров",     icon: "Handshake",   color: "text-neon-green",  desc: "Форматы сотрудничества" },
+                  ].map(({ type, label, icon, color, desc }) => (
+                    <button
+                      key={type}
+                      disabled={presLoading === type}
+                      onClick={async () => {
+                        setPresLoading(type);
+                        setPresMenuOpen(false);
+                        try {
+                          const r = await fetch(`${PRESENTATION_URL}?type=${type}`);
+                          const d = await r.json();
+                          if (d.url) window.open(d.url, "_blank");
+                        } catch { /* silent */ }
+                        finally { setPresLoading(null); }
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors border-b border-white/5 last:border-0 disabled:opacity-50"
+                    >
+                      {presLoading === type
+                        ? <Icon name="Loader2" size={16} className={`${color} animate-spin shrink-0`} />
+                        : <Icon name={icon as never} size={16} className={`${color} shrink-0`} />}
+                      <div className="text-left">
+                        <p className="text-white text-sm font-medium">{label}</p>
+                        <p className="text-white/30 text-xs">{desc}</p>
+                      </div>
+                      {presLoading !== type && <Icon name="Download" size={13} className="text-white/20 ml-auto shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => {
+                setToken("");
+                localStorage.removeItem("gl_admin_token");
+                if (onExternalLogout) onExternalLogout();
+              }}
+              className="flex items-center gap-1.5 text-white/40 hover:text-neon-pink transition-colors text-sm"
+            >
+              <Icon name="LogOut" size={14} />Выйти
+            </button>
+          </div>
         </div>
       </div>
 

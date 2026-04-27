@@ -1,0 +1,11 @@
+{
+  "tests": [
+    {
+      "name": "Invalid type",
+      "method": "GET",
+      "path": "/?type=invalid",
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
+    }
+  ]
+}
