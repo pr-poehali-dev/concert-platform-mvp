@@ -24,11 +24,12 @@ interface Venue {
 
 interface DashboardPageProps {
   onNavigate?: (page: string) => void;
+  initialTab?: string;
 }
 
-export default function DashboardPage({ onNavigate }: DashboardPageProps) {
+export default function DashboardPage({ onNavigate, initialTab }: DashboardPageProps) {
   const { user, logout, updateProfile } = useAuth();
-  const [tab, setTab] = useState(user?.role === "venue" ? "venues" : "tours");
+  const [tab, setTab] = useState(initialTab || (user?.role === "venue" ? "venues" : "tours"));
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showVenueSetup, setShowVenueSetup] = useState(false);

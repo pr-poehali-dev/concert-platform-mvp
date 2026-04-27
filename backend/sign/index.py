@@ -423,6 +423,19 @@ def handler(event: dict, context) -> dict:
             (sig_doc_id, user_id, recipient_email, recipient_name, message)
         )
         req_id = str(cur.fetchone()[0])
+
+        # Уведомление внутри платформы — создаём для получателя если он зарегистрирован
+        if recipient_row:
+            rec_user_id_notif = str(recipient_row[0])
+            notif_title = f"Запрос на подписание документа"
+            notif_body  = f"{user_name} просит подписать документ \"{doc_name}\""
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.notifications
+                    (user_id, type, title, body, link_page)
+                    VALUES (%s, %s, %s, %s, %s)""",
+                (rec_user_id_notif, "signing", notif_title, notif_body, "signing")
+            )
+
         conn.commit(); conn.close()
 
         app_url = os.environ.get("APP_URL", "https://globallink.art")
@@ -479,30 +492,35 @@ def handler(event: dict, context) -> dict:
         from reportlab.pdfbase.ttfonts import TTFont
         from pypdf import PdfWriter, PdfReader
 
-        # ── Регистрируем TTF-шрифт с кириллицей (DejaVu) ─────────────────
-        FONT_URLS = {
-            "DejaVu":      "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf",
-            "DejaVu-Bold": "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans-Bold.ttf",
-        }
-        fonts_ok = False
-        try:
-            tmpdir = tempfile.mkdtemp()
-            for fname, furl in FONT_URLS.items():
-                fpath = os.path.join(tmpdir, f"{fname}.ttf")
-                r = urllib.request.Request(furl, headers={"User-Agent": "GLOBALLINK/1.0"})
-                with urllib.request.urlopen(r, timeout=15) as resp:
-                    with open(fpath, "wb") as f:
-                        f.write(resp.read())
-                pdfmetrics.registerFont(TTFont(fname, fpath))
-            F_NORMAL = "DejaVu"
-            F_BOLD   = "DejaVu-Bold"
-            F_MONO   = "Courier"
-            fonts_ok = True
-        except Exception as e:
-            print(f"[sign] font load error: {e}")
-            F_NORMAL = "Helvetica"
-            F_BOLD   = "Helvetica-Bold"
-            F_MONO   = "Courier"
+        # ── Шрифт с кириллицей ────────────────────────────────────────────────
+        # Ищем TTF-шрифт поддерживающий кириллицу: сначала системные, потом reportlab
+        import glob, reportlab as _rl
+        F_NORMAL = "Helvetica"
+        F_BOLD   = "Helvetica-Bold"
+        F_MONO   = "Courier"
+        _rl_fonts_dir = os.path.join(os.path.dirname(_rl.__file__), "fonts")
+        _font_candidates = [
+            # reportlab bundled
+            (os.path.join(_rl_fonts_dir, "FreeSans.ttf"),     os.path.join(_rl_fonts_dir, "FreeSansBold.ttf")),
+            # Ubuntu / Debian
+            ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            ("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+            # generic
+            ("/usr/share/fonts/truetype/freefont/FreeSans.ttf", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
+        ]
+        for _fn, _fb in _font_candidates:
+            if os.path.exists(_fn):
+                try:
+                    pdfmetrics.registerFont(TTFont("CyrNormal", _fn))
+                    F_NORMAL = "CyrNormal"
+                    if os.path.exists(_fb):
+                        pdfmetrics.registerFont(TTFont("CyrBold", _fb))
+                        F_BOLD = "CyrBold"
+                    else:
+                        F_BOLD = "CyrNormal"
+                    break
+                except Exception as _fe:
+                    print(f"[sign] font {_fn}: {_fe}")
 
         doc_id = params.get("document_id", "")
         if not doc_id:

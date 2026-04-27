@@ -27,6 +27,7 @@ function IndexInner() {
   const { user } = useAuth();
   const [activePage, setActivePage] = useState<Page>("home");
   const [openChatConvId, setOpenChatConvId] = useState<string | null>(null);
+  const [dashboardTab, setDashboardTab] = useState<string | null>(null);
 
   // Восстанавливаем страницу из localStorage после загрузки
   useEffect(() => {
@@ -47,6 +48,25 @@ function IndexInner() {
       setActivePage("chat");
       localStorage.setItem(PAGE_KEY, "chat");
       localStorage.setItem(CONV_KEY, convId);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    // Навигация в конкретный таб дашборда: "dashboard:signing", "dashboard:documents" и т.д.
+    if (page.startsWith("dashboard:")) {
+      const tabName = page.slice(10);
+      if (!user) { setActivePage("home"); return; }
+      setDashboardTab(tabName);
+      setActivePage("dashboard");
+      localStorage.setItem(PAGE_KEY, "dashboard");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    // Прямой переход "signing" → дашборд на таб подписания
+    if (page === "signing") {
+      if (!user) { setActivePage("home"); return; }
+      setDashboardTab("signing");
+      setActivePage("dashboard");
+      localStorage.setItem(PAGE_KEY, "dashboard");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -72,7 +92,7 @@ function IndexInner() {
         {activePage === "search" && <SearchPage onNavigate={handleNavigate} />}
         {activePage === "tours" && <ToursPage />}
         {activePage === "chat" && <ChatPage initialConversationId={openChatConvId} />}
-        {activePage === "dashboard" && <DashboardPage onNavigate={handleNavigate} />}
+        {activePage === "dashboard" && <DashboardPage onNavigate={handleNavigate} initialTab={dashboardTab || undefined} />}
         {activePage === "projects" && <ProjectsPage onNavigate={handleNavigate} />}
       </main>
       <SupportChat />
