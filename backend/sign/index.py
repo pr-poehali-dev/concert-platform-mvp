@@ -405,8 +405,17 @@ def handler(event: dict, context) -> dict:
             } for r in rows
         ]})
 
-    # ── GET download_signed — HTML-страница с печатью подписей → S3 → URL ──
+    # ── GET download_signed — PDF оригинал + лист подписей → S3 → URL ───────
     if method == "GET" and action == "download_signed":
+        import io
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import mm
+        from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable, Table, TableStyle
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from pypdf import PdfWriter, PdfReader
+
         doc_id = params.get("document_id", "")
         if not doc_id:
             return err("document_id required")
@@ -422,7 +431,7 @@ def handler(event: dict, context) -> dict:
         doc_name, file_url, mime_type = doc_row
 
         cur.execute(
-            f"""SELECT signer_name, signer_email, sign_type, status, signed_at, hash, ip_address
+            f"""SELECT signer_name, signer_email, sign_type, signed_at, hash, ip_address
                 FROM {SCHEMA}.document_signatures
                 WHERE document_id = %s AND status = 'signed'
                 ORDER BY signed_at""",
@@ -434,127 +443,147 @@ def handler(event: dict, context) -> dict:
         if not sigs:
             return err("Документ ещё не подписан")
 
-        # Формируем HTML-страницу с печатью подписей
-        sigs_html = ""
-        for s in sigs:
-            s_name, s_email, s_type, s_status, s_at, s_hash, s_ip = s
-            s_dt = s_at.strftime("%d.%m.%Y %H:%M:%S UTC") if s_at else "—"
-            sigs_html += f"""
-            <div class="sig-block">
-              <div class="sig-icon">✓</div>
-              <div class="sig-info">
-                <div class="sig-name">{s_name}</div>
-                <div class="sig-email">{s_email}</div>
-                <div class="sig-meta">
-                  <span class="sig-type">{'Простая ЭП (ПЭП)' if s_type == 'pep' else 'КЭП'}</span>
-                  <span>·</span>
-                  <span>{s_dt}</span>
-                  {'<span>· IP: ' + s_ip + '</span>' if s_ip else ''}
-                </div>
-                <div class="sig-hash">SHA-256: {s_hash}</div>
-              </div>
-            </div>"""
-
         generated_at = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M:%S UTC")
-        is_image = mime_type.startswith("image/")
-        is_pdf   = mime_type == "application/pdf"
 
-        preview_block = ""
+        # ── Генерируем лист подписей (PDF) через ReportLab ─────────────
+        sig_buf = io.BytesIO()
+        doc_rl = SimpleDocTemplate(
+            sig_buf, pagesize=A4,
+            leftMargin=20*mm, rightMargin=20*mm,
+            topMargin=20*mm, bottomMargin=20*mm,
+        )
+
+        styles = getSampleStyleSheet()
+        story  = []
+
+        # Стили
+        title_style = ParagraphStyle("title", parent=styles["Normal"],
+            fontSize=18, fontName="Helvetica-Bold", textColor=colors.HexColor("#1a1a2e"),
+            spaceAfter=4, alignment=TA_CENTER)
+        sub_style = ParagraphStyle("sub", parent=styles["Normal"],
+            fontSize=11, fontName="Helvetica", textColor=colors.HexColor("#555577"),
+            spaceAfter=2, alignment=TA_CENTER)
+        label_style = ParagraphStyle("label", parent=styles["Normal"],
+            fontSize=8, fontName="Helvetica", textColor=colors.HexColor("#888899"),
+            spaceAfter=1)
+        value_style = ParagraphStyle("value", parent=styles["Normal"],
+            fontSize=10, fontName="Helvetica-Bold", textColor=colors.HexColor("#1a1a2e"),
+            spaceAfter=2)
+        mono_style = ParagraphStyle("mono", parent=styles["Normal"],
+            fontSize=7, fontName="Courier", textColor=colors.HexColor("#888899"),
+            spaceAfter=6, wordWrap="CJK")
+        footer_style = ParagraphStyle("footer", parent=styles["Normal"],
+            fontSize=7, fontName="Helvetica", textColor=colors.HexColor("#aaaacc"),
+            alignment=TA_CENTER)
+
+        # Заголовок
+        story.append(Paragraph("GLOBAL LINK", title_style))
+        story.append(Paragraph("Лист электронной подписи", sub_style))
+        story.append(Paragraph(f"Документ: {doc_name}", sub_style))
+        story.append(Spacer(1, 6*mm))
+        story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#ddddee")))
+        story.append(Spacer(1, 4*mm))
+
+        # Блок каждой подписи
+        for i, s in enumerate(sigs, 1):
+            s_name, s_email, s_type, s_at, s_hash, s_ip = s
+            s_dt = s_at.strftime("%d.%m.%Y %H:%M:%S UTC") if s_at else "—"
+            sign_label = "Простая электронная подпись (ПЭП)" if s_type == "pep" else "Квалифицированная ЭП (КЭП)"
+
+            # Таблица-блок подписи
+            data = [
+                [Paragraph(f"Подпись #{i} — {sign_label}", ParagraphStyle("sh", parent=styles["Normal"],
+                    fontSize=9, fontName="Helvetica-Bold", textColor=colors.HexColor("#4444aa")))],
+                [Table([
+                    [Paragraph("Подписант:", label_style), Paragraph(s_name, value_style)],
+                    [Paragraph("Email:", label_style),     Paragraph(s_email, value_style)],
+                    [Paragraph("Дата и время:", label_style), Paragraph(s_dt, value_style)],
+                    [Paragraph("IP-адрес:", label_style),  Paragraph(s_ip or "—", value_style)],
+                    [Paragraph("Контрольная сумма SHA-256:", label_style),
+                     Paragraph(s_hash, mono_style)],
+                ], colWidths=[45*mm, None],
+                   style=TableStyle([
+                       ("VALIGN", (0,0), (-1,-1), "TOP"),
+                       ("LEFTPADDING", (0,0), (-1,-1), 0),
+                       ("RIGHTPADDING", (0,0), (-1,-1), 0),
+                       ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+                   ]))],
+            ]
+            tbl = Table(data, colWidths=["100%"],
+                style=TableStyle([
+                    ("BOX", (0,0), (-1,-1), 0.5, colors.HexColor("#ccccee")),
+                    ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#f0f0fa")),
+                    ("BACKGROUND", (0,1), (-1,1), colors.HexColor("#fafafa")),
+                    ("LEFTPADDING", (0,0), (-1,-1), 6),
+                    ("RIGHTPADDING", (0,0), (-1,-1), 6),
+                    ("TOPPADDING", (0,0), (-1,-1), 5),
+                    ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+                ]))
+            story.append(tbl)
+            story.append(Spacer(1, 3*mm))
+
+        story.append(Spacer(1, 4*mm))
+        story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#ddddee")))
+        story.append(Spacer(1, 3*mm))
+        story.append(Paragraph(
+            f"Сформировано платформой GLOBAL LINK &bull; {generated_at} &bull; ID документа: {doc_id}",
+            footer_style
+        ))
+        story.append(Paragraph(
+            "Настоящий лист является неотъемлемой частью документа и подтверждает факт подписания "
+            "простой электронной подписью в соответствии с ФЗ-63 «Об электронной подписи».",
+            ParagraphStyle("law", parent=footer_style, fontSize=6, spaceAfter=0)
+        ))
+
+        doc_rl.build(story)
+        sig_pdf_bytes = sig_buf.getvalue()
+
+        # ── Объединяем с оригинальным PDF если он есть ─────────────────
+        is_pdf = mime_type == "application/pdf"
+        writer = PdfWriter()
+
         if is_pdf:
-            preview_block = f'<div class="preview-link"><a href="{file_url}" target="_blank">📄 Открыть оригинальный документ</a></div>'
-        elif is_image:
-            preview_block = f'<img src="{file_url}" class="preview-img" alt="Документ" />'
-        else:
-            preview_block = f'<div class="preview-link"><a href="{file_url}" target="_blank">📎 Скачать оригинальный файл: {doc_name}</a></div>'
+            try:
+                # Скачиваем оригинал
+                orig_req = urllib.request.Request(file_url, headers={"User-Agent": "GLOBALLINK/1.0"})
+                with urllib.request.urlopen(orig_req, timeout=15) as resp:
+                    orig_bytes = resp.read()
+                orig_reader = PdfReader(io.BytesIO(orig_bytes))
+                for page in orig_reader.pages:
+                    writer.add_page(page)
+            except Exception as e:
+                print(f"[sign] could not fetch original PDF: {e}")
+                # Если не удалось скачать — просто лист подписей
 
-        html = f"""<!DOCTYPE html>
-<html lang="ru">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Подписанный документ — {doc_name}</title>
-<style>
-  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
-  body {{ font-family: 'Arial', sans-serif; background: #0d0d1a; color: #fff; padding: 40px 20px; }}
-  .container {{ max-width: 760px; margin: 0 auto; }}
-  .header {{ text-align: center; margin-bottom: 32px; }}
-  .brand {{ font-size: 22px; font-weight: bold; letter-spacing: 3px; color: #fff; margin-bottom: 8px; }}
-  .title {{ font-size: 20px; color: #e2e2ff; margin-bottom: 4px; }}
-  .doc-name {{ font-size: 16px; color: rgba(255,255,255,0.5); word-break: break-word; }}
-  .badge {{ display: inline-flex; align-items: center; gap: 6px; background: rgba(34,211,238,0.1);
-            border: 1px solid rgba(34,211,238,0.3); color: #22d3ee; border-radius: 20px;
-            padding: 4px 14px; font-size: 13px; margin-top: 12px; }}
-  .section {{ background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
-              border-radius: 16px; padding: 24px; margin-bottom: 20px; }}
-  .section-title {{ font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
-                    color: rgba(255,255,255,0.35); margin-bottom: 16px; }}
-  .sig-block {{ display: flex; gap: 14px; padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,0.06); }}
-  .sig-block:last-child {{ border-bottom: none; padding-bottom: 0; }}
-  .sig-icon {{ width: 36px; height: 36px; border-radius: 10px; background: rgba(34,211,238,0.15);
-               border: 1px solid rgba(34,211,238,0.3); display: flex; align-items: center;
-               justify-content: center; color: #22d3ee; font-size: 18px; flex-shrink: 0; }}
-  .sig-name {{ font-size: 15px; font-weight: bold; color: #fff; }}
-  .sig-email {{ font-size: 13px; color: rgba(255,255,255,0.45); margin-top: 2px; }}
-  .sig-meta {{ font-size: 12px; color: rgba(255,255,255,0.3); margin-top: 6px; display: flex; flex-wrap: wrap; gap: 6px; }}
-  .sig-type {{ background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3);
-               color: #a855f7; border-radius: 6px; padding: 1px 8px; font-size: 11px; }}
-  .sig-hash {{ font-family: monospace; font-size: 11px; color: rgba(255,255,255,0.2);
-               margin-top: 6px; word-break: break-all; }}
-  .preview-link {{ text-align: center; padding: 16px; }}
-  .preview-link a {{ color: #22d3ee; text-decoration: none; font-size: 15px; }}
-  .preview-img {{ width: 100%; border-radius: 10px; border: 1px solid rgba(255,255,255,0.1); }}
-  .footer {{ text-align: center; color: rgba(255,255,255,0.2); font-size: 12px; margin-top: 24px; }}
-  .seal {{ border: 2px solid rgba(34,211,238,0.4); border-radius: 50%; width: 120px; height: 120px;
-           display: flex; flex-direction: column; align-items: center; justify-content: center;
-           margin: 0 auto 24px; text-align: center; color: rgba(34,211,238,0.8); }}
-  .seal-top {{ font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }}
-  .seal-check {{ font-size: 36px; line-height: 1; margin: 4px 0; }}
-  .seal-bottom {{ font-size: 9px; letter-spacing: 1px; text-transform: uppercase; }}
-</style>
-</head>
-<body>
-<div class="container">
-  <div class="header">
-    <div class="brand">GLOBAL LINK</div>
-    <div class="title">Подписанный документ</div>
-    <div class="doc-name">{doc_name}</div>
-    <div class="badge">✓ Электронная подпись действительна</div>
-  </div>
+        # Добавляем лист подписей
+        sig_reader = PdfReader(io.BytesIO(sig_pdf_bytes))
+        for page in sig_reader.pages:
+            writer.add_page(page)
 
-  <div class="seal">
-    <div class="seal-top">GLOBAL</div>
-    <div class="seal-check">✓</div>
-    <div class="seal-bottom">LINK · ПЭП</div>
-  </div>
+        # Метаданные
+        writer.add_metadata({
+            "/Title": f"{doc_name} — подписано",
+            "/Author": "GLOBAL LINK",
+            "/Subject": "Электронная подпись (ПЭП)",
+            "/Creator": "GLOBAL LINK Platform",
+        })
 
-  <div class="section">
-    <div class="section-title">Подписи ({len(sigs)})</div>
-    {sigs_html}
-  </div>
+        out_buf = io.BytesIO()
+        writer.write(out_buf)
+        final_pdf = out_buf.getvalue()
 
-  <div class="section">
-    <div class="section-title">Документ</div>
-    {preview_block}
-  </div>
-
-  <div class="footer">
-    Сформировано платформой GLOBAL LINK · {generated_at}<br>
-    Документ ID: {doc_id}
-  </div>
-</div>
-</body>
-</html>"""
-
-        # Сохраняем в S3
+        # ── Сохраняем в S3 ─────────────────────────────────────────────
         s3 = boto3.client("s3",
             endpoint_url="https://bucket.poehali.dev",
             aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
             aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
         )
-        key = f"signed/{doc_id}/{uuid.uuid4()}.html"
-        s3.put_object(Bucket="files", Key=key, Body=html.encode("utf-8"), ContentType="text/html; charset=utf-8")
+        key = f"signed/{doc_id}/{uuid.uuid4()}.pdf"
+        s3.put_object(Bucket="files", Key=key, Body=final_pdf,
+                      ContentType="application/pdf",
+                      ContentDisposition=f'attachment; filename="signed_{doc_name}.pdf"')
         cdn = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
-        return ok({"url": cdn, "signaturesCount": len(sigs)})
+        return ok({"url": cdn, "signaturesCount": len(sigs), "isPdf": True})
 
     # ── POST send_internal — отправить документ контрагенту внутри платформы
     if method == "POST" and action == "send_internal":
