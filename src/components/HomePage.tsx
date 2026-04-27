@@ -64,11 +64,28 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const [authModal, setAuthModal] = useState<{ open: boolean; role: "organizer" | "venue" }>({ open: false, role: "organizer" });
   const [topVenues, setTopVenues] = useState<VenueTop[]>([]);
   const [stats, setStats] = useState<HomeStats | null>(null);
+  const [installPrompt, setInstallPrompt] = useState<Event & { prompt: () => void } | null>(null);
+  const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
     fetch(`${VENUES_URL}?action=home_stats`).then(r => r.json()).then(d => setStats(d)).catch(() => {});
     fetch(`${VENUES_URL}?action=top`).then(r => r.json()).then(d => setTopVenues(d.venues || [])).catch(() => {});
+
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e as Event & { prompt: () => void });
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => setInstalled(true));
+    return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
+
+  const handleInstall = () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    installPrompt.prompt = () => {};
+    setInstallPrompt(null);
+  };
 
   const colorMap: Record<string, string> = {
     "neon-purple": "text-neon-purple bg-neon-purple/10 border-neon-purple/20",
@@ -138,6 +155,21 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                 <Icon name="Route" size={20} />
                 Создать тур
               </button>
+              {installPrompt && !installed && (
+                <button
+                  onClick={handleInstall}
+                  className="flex items-center gap-2 px-8 py-4 border border-neon-purple/40 bg-neon-purple/10 text-neon-purple font-oswald font-semibold text-lg rounded-xl hover:bg-neon-purple/20 transition-all duration-200"
+                >
+                  <Icon name="Download" size={20} />
+                  Установить приложение
+                </button>
+              )}
+              {installed && (
+                <div className="flex items-center gap-2 px-6 py-4 border border-neon-green/30 bg-neon-green/10 text-neon-green font-oswald font-semibold text-lg rounded-xl">
+                  <Icon name="CheckCircle2" size={20} />
+                  Приложение установлено
+                </div>
+              )}
             </div>
           </div>
         </div>
