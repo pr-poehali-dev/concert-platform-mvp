@@ -35,7 +35,7 @@ export default function ProjectDetailHeader({
       });
       const data = await res.json();
       if (data.linkId) {
-        const url = `${window.location.origin}/share/${data.linkId}`;
+        const url = `${window.location.origin}/#/share/${data.linkId}`;
         setShareLink(url);
       }
     } finally {

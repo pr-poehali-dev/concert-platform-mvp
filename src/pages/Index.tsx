@@ -17,7 +17,7 @@ const PAGE_KEY = "gl_active_page";
 const CONV_KEY = "gl_chat_conv";
 
 export default function Index() {
-  const m = window.location.pathname.match(/^\/share\/([^/]+)/);
+  const m = window.location.hash.match(/^#\/share\/([^/]+)/);
   if (m) return <SharedProjectPage linkId={m[1]} />;
   return <IndexInner />;
 }
