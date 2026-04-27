@@ -120,6 +120,11 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                           {STATUS_CONFIG[p.status]?.label}
                         </Badge>
                         <span className="text-white/30 text-xs">{p.projectType==="single"?"Концерт":"Тур"}</span>
+                        {p.isPartner && (
+                          <span className="flex items-center gap-1 text-neon-cyan text-[10px] font-medium border border-neon-cyan/25 bg-neon-cyan/8 px-1.5 py-0.5 rounded">
+                            <Icon name="Handshake" size={10}/>Партнёрский
+                          </span>
+                        )}
                         {overdue && (
                           <span className="flex items-center gap-1 text-neon-pink text-xs font-medium animate-pulse">
                             <Icon name="AlertTriangle" size={11}/>просрочено
@@ -128,6 +133,11 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                       </div>
                       <h3 className="font-oswald font-bold text-xl text-white group-hover:text-neon-purple transition-colors truncate">{p.title}</h3>
                       {p.artist && <p className="text-neon-cyan text-sm">{p.artist}</p>}
+                      {p.isPartner && p.ownerName && (
+                        <p className="text-white/30 text-xs flex items-center gap-1 mt-0.5">
+                          <Icon name="User" size={10}/>от {p.ownerName}
+                        </p>
+                      )}
                     </div>
                     <Icon name="ChevronRight" size={16} className="text-white/20 group-hover:text-neon-purple transition-colors shrink-0 mt-1"/>
                   </div>

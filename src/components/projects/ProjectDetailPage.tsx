@@ -10,6 +10,7 @@ import ProjectVenueTab from "@/components/projects/ProjectVenueTab";
 import ProjectCrmTab from "@/components/projects/ProjectCrmTab";
 import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import ProjectDocumentsTab from "@/components/projects/ProjectDocumentsTab";
+import ProjectMembersTab from "@/components/projects/ProjectMembersTab";
 
 interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversationId: string) => void; }
 
@@ -17,7 +18,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const { user } = useAuth();
   const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"company"|"documents">("budget");
+  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"company"|"documents"|"members">("budget");
   const [saving, setSaving] = useState<string|null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -123,6 +124,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const incPlan = project.totalIncomePlan, incFact = project.totalIncomeFact;
   const taxPlan = f.taxPlan, taxFact = f.taxFact;
   const profitPlan = f.profitPlan, profitFact = f.profitFact;
+  const isOwner = project.userId === user?.id;
 
   // Права доступа для сотрудников
   const ap = user?.accessPermissions;
@@ -139,7 +141,8 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
     {id:"venue",     label:"Площадка",        icon:"Building2",     visible: true},
     {id:"crm",       label:"Задачи",          icon:"ClipboardList", visible: true},
     {id:"documents", label:"Документы",       icon:"FileArchive",   visible: true},
-    {id:"company",   label:"Компания",        icon:"Users",         visible: true},
+    {id:"members",   label:"Участники",       icon:"UserCheck",     visible: true},
+    {id:"company",   label:"Компания",        icon:"Building2",     visible: !user?.isEmployee},
   ] as const;
   const TABS = ALL_TABS.filter(t => t.visible);
 
@@ -230,6 +233,11 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
         {/* ── ДОКУМЕНТЫ ── */}
         {activeTab==="documents" && (
           <ProjectDocumentsTab projectId={projectId} />
+        )}
+
+        {/* ── УЧАСТНИКИ ── */}
+        {activeTab==="members" && (
+          <ProjectMembersTab projectId={projectId} isOwner={isOwner} />
         )}
 
         {/* ── КОМПАНИЯ ── */}

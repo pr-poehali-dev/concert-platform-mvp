@@ -108,7 +108,7 @@ def notify(recipient_id: str, title: str, body: str, link_page: str = "chat"):
 
 
 def msg_to_dict(r) -> dict:
-    """Конвертирует строку messages в dict. r = (id, conv_id, sender_id, text, created_at, att_url, att_name, att_size, att_mime)"""
+    """r = (id, conv_id, sender_id, text, created_at, att_url, att_name, att_size, att_mime, sender_name, sender_role, sender_company)"""
     return {
         "id":             str(r[0]),
         "conversationId": str(r[1]),
@@ -120,6 +120,9 @@ def msg_to_dict(r) -> dict:
         "attachmentSize": r[7] or 0,
         "attachmentMime": r[8] or "",
         "attachmentSizeHuman": format_size(r[7] or 0) if (r[7] or 0) > 0 else "",
+        "senderName":    r[9] if len(r) > 9 else "",
+        "senderRole":    r[10] if len(r) > 10 else "",
+        "senderCompany": r[11] if len(r) > 11 else "",
     }
 
 
@@ -178,11 +181,12 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
         cur.execute(
-            f"""SELECT id, conversation_id, sender_id, text, created_at,
-                       attachment_url, attachment_name, attachment_size, attachment_mime
-                FROM {SCHEMA}.messages
-                WHERE conversation_id = %s
-                ORDER BY created_at ASC LIMIT %s""",
+            f"""SELECT m.id, m.conversation_id, m.sender_id, m.text, m.created_at,
+                       m.attachment_url, m.attachment_name, m.attachment_size, m.attachment_mime,
+                       m.sender_name, m.sender_role, m.sender_company
+                FROM {SCHEMA}.messages m
+                WHERE m.conversation_id = %s
+                ORDER BY m.created_at ASC LIMIT %s""",
             (conv_id, limit),
         )
         rows = cur.fetchall()
@@ -280,16 +284,17 @@ def handler(event: dict, context) -> dict:
 
     # ── POST send ──────────────────────────────────────────────────────────
     if method == "POST" and action == "send":
-        body         = json.loads(event.get("body") or "{}")
-        conv_id      = body.get("conversationId", "")
-        sender_id    = body.get("senderId", "")
-        text         = (body.get("text") or "").strip()
-        sender_name  = (body.get("senderName") or "Пользователь").strip()
-        # Вложение (опционально — уже загруженный файл)
-        att_url      = body.get("attachmentUrl", "")
-        att_name     = body.get("attachmentName", "")
-        att_size     = int(body.get("attachmentSize", 0))
-        att_mime     = body.get("attachmentMime", "")
+        body           = json.loads(event.get("body") or "{}")
+        conv_id        = body.get("conversationId", "")
+        sender_id      = body.get("senderId", "")
+        text           = (body.get("text") or "").strip()
+        sender_name    = (body.get("senderName") or "").strip()
+        sender_role    = (body.get("senderRole") or "").strip()
+        sender_company = (body.get("senderCompany") or "").strip()
+        att_url        = body.get("attachmentUrl", "")
+        att_name       = body.get("attachmentName", "")
+        att_size       = int(body.get("attachmentSize", 0))
+        att_mime       = body.get("attachmentMime", "")
 
         if not conv_id or not sender_id:
             return err("conversationId, senderId обязательны")
@@ -298,6 +303,18 @@ def handler(event: dict, context) -> dict:
 
         conn = get_conn()
         cur = conn.cursor()
+
+        # Если sender_name не передан — подтягиваем из БД вместе с ролью и компанией
+        if not sender_name:
+            cur.execute(
+                f"""SELECT name, role, COALESCE(legal_name, '') FROM {SCHEMA}.users WHERE id=%s""",
+                (sender_id,)
+            )
+            urow = cur.fetchone()
+            if urow:
+                sender_name    = urow[0] or ""
+                sender_role    = sender_role or urow[1] or ""
+                sender_company = sender_company or urow[2] or ""
 
         cur.execute(
             f"SELECT organizer_id, venue_user_id FROM {SCHEMA}.conversations WHERE id = %s",
@@ -312,22 +329,21 @@ def handler(event: dict, context) -> dict:
         is_organizer = sender_id == organizer_id
         recipient_id = venue_user_id if is_organizer else organizer_id
 
-        safe_att_url  = att_url.replace("'", "''")
-        safe_att_name = att_name.replace("'", "''")
-        safe_att_mime = att_mime.replace("'", "''")
-
         cur.execute(
             f"""INSERT INTO {SCHEMA}.messages
-                (conversation_id, sender_id, text, attachment_url, attachment_name, attachment_size, attachment_mime)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (conversation_id, sender_id, text,
+                 attachment_url, attachment_name, attachment_size, attachment_mime,
+                 sender_name, sender_role, sender_company)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, created_at""",
-            (conv_id, sender_id, text or "", att_url, att_name, att_size, att_mime),
+            (conv_id, sender_id, text or "",
+             att_url, att_name, att_size, att_mime,
+             sender_name, sender_role, sender_company),
         )
         msg_row = cur.fetchone()
         msg_id     = str(msg_row[0])
         created_at = str(msg_row[1])
 
-        # Превью для last_message в диалоге
         last_msg_preview = text if text else f"📎 {att_name}"
         unread_col = "venue_unread" if is_organizer else "organizer_unread"
 
@@ -341,12 +357,15 @@ def handler(event: dict, context) -> dict:
         conn.close()
 
         notif_body = text[:80] if text else f"Прикреплён файл: {att_name}"
-        notify(recipient_id, f"Новое сообщение от {sender_name}", notif_body)
+        notify(recipient_id, f"Новое сообщение от {sender_name or 'пользователя'}", notif_body)
 
         return ok({
             "id":             msg_id,
             "conversationId": conv_id,
             "senderId":       sender_id,
+            "senderName":     sender_name,
+            "senderRole":     sender_role,
+            "senderCompany":  sender_company,
             "text":           text or "",
             "createdAt":      created_at,
             "attachmentUrl":  att_url,

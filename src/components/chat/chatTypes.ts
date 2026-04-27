@@ -60,6 +60,23 @@ export interface Message {
   attachmentSize?: number;
   attachmentMime?: string;
   attachmentSizeHuman?: string;
+  senderName?: string;
+  senderRole?: string;
+  senderCompany?: string;
+}
+
+export function getRoleLabel(role?: string): string {
+  if (role === "venue") return "Площадка";
+  if (role === "organizer") return "Организатор";
+  if (role === "employee") return "Сотрудник";
+  return "";
+}
+
+export function getRoleColor(role?: string): string {
+  if (role === "venue") return "text-neon-cyan border-neon-cyan/30 bg-neon-cyan/8";
+  if (role === "organizer") return "text-neon-purple border-neon-purple/30 bg-neon-purple/8";
+  if (role === "employee") return "text-neon-green border-neon-green/30 bg-neon-green/8";
+  return "text-white/40 border-white/10 bg-white/5";
 }
 
 export interface PendingAttachment {

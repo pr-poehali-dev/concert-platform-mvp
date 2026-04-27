@@ -152,25 +152,56 @@ def handler(event: dict, context) -> dict:
         uid = params.get("user_id", "")
         if not uid: return err("user_id required")
         conn = get_conn(); cur = conn.cursor()
+        # Свои проекты
         cur.execute(
             f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
                        city,venue_name,description,tax_system,total_expenses_plan,
                        total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
                 FROM {SCHEMA}.projects WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
-        rows = cur.fetchall()
-        # Получаем project_id-шники с просроченными задачами одним запросом
+        own_rows = cur.fetchall()
+        own_ids = {str(r[0]) for r in own_rows}
+
+        # Проекты где пользователь — партнёр
+        cur.execute(
+            f"""SELECT p.id,p.user_id,p.title,p.artist,p.project_type,p.status,p.date_start,p.date_end,
+                       p.city,p.venue_name,p.description,p.tax_system,p.total_expenses_plan,
+                       p.total_expenses_fact,p.total_income_plan,p.total_income_fact,p.created_at,p.updated_at
+                FROM {SCHEMA}.projects p
+                JOIN {SCHEMA}.project_members pm ON pm.project_id = p.id
+                WHERE pm.user_id=%s AND pm.role != 'removed'
+                ORDER BY p.created_at DESC""", (uid,))
+        partner_rows = cur.fetchall()
+
         cur.execute(
             f"""SELECT DISTINCT project_id FROM {SCHEMA}.project_tasks
-                WHERE status NOT IN ('done')
-                  AND due_date IS NOT NULL
-                  AND due_date < CURRENT_DATE
+                WHERE status NOT IN ('done') AND due_date IS NOT NULL AND due_date < CURRENT_DATE
                   AND project_id IN (SELECT id FROM {SCHEMA}.projects WHERE user_id=%s)""", (uid,))
         overdue_ids = {str(r[0]) for r in cur.fetchall()}
+
+        # Имена владельцев партнёрских проектов
+        partner_owner_ids = [str(r[1]) for r in partner_rows if str(r[0]) not in own_ids]
+        owner_names = {}
+        if partner_owner_ids:
+            placeholders = ",".join(["%s"] * len(partner_owner_ids))
+            cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE id IN ({placeholders})", partner_owner_ids)
+            for row in cur.fetchall():
+                owner_names[str(row[0])] = row[1]
+
         conn.close()
         projects = []
-        for r in rows:
+        for r in own_rows:
             p = row_to_project(r)
             p["hasOverdueTasks"] = p["id"] in overdue_ids
+            p["isPartner"] = False
+            p["ownerName"] = None
+            projects.append(p)
+        for r in partner_rows:
+            if str(r[0]) in own_ids:
+                continue
+            p = row_to_project(r)
+            p["hasOverdueTasks"] = False
+            p["isPartner"] = True
+            p["ownerName"] = owner_names.get(str(r[1]), "")
             projects.append(p)
         return ok({"projects": projects})
 
@@ -1418,5 +1449,132 @@ def handler(event: dict, context) -> dict:
             project["documents"] = []
         conn.close()
         return ok({"project": project, "showFiles": show_files})
+
+    # ── GET members — список участников проекта ───────────────────────────
+    if method == "GET" and action == "members":
+        project_id = params.get("project_id", "")
+        user_id    = params.get("user_id", "")
+        if not project_id: return err("project_id required")
+        conn = get_conn(); cur = conn.cursor()
+        # Проверяем доступ: владелец или участник
+        cur.execute(
+            f"""SELECT 1 FROM {SCHEMA}.projects WHERE id=%s AND user_id=%s
+                UNION
+                SELECT 1 FROM {SCHEMA}.project_members WHERE project_id=%s AND user_id=%s""",
+            (project_id, user_id, project_id, user_id)
+        )
+        if not cur.fetchone(): conn.close(); return err("Нет доступа", 403)
+
+        cur.execute(
+            f"""SELECT pm.id, pm.user_id, pm.role, pm.invited_at,
+                       u.name, u.email, u.role as user_role,
+                       COALESCE(u.legal_name, '') as company,
+                       COALESCE(u.logo_url, '') as logo_url,
+                       COALESCE(u.avatar, '') as avatar
+                FROM {SCHEMA}.project_members pm
+                JOIN {SCHEMA}.users u ON u.id = pm.user_id
+                WHERE pm.project_id = %s
+                ORDER BY pm.invited_at""",
+            (project_id,)
+        )
+        members = [{"id":str(r[0]),"userId":str(r[1]),"role":r[2],"invitedAt":str(r[3]),
+                    "name":r[4],"email":r[5],"userRole":r[6],"company":r[7],
+                    "logoUrl":r[8],"avatar":r[9]} for r in cur.fetchall()]
+
+        # Также добавляем владельца
+        cur.execute(
+            f"""SELECT u.id, u.name, u.email, u.role, COALESCE(u.legal_name,'') as company,
+                       COALESCE(u.logo_url,'') as logo_url, COALESCE(u.avatar,'') as avatar
+                FROM {SCHEMA}.projects p JOIN {SCHEMA}.users u ON u.id=p.user_id
+                WHERE p.id=%s""",
+            (project_id,)
+        )
+        owner_row = cur.fetchone()
+        conn.close()
+        owner = None
+        if owner_row:
+            owner = {"userId":str(owner_row[0]),"name":owner_row[1],"email":owner_row[2],
+                     "userRole":owner_row[3],"company":owner_row[4],
+                     "logoUrl":owner_row[5],"avatar":owner_row[6],"role":"owner"}
+        return ok({"members": members, "owner": owner})
+
+    # ── POST invite_member — пригласить партнёра в проект ─────────────────
+    if method == "POST" and action == "invite_member":
+        b = json.loads(event.get("body") or "{}")
+        project_id     = b.get("projectId", "")
+        inviter_id     = b.get("userId", "")
+        partner_email  = (b.get("email") or "").strip().lower()
+        partner_role   = b.get("role", "partner")  # partner | viewer
+
+        if not project_id: return err("projectId required")
+        if "@" not in partner_email: return err("Некорректный email")
+
+        conn = get_conn(); cur = conn.cursor()
+        # Только владелец может приглашать
+        cur.execute(f"SELECT title, user_id FROM {SCHEMA}.projects WHERE id=%s", (project_id,))
+        proj_row = cur.fetchone()
+        if not proj_row: conn.close(); return err("Проект не найден", 404)
+        proj_title, owner_id = proj_row[0], str(proj_row[1])
+        if owner_id != inviter_id: conn.close(); return err("Только владелец может приглашать участников", 403)
+
+        # Находим партнёра
+        cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE LOWER(email)=%s", (partner_email,))
+        partner = cur.fetchone()
+        if not partner: conn.close(); return err("Пользователь с таким email не найден на платформе", 404)
+        partner_id, partner_name = str(partner[0]), partner[1]
+
+        if partner_id == inviter_id: conn.close(); return err("Нельзя пригласить самого себя")
+
+        # Не добавляем дубли
+        cur.execute(
+            f"SELECT id FROM {SCHEMA}.project_members WHERE project_id=%s AND user_id=%s",
+            (project_id, partner_id)
+        )
+        if cur.fetchone(): conn.close(); return err("Этот пользователь уже участник проекта")
+
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.project_members (project_id, user_id, role, invited_by)
+                VALUES (%s, %s, %s, %s) RETURNING id""",
+            (project_id, partner_id, partner_role, inviter_id)
+        )
+        member_id = str(cur.fetchone()[0])
+
+        # Получаем имя пригласившего
+        cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id=%s", (inviter_id,))
+        inviter_row = cur.fetchone()
+        inviter_name = inviter_row[0] if inviter_row else "Организатор"
+
+        # Уведомление партнёру
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.notifications (user_id, type, title, body, link_page)
+                VALUES (%s, 'system', %s, %s, 'projects')""",
+            (partner_id,
+             "Вас добавили в проект",
+             f"{inviter_name} открыл вам доступ к проекту «{proj_title}»")
+        )
+        conn.commit(); conn.close()
+        return ok({"memberId": member_id, "partnerName": partner_name})
+
+    # ── POST remove_member — удалить участника из проекта ─────────────────
+    if method == "POST" and action == "remove_member":
+        b = json.loads(event.get("body") or "{}")
+        project_id = b.get("projectId", "")
+        user_id    = b.get("userId", "")
+        member_id  = b.get("memberId", "")
+        if not all([project_id, user_id, member_id]): return err("projectId, userId, memberId required")
+
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"SELECT user_id FROM {SCHEMA}.projects WHERE id=%s", (project_id,))
+        proj_row = cur.fetchone()
+        if not proj_row: conn.close(); return err("Проект не найден", 404)
+        owner_id = str(proj_row[0])
+        if owner_id != user_id: conn.close(); return err("Только владелец может удалять участников", 403)
+
+        cur.execute(
+            f"UPDATE {SCHEMA}.project_members SET role='removed' WHERE id=%s AND project_id=%s",
+            (member_id, project_id)
+        )
+        conn.commit(); conn.close()
+        return ok({"removed": True})
 
     return err("Not found", 404)

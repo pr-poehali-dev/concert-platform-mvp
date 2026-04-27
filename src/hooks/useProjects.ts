@@ -34,6 +34,8 @@ export interface Project {
   expenses?: Expense[];
   incomeLines?: IncomeLine[];
   hasOverdueTasks?: boolean;
+  isPartner?: boolean;
+  ownerName?: string | null;
 }
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
