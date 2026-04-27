@@ -121,7 +121,7 @@
   }
 
   .glass-strong {
-    background: rgba(255, 255, 255, 0.08);
+    background: #13131f;
     backdrop-filter: blur(24px);
     border: 1px solid rgba(255, 255, 255, 0.12);
   }
