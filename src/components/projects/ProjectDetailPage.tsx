@@ -85,7 +85,15 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
     await api("update_income",{id,...fields});
     setProject(p=>{
       if(!p||!p.incomeLines) return p;
-      const incomeLines = p.incomeLines.map(i=>i.id===id?{...i,...fields,totalPlan:(fields.ticketCount??i.ticketCount)*(fields.ticketPrice??i.ticketPrice),totalFact:(fields.soldCount??i.soldCount)*(fields.ticketPrice??i.ticketPrice)}:i);
+      const incomeLines = p.incomeLines.map(i=>{
+        if(i.id!==id) return i;
+        const merged = {...i,...fields};
+        return {
+          ...merged,
+          totalPlan: merged.ticketCount * merged.ticketPrice,
+          totalFact: merged.soldCount  * merged.ticketPrice,
+        };
+      });
       const tp = incomeLines.reduce((s,i)=>s+i.totalPlan,0);
       const tf = incomeLines.reduce((s,i)=>s+i.totalFact,0);
       return {...p,incomeLines,totalIncomePlan:tp,totalIncomeFact:tf};
