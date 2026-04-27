@@ -174,6 +174,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
             venues={myVenues}
             loading={venuesLoading}
             onAddVenue={() => setShowVenueSetup(true)}
+            onReload={loadMyVenues}
           />
         )}
 

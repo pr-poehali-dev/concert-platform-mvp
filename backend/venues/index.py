@@ -306,27 +306,96 @@ def handler(event: dict, context) -> dict:
 
     # ── POST update ───────────────────────────────────────────────────────
     if method == "POST" and action == "update":
-        body = json.loads(event.get("body") or "{}")
+        body    = json.loads(event.get("body") or "{}")
         venue_id = body.get("venueId", "")
-        user_id = body.get("userId", "")
-        if not venue_id or not user_id:
-            return err("venueId и userId обязательны")
+        user_id  = body.get("userId", "")
+        if not venue_id:
+            return err("venueId обязателен")
 
+        conn = get_conn(); cur = conn.cursor()
+
+        # Проверяем владение (userId опционален — используем сессию если не передан)
+        owner_check = user_id if user_id else None
+        if owner_check:
+            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s", (venue_id, owner_check))
+        else:
+            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+        if not cur.fetchone():
+            conn.close(); return err("Площадка не найдена или нет прав", 403)
+
+        # Основные поля
         fields = {}
         for key, col in [("name","name"),("city","city"),("address","address"),("venueType","venue_type"),
                          ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags")]:
             if key in body:
                 fields[col] = body[key]
-        if not fields:
-            return err("Нет данных для обновления")
 
-        set_clause = ", ".join(f"{c} = %s" for c in fields)
-        values = list(fields.values()) + [venue_id, user_id]
-        conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(f"UPDATE {SCHEMA}.venues SET {set_clause} WHERE id = %s AND user_id = %s", values)
-        conn.commit()
-        conn.close()
+        s3 = get_s3()
+
+        # Новые фотографии
+        new_photos_b64 = body.get("photosBase64") or []
+        uploaded_photo_urls = []
+        for ph in new_photos_b64:
+            if not ph.get("data"): continue
+            ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
+            url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
+            uploaded_photo_urls.append(url)
+
+        # Существующие фото (те что оставил пользователь)
+        existing_photos = body.get("existingPhotos") or []
+        all_photos = existing_photos + uploaded_photo_urls
+
+        # Обновляем главное фото
+        if all_photos:
+            fields["photo_url"] = all_photos[0]
+        elif body.get("existingPhotos") is not None:
+            fields["photo_url"] = ""
+
+        # Райдер
+        if body.get("riderBase64"):
+            rider_orig = body.get("riderFileName", "rider.pdf")
+            ext = rider_orig.rsplit(".", 1)[-1] if "." in rider_orig else "pdf"
+            fields["rider_url"]  = upload_file(s3, body["riderBase64"], body.get("riderMime", "application/pdf"), "riders", ext)
+            fields["rider_name"] = rider_orig
+        elif body.get("clearRider"):
+            fields["rider_url"]  = ""
+            fields["rider_name"] = ""
+
+        # Схема
+        if body.get("schemaBase64"):
+            schema_orig = body.get("schemaFileName", "schema.pdf")
+            ext = schema_orig.rsplit(".", 1)[-1] if "." in schema_orig else "pdf"
+            fields["schema_url"]  = upload_file(s3, body["schemaBase64"], body.get("schemaMime", "application/pdf"), "schemas", ext)
+            fields["schema_name"] = schema_orig
+        elif body.get("clearSchema"):
+            fields["schema_url"]  = ""
+            fields["schema_name"] = ""
+
+        # Сохраняем основные поля
+        if fields:
+            set_clause = ", ".join(f"{c} = %s" for c in fields)
+            cur.execute(f"UPDATE {SCHEMA}.venues SET {set_clause} WHERE id = %s", list(fields.values()) + [venue_id])
+
+        # Обновляем фото в venue_photos
+        if body.get("existingPhotos") is not None or uploaded_photo_urls:
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
+            for i, url in enumerate(all_photos):
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
+                    (venue_id, url, i)
+                )
+
+        # Обновляем занятые даты
+        if "busyDates" in body:
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
+            for bd in (body["busyDates"] or []):
+                if bd.get("date"):
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
+                        (venue_id, bd["date"], bd.get("note", ""))
+                    )
+
+        conn.commit(); conn.close()
         return ok({"success": True})
 
     # ── GET home_stats — реальная статистика для главной страницы ─────────

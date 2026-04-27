@@ -373,18 +373,25 @@ def handler(event: dict, context) -> dict:
             (recipient_email,)
         )
         recipient_row = cur.fetchone()
+        # doc_id для signature_requests — оригинальный, но получатель будет видеть свою копию
+        sig_doc_id = doc_id  # ID документа который подписывается (может быть копия)
+
         if recipient_row:
             rec_user_id, rec_name = str(recipient_row[0]), recipient_row[1]
             if not recipient_name:
                 recipient_name = rec_name
-            # Копируем документ получателю если у него его ещё нет
+            # Ищем уже существующую копию у получателя
             cur.execute(
                 f"""SELECT id FROM {SCHEMA}.user_documents
                     WHERE file_url = (SELECT file_url FROM {SCHEMA}.user_documents WHERE id = %s)
                       AND user_id = %s""",
                 (doc_id, rec_user_id)
             )
-            if not cur.fetchone():
+            existing_copy = cur.fetchone()
+            if existing_copy:
+                sig_doc_id = str(existing_copy[0])
+            else:
+                # Копируем документ получателю и используем ID копии
                 cur.execute(
                     f"""SELECT category, name, file_url, file_size, mime_type
                         FROM {SCHEMA}.user_documents WHERE id = %s""",
@@ -395,10 +402,13 @@ def handler(event: dict, context) -> dict:
                     cur.execute(
                         f"""INSERT INTO {SCHEMA}.user_documents
                             (user_id, user_role, category, name, file_url, file_size, mime_type, note)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id""",
                         (rec_user_id, 'organizer', orig[0], orig[1], orig[2], orig[3], orig[4],
                          f"Получен от {user_name} для подписания" + (f": {message}" if message else ""))
                     )
+                    new_doc_row = cur.fetchone()
+                    if new_doc_row:
+                        sig_doc_id = str(new_doc_row[0])
         else:
             if not recipient_name:
                 recipient_name = recipient_email
@@ -407,7 +417,7 @@ def handler(event: dict, context) -> dict:
             f"""INSERT INTO {SCHEMA}.signature_requests
                 (document_id, sender_user_id, recipient_email, recipient_name, message)
                 VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-            (doc_id, user_id, recipient_email, recipient_name, message)
+            (sig_doc_id, user_id, recipient_email, recipient_name, message)
         )
         req_id = str(cur.fetchone()[0])
         conn.commit(); conn.close()

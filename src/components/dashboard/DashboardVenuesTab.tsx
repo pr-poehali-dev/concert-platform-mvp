@@ -1,12 +1,18 @@
+import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import VenueEditModal, { type VenueData } from "@/components/VenueEditModal";
 
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/2d0113c6-c12e-42b6-9cd4-2141cf50ef4f.jpg";
 
 interface Venue {
   id: string; name: string; city: string; venueType: string;
   capacity: number; priceFrom: number; photoUrl: string;
+  photos?: string[];
   tags: string[]; rating: number; reviewsCount: number;
+  description?: string; address?: string;
+  riderUrl?: string; riderName?: string;
+  schemaUrl?: string; schemaName?: string;
   busyDates?: { date: string; note: string }[];
 }
 
@@ -14,9 +20,33 @@ interface DashboardVenuesTabProps {
   venues: Venue[];
   loading: boolean;
   onAddVenue: () => void;
+  onReload?: () => void;
 }
 
-export default function DashboardVenuesTab({ venues, loading, onAddVenue }: DashboardVenuesTabProps) {
+export default function DashboardVenuesTab({ venues, loading, onAddVenue, onReload }: DashboardVenuesTabProps) {
+  const [editVenue, setEditVenue] = useState<VenueData | null>(null);
+
+  const openEdit = (v: Venue) => {
+    setEditVenue({
+      id:          v.id,
+      name:        v.name,
+      city:        v.city,
+      address:     v.address     || "",
+      venueType:   v.venueType,
+      capacity:    v.capacity,
+      priceFrom:   v.priceFrom,
+      description: v.description || "",
+      tags:        v.tags        || [],
+      photos:      v.photos      || (v.photoUrl ? [v.photoUrl] : []),
+      photoUrl:    v.photoUrl    || "",
+      riderUrl:    v.riderUrl    || "",
+      riderName:   v.riderName   || "",
+      schemaUrl:   v.schemaUrl   || "",
+      schemaName:  v.schemaName  || "",
+      busyDates:   v.busyDates   || [],
+    });
+  };
+
   return (
     <div className="animate-fade-in">
       <div className="flex items-center justify-between mb-6">
@@ -63,8 +93,11 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue }: Dash
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <button className="flex-1 py-1.5 text-xs glass text-white/50 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition-colors">
-                    Редактировать
+                  <button
+                    onClick={() => openEdit(v)}
+                    className="flex-1 py-1.5 text-xs bg-neon-purple/10 text-neon-purple hover:bg-neon-purple/20 rounded-lg border border-neon-purple/30 hover:border-neon-purple/50 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    <Icon name="Pencil" size={12} />Редактировать
                   </button>
                   <button className="px-3 py-1.5 text-xs bg-neon-purple/20 text-neon-purple rounded-lg border border-neon-purple/30 hover:bg-neon-purple/30 transition-colors">
                     <Icon name="Eye" size={13} />
@@ -74,6 +107,14 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue }: Dash
             </div>
           ))}
         </div>
+      )}
+
+      {editVenue && (
+        <VenueEditModal
+          venue={editVenue}
+          onClose={() => setEditVenue(null)}
+          onSaved={() => { setEditVenue(null); onReload?.(); }}
+        />
       )}
     </div>
   );
