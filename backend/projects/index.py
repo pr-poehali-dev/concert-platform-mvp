@@ -157,8 +157,22 @@ def handler(event: dict, context) -> dict:
                        city,venue_name,description,tax_system,total_expenses_plan,
                        total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
                 FROM {SCHEMA}.projects WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
-        rows = cur.fetchall(); conn.close()
-        return ok({"projects": [row_to_project(r) for r in rows]})
+        rows = cur.fetchall()
+        # Получаем project_id-шники с просроченными задачами одним запросом
+        cur.execute(
+            f"""SELECT DISTINCT project_id FROM {SCHEMA}.project_tasks
+                WHERE status NOT IN ('done')
+                  AND due_date IS NOT NULL
+                  AND due_date < CURRENT_DATE
+                  AND project_id IN (SELECT id FROM {SCHEMA}.projects WHERE user_id=%s)""", (uid,))
+        overdue_ids = {str(r[0]) for r in cur.fetchall()}
+        conn.close()
+        projects = []
+        for r in rows:
+            p = row_to_project(r)
+            p["hasOverdueTasks"] = p["id"] in overdue_ids
+            projects.append(p)
+        return ok({"projects": projects})
 
     # GET detail
     if method == "GET" and action == "detail":
@@ -1117,17 +1131,107 @@ def handler(event: dict, context) -> dict:
              priority, due_date, order))
         task_id = str(cur.fetchone()[0])
         conn.commit(); conn.close()
-        # Уведомить сотрудника если назначен
+        # Отправить DM и уведомление сотруднику если назначен
         if assigned_to:
-            # Получаем email сотрудника чтобы найти user_id — или шлём на employees напрямую
             conn2 = get_conn(); cur2 = conn2.cursor()
-            cur2.execute(f"SELECT name FROM {SCHEMA}.employees WHERE id=%s", (assigned_to,))
-            emp = cur2.fetchone(); conn2.close()
+            cur2.execute(f"SELECT name, avatar, avatar_color FROM {SCHEMA}.employees WHERE id=%s", (assigned_to,))
+            emp = cur2.fetchone()
+            # Имя и аватар владельца
+            cur2.execute(f"SELECT name, avatar, avatar_color FROM {SCHEMA}.users WHERE id=%s", (company_uid,))
+            owner = cur2.fetchone()
+            conn2.close()
             if emp:
+                PRIORITY_LABELS = {"low": "Низкий", "medium": "Средний", "high": "Высокий", "urgent": "Срочно!"}
+                due_str = f"\n📅 Срок: {due_date}" if due_date else ""
+                desc_str = f"\n📝 {description}" if description else ""
+                dm_text = (
+                    f"📋 Тебе назначена новая задача:\n\n"
+                    f"*{title}*{desc_str}\n\n"
+                    f"⚡ Приоритет: {PRIORITY_LABELS.get(priority, priority)}{due_str}\n\n"
+                    f"Пожалуйста, возьми задачу в работу."
+                )
+                # Отправляем DM через employees функцию
+                EMPLOYEES_URL = "https://functions.poehali.dev/cc27106d-e3a4-4d7a-b6c2-47eb9365104e"
+                owner_name = owner[0] if owner else "Руководитель"
+                owner_avatar = owner[1] if owner else ""
+                owner_color = owner[2] if owner else "from-neon-purple to-neon-cyan"
+                dm_payload = json.dumps({
+                    "companyUserId": company_uid,
+                    "senderId": company_uid,
+                    "senderType": "user",
+                    "recipientId": assigned_to,
+                    "text": dm_text,
+                }).encode()
+                try:
+                    req = urllib.request.Request(
+                        f"{EMPLOYEES_URL}?action=dm_send",
+                        data=dm_payload,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    urllib.request.urlopen(req, timeout=8)
+                except Exception as e:
+                    print(f"[DM] send error: {e}")
                 send_notification(company_uid, "booking",
                     f"Новая задача: {title}",
                     f"Назначена на {emp[0]}", "projects")
         return ok({"taskId": task_id}, 201)
+
+    # GET check_overdue_tasks — напоминания по задачам не взятым в работу (вызывается по расписанию)
+    if method == "GET" and action == "check_overdue_tasks":
+        conn = get_conn(); cur = conn.cursor()
+        # Задачи в статусе todo старше 12 часов, с назначенным исполнителем
+        cur.execute(
+            f"""SELECT t.id, t.company_user_id, t.assigned_to, t.title, t.description,
+                       t.priority, t.due_date, t.created_at,
+                       e.name as emp_name, e.avatar, e.avatar_color,
+                       p.title as proj_title
+                FROM {SCHEMA}.project_tasks t
+                JOIN {SCHEMA}.employees e ON e.id = t.assigned_to
+                LEFT JOIN {SCHEMA}.projects p ON p.id = t.project_id
+                WHERE t.status = 'todo'
+                  AND t.assigned_to IS NOT NULL
+                  AND t.created_at < NOW() - INTERVAL '12 hours'
+                  AND (t.last_reminder_at IS NULL OR t.last_reminder_at < NOW() - INTERVAL '12 hours')
+            """)
+        rows = cur.fetchall()
+        reminded = 0
+        EMPLOYEES_URL_INNER = "https://functions.poehali.dev/cc27106d-e3a4-4d7a-b6c2-47eb9365104e"
+        PRIORITY_LABELS = {"low": "Низкий", "medium": "Средний", "high": "Высокий", "urgent": "Срочно!"}
+        for r in rows:
+            task_id_r, company_uid_r, assigned_to_r = str(r[0]), str(r[1]), str(r[2])
+            t_title, t_desc, t_priority, t_due = r[3], r[4], r[5], r[6]
+            due_str = f"\n📅 Срок: {t_due}" if t_due else ""
+            reminder_text = (
+                f"⏰ Напоминание: задача всё ещё ожидает тебя!\n\n"
+                f"*{t_title}*{due_str}\n\n"
+                f"⚡ Приоритет: {PRIORITY_LABELS.get(t_priority, t_priority)}\n\n"
+                f"Пожалуйста, возьми задачу в работу."
+            )
+            try:
+                dm_payload = json.dumps({
+                    "companyUserId": company_uid_r,
+                    "senderId": company_uid_r,
+                    "senderType": "user",
+                    "recipientId": assigned_to_r,
+                    "text": reminder_text,
+                }).encode()
+                req = urllib.request.Request(
+                    f"{EMPLOYEES_URL_INNER}?action=dm_send",
+                    data=dm_payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                urllib.request.urlopen(req, timeout=8)
+                # Обновляем время последнего напоминания
+                cur.execute(
+                    f"UPDATE {SCHEMA}.project_tasks SET last_reminder_at = NOW() WHERE id = %s",
+                    (task_id_r,))
+                reminded += 1
+            except Exception as e:
+                print(f"[Reminder] {task_id_r}: {e}")
+        conn.commit(); conn.close()
+        return ok({"reminded": reminded})
 
     # POST project_task_update — обновить задачу
     if method == "POST" and action == "project_task_update":

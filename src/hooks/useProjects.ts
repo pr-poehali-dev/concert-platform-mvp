@@ -33,6 +33,7 @@ export interface Project {
   finance: Finance;
   expenses?: Expense[];
   incomeLines?: IncomeLine[];
+  hasOverdueTasks?: boolean;
 }
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {

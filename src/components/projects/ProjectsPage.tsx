@@ -108,9 +108,10 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
             {filtered.map(p=>{
               const f = p.finance;
               const profitPositive = f.profitPlan >= 0;
+              const overdue = p.hasOverdueTasks;
               return (
                 <div key={p.id} onClick={()=>setOpenProjectId(p.id)}
-                  className="glass rounded-2xl p-5 cursor-pointer hover-lift group transition-all border border-white/5 hover:border-neon-purple/20">
+                  className={`glass rounded-2xl p-5 cursor-pointer hover-lift group transition-all border hover:border-neon-purple/20 ${overdue ? "border-neon-pink/40 animate-pulse-border" : "border-white/5"}`}>
                   {/* Card header */}
                   <div className="flex items-start justify-between mb-3 gap-2">
                     <div className="flex-1 min-w-0">
@@ -119,6 +120,11 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                           {STATUS_CONFIG[p.status]?.label}
                         </Badge>
                         <span className="text-white/30 text-xs">{p.projectType==="single"?"Концерт":"Тур"}</span>
+                        {overdue && (
+                          <span className="flex items-center gap-1 text-neon-pink text-xs font-medium animate-pulse">
+                            <Icon name="AlertTriangle" size={11}/>просрочено
+                          </span>
+                        )}
                       </div>
                       <h3 className="font-oswald font-bold text-xl text-white group-hover:text-neon-purple transition-colors truncate">{p.title}</h3>
                       {p.artist && <p className="text-neon-cyan text-sm">{p.artist}</p>}
