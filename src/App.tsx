@@ -15,6 +15,12 @@ import VenueLoginPage from "./pages/VenueLoginPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
 import SharedProjectPage from "./pages/SharedProjectPage";
+import { useParams } from "react-router-dom";
+
+function SharedProjectRoute() {
+  const { linkId } = useParams<{ linkId: string }>();
+  return <SharedProjectPage linkId={linkId || ""} />;
+}
 
 const queryClient = new QueryClient();
 
@@ -35,7 +41,7 @@ const App = () => (
             <Route path="/login/venue" element={<VenueLoginPage />} />
             <Route path="/login/admin" element={<AdminLoginPage />} />
             <Route path="/verify" element={<VerifyEmailPage />} />
-            <Route path="/share/:linkId" element={<SharedProjectPage />} />
+            <Route path="/share/:linkId" element={<SharedProjectRoute />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
