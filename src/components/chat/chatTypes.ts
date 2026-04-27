@@ -47,6 +47,9 @@ export interface Conversation {
   unread: number;
   isOrganizer: boolean;
   organizerName: string;
+  organizerCompany?: string;
+  venueCompany?: string;
+  sidebarName?: string; // название компании контрагента для сайдбара
 }
 
 export interface Message {
@@ -62,7 +65,16 @@ export interface Message {
   attachmentSizeHuman?: string;
   senderName?: string;
   senderRole?: string;
-  senderCompany?: string;
+  senderCompany?: string;   // формат: "Компания|Должность" или просто "Компания"
+  senderPosition?: string;  // должность сотрудника (уже распарсена)
+}
+
+// Парсит senderCompany — возвращает { company, position }
+export function parseSenderCompany(raw?: string): { company: string; position: string } {
+  if (!raw) return { company: "", position: "" };
+  const idx = raw.indexOf("|");
+  if (idx === -1) return { company: raw, position: "" };
+  return { company: raw.slice(0, idx), position: raw.slice(idx + 1) };
 }
 
 export function getRoleLabel(role?: string): string {

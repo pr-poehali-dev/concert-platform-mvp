@@ -205,17 +205,25 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
                   >
                     <Icon name="ArrowLeft" size={16} />
                   </button>
-                  <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(activeConv.isOrganizer ? activeConv.venueName : (activeConv.organizerName || "Организатор"))} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
-                    {getInitial(activeConv.isOrganizer ? activeConv.venueName : (activeConv.organizerName || "Организатор"))}
-                  </div>
-                  <div>
-                    <h3 className="font-oswald font-semibold text-white">
-                      {activeConv.isOrganizer ? activeConv.venueName : (activeConv.organizerName || "Организатор")}
-                    </h3>
-                    <p className="text-xs text-white/40">
-                      {activeConv.isOrganizer ? "Концертная площадка" : "Организатор тура"}
-                    </p>
-                  </div>
+                  {(() => {
+                    const companyName = activeConv.sidebarName
+                      || (activeConv.isOrganizer
+                        ? activeConv.venueCompany || activeConv.venueName
+                        : activeConv.organizerCompany || activeConv.organizerName || "Организатор");
+                    return (
+                      <>
+                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(companyName)} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
+                          {getInitial(companyName)}
+                        </div>
+                        <div>
+                          <h3 className="font-oswald font-semibold text-white">{companyName}</h3>
+                          <p className="text-xs text-white/40">
+                            {activeConv.isOrganizer ? "Концертная площадка" : "Организатор тура"}
+                          </p>
+                        </div>
+                      </>
+                    );
+                  })()}
                   <div className="ml-auto flex items-center gap-2">
                     <button
                       onClick={() => loadMessages(activeConvId!)}

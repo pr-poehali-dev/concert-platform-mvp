@@ -23,11 +23,13 @@ export default function ChatSidebar({
 }: Props) {
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
-  const filtered = conversations.filter(c =>
-    !search ||
-    c.venueName.toLowerCase().includes(search.toLowerCase()) ||
-    (c.organizerName || "").toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = conversations.filter(c => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    const company = (c.sidebarName || c.venueName || "").toLowerCase();
+    const person  = (c.isOrganizer ? c.venueName : c.organizerName || "").toLowerCase();
+    return company.includes(q) || person.includes(q);
+  });
 
   return (
     <aside className={`shrink-0 flex flex-col glass sm:rounded-2xl overflow-hidden w-full sm:w-72 ${activeConvId ? "hidden sm:flex" : "flex"}`}>
@@ -71,10 +73,18 @@ export default function ChatSidebar({
           </div>
         ) : (
           filtered.map(conv => {
-            const name = conv.isOrganizer ? conv.venueName : (conv.organizerName || "Организатор");
-            const color = getAvatarColor(name);
-            const initial = getInitial(name);
+            // Название чата = компания контрагента
+            const companyName = conv.sidebarName
+              || (conv.isOrganizer ? conv.venueName : conv.organizerCompany || conv.organizerName || "Организатор");
+            // Подзаголовок = имя человека (площадка или организатор)
+            const personName = conv.isOrganizer
+              ? (conv.venueCompany && conv.venueCompany !== companyName ? conv.venueName : "")
+              : (conv.organizerName || "");
+
+            const color   = getAvatarColor(companyName);
+            const initial = getInitial(companyName);
             const isActive = conv.id === activeConvId;
+
             return (
               <div
                 key={conv.id}
@@ -86,9 +96,12 @@ export default function ChatSidebar({
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between mb-0.5">
-                    <span className="font-medium text-white text-sm truncate">{name}</span>
+                    <span className="font-semibold text-white text-sm truncate">{companyName}</span>
                     <span className="text-white/30 text-xs shrink-0 ml-2">{formatTime(conv.lastMessageAt)}</span>
                   </div>
+                  {personName && (
+                    <p className="text-white/35 text-xs truncate mb-0.5">{personName}</p>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-white/40 text-xs truncate">{conv.lastMessage}</span>
                     {conv.unread > 0 && (

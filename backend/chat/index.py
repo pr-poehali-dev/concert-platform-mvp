@@ -144,9 +144,12 @@ def handler(event: dict, context) -> dict:
         cur.execute(
             f"""SELECT c.id, c.organizer_id, c.venue_id, c.venue_user_id, c.venue_name,
                        c.last_message, c.last_message_at, c.organizer_unread, c.venue_unread, c.created_at,
-                       COALESCE(u.name, 'Организатор')
+                       COALESCE(uorg.name, 'Организатор') as organizer_name,
+                       COALESCE(uorg.legal_name, uorg.name, 'Организатор') as organizer_company,
+                       COALESCE(uvn.legal_name, uvn.name, c.venue_name) as venue_company
                 FROM {SCHEMA}.conversations c
-                LEFT JOIN {SCHEMA}.users u ON u.id = c.organizer_id
+                LEFT JOIN {SCHEMA}.users uorg ON uorg.id = c.organizer_id
+                LEFT JOIN {SCHEMA}.users uvn  ON uvn.id  = c.venue_user_id
                 WHERE c.organizer_id = %s OR c.venue_user_id = %s
                 ORDER BY c.last_message_at DESC""",
             (user_id, user_id),
@@ -158,6 +161,8 @@ def handler(event: dict, context) -> dict:
         for r in rows:
             is_organizer = str(r[1]) == user_id
             unread = r[7] if is_organizer else r[8]
+            # Название в сайдбаре: организатор видит компанию площадки, площадка — компанию организатора
+            sidebar_name = r[12] if is_organizer else r[11]  # venue_company or organizer_company
             result.append({
                 "id": str(r[0]),
                 "organizerId": str(r[1]),
@@ -169,6 +174,9 @@ def handler(event: dict, context) -> dict:
                 "unread": unread,
                 "isOrganizer": is_organizer,
                 "organizerName": r[10],
+                "organizerCompany": r[11],
+                "venueCompany": r[12],
+                "sidebarName": sidebar_name,
             })
         return ok({"conversations": result})
 
@@ -304,7 +312,9 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         cur = conn.cursor()
 
-        # Если sender_name не передан — подтягиваем из БД вместе с ролью и компанией
+        sender_position = (body.get("senderPosition") or "").strip()
+
+        # Подтягиваем из БД имя, роль, компанию и должность
         if not sender_name:
             cur.execute(
                 f"""SELECT name, role, COALESCE(legal_name, '') FROM {SCHEMA}.users WHERE id=%s""",
@@ -315,6 +325,24 @@ def handler(event: dict, context) -> dict:
                 sender_name    = urow[0] or ""
                 sender_role    = sender_role or urow[1] or ""
                 sender_company = sender_company or urow[2] or ""
+
+        # Проверяем — может это сотрудник? Подтягиваем должность из employees
+        if not sender_position:
+            cur.execute(
+                f"""SELECT e.role_in_company, u2.id as company_user_id,
+                           COALESCE(u2.legal_name, u2.name, '') as company_name
+                    FROM {SCHEMA}.employees e
+                    JOIN {SCHEMA}.users u2 ON u2.id = e.company_user_id
+                    WHERE LOWER(e.email) = (SELECT LOWER(email) FROM {SCHEMA}.users WHERE id=%s LIMIT 1)
+                      AND e.is_active = true
+                    LIMIT 1""",
+                (sender_id,)
+            )
+            emp_row = cur.fetchone()
+            if emp_row:
+                sender_position = emp_row[0] or ""
+                if not sender_company:
+                    sender_company = emp_row[2] or ""
 
         cur.execute(
             f"SELECT organizer_id, venue_user_id FROM {SCHEMA}.conversations WHERE id = %s",
@@ -338,7 +366,8 @@ def handler(event: dict, context) -> dict:
                 RETURNING id, created_at""",
             (conv_id, sender_id, text or "",
              att_url, att_name, att_size, att_mime,
-             sender_name, sender_role, sender_company),
+             sender_name, sender_role,
+             f"{sender_company}|{sender_position}" if sender_position else sender_company),
         )
         msg_row = cur.fetchone()
         msg_id     = str(msg_row[0])
@@ -359,14 +388,16 @@ def handler(event: dict, context) -> dict:
         notif_body = text[:80] if text else f"Прикреплён файл: {att_name}"
         notify(recipient_id, f"Новое сообщение от {sender_name or 'пользователя'}", notif_body)
 
+        stored_company = f"{sender_company}|{sender_position}" if sender_position else sender_company
         return ok({
-            "id":             msg_id,
-            "conversationId": conv_id,
-            "senderId":       sender_id,
-            "senderName":     sender_name,
-            "senderRole":     sender_role,
-            "senderCompany":  sender_company,
-            "text":           text or "",
+            "id":               msg_id,
+            "conversationId":   conv_id,
+            "senderId":         sender_id,
+            "senderName":       sender_name,
+            "senderRole":       sender_role,
+            "senderCompany":    stored_company,
+            "senderPosition":   sender_position,
+            "text":             text or "",
             "createdAt":      created_at,
             "attachmentUrl":  att_url,
             "attachmentName": att_name,

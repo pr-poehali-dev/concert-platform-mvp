@@ -1,6 +1,6 @@
 import { useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
-import { type Message, IMAGE_MIMES, formatTime, formatSize, getInitial, getAvatarColor, getRoleLabel, getRoleColor } from "./chatTypes";
+import { type Message, IMAGE_MIMES, formatTime, formatSize, getInitial, getAvatarColor, getRoleLabel, getRoleColor, parseSenderCompany } from "./chatTypes";
 
 interface Props {
   messages: Message[];
@@ -11,33 +11,39 @@ interface Props {
 
 // Плашка-подпись отправителя для чужих сообщений
 function SenderBadge({ msg }: { msg: Message }) {
-  const name    = msg.senderName || "";
-  const role    = msg.senderRole || "";
-  const company = msg.senderCompany || "";
+  const name   = msg.senderName || "";
+  const role   = msg.senderRole || "";
+  const { company, position } = parseSenderCompany(msg.senderCompany);
   if (!name && !role) return null;
 
-  const roleLabel  = getRoleLabel(role);
-  const roleColor  = getRoleColor(role);
-  const initial    = getInitial(name || "?");
+  const roleLabel   = getRoleLabel(role);
+  const roleColor   = getRoleColor(role);
+  const initial     = getInitial(name || "?");
   const avatarColor = getAvatarColor(msg.senderId);
 
   return (
-    <div className="flex items-center gap-1.5 mb-1 ml-1">
+    <div className="flex items-center gap-1.5 mb-1 ml-1 flex-wrap">
       {/* Аватар */}
       <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${avatarColor} flex items-center justify-center text-[9px] font-bold text-white shrink-0`}>
         {initial}
       </div>
       {/* Имя */}
-      {name && <span className="text-white/60 text-xs font-medium">{name}</span>}
+      {name && <span className="text-white/70 text-xs font-semibold">{name}</span>}
+      {/* Должность (если сотрудник) */}
+      {position && (
+        <span className="text-neon-green/80 text-[10px] border border-neon-green/20 bg-neon-green/8 px-1.5 py-px rounded font-medium">
+          {position}
+        </span>
+      )}
       {/* Роль */}
-      {roleLabel && (
+      {roleLabel && !position && (
         <span className={`text-[10px] px-1.5 py-px rounded border font-medium ${roleColor}`}>
           {roleLabel}
         </span>
       )}
       {/* Компания */}
       {company && (
-        <span className="text-white/30 text-[10px] truncate max-w-[120px]">· {company}</span>
+        <span className="text-white/30 text-[10px] truncate max-w-[150px]">· {company}</span>
       )}
     </div>
   );
