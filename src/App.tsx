@@ -23,32 +23,50 @@ function SharedProjectRoute() {
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <NotificationsProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <HashRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/admin" element={<AdminPage />} />
-            {/* ── Login routes ── */}
-            <Route path="/login" element={<LoginSelectPage />} />
-            <Route path="/login/organizer" element={<OrganizerLoginPage />} />
-            <Route path="/login/venue" element={<VenueLoginPage />} />
-            <Route path="/login/admin" element={<AdminLoginPage />} />
-            <Route path="/verify" element={<VerifyEmailPage />} />
-            <Route path="/share/:linkId" element={<SharedProjectRoute />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </HashRouter>
-      </TooltipProvider>
-      </NotificationsProvider>
-    </AuthProvider>
-  </QueryClientProvider>
-);
+const App = () => {
+  // Публичные share-ссылки рендерим без провайдеров авторизации
+  const isShare = window.location.hash.startsWith("#/share/");
+  if (isShare) {
+    const m = window.location.hash.match(/^#\/share\/([^/?]+)/);
+    const linkId = m ? m[1] : "";
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <SharedProjectPage linkId={linkId} />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
+  return (
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <NotificationsProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <HashRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/admin" element={<AdminPage />} />
+              {/* ── Login routes ── */}
+              <Route path="/login" element={<LoginSelectPage />} />
+              <Route path="/login/organizer" element={<OrganizerLoginPage />} />
+              <Route path="/login/venue" element={<VenueLoginPage />} />
+              <Route path="/login/admin" element={<AdminLoginPage />} />
+              <Route path="/verify" element={<VerifyEmailPage />} />
+              <Route path="/share/:linkId" element={<SharedProjectRoute />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </HashRouter>
+        </TooltipProvider>
+        </NotificationsProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
