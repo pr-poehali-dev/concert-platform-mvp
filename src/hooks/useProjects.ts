@@ -58,6 +58,27 @@ export const EXPENSE_CATEGORIES = [
 
 export const CITIES = ["Москва","Санкт-Петербург","Екатеринбург","Новосибирск","Казань","Ростов-на-Дону","Краснодар","Воронеж","Самара","Уфа"];
 
+const TAX_RATES: Record<string, number> = {
+  none: 0, usn_6: 0.06, usn_15: 0.15, osn: 0.20, npd: 0.06,
+};
+const TAX_LABELS: Record<string, string> = {
+  none: "Без налога", usn_6: "УСН 6% (доходы)",
+  usn_15: "УСН 15% (доходы − расходы)", osn: "ОСН НДС 20%", npd: "Самозанятый 6%",
+};
+
+export function recalcFinance(ip: number, iF: number, ep: number, ef: number, taxSystem: string): Finance {
+  const rate = TAX_RATES[taxSystem] ?? 0;
+  const tp = taxSystem === "usn_15" ? Math.max(0, (ip - ep) * rate) : ip * rate;
+  const tf = taxSystem === "usn_15" ? Math.max(0, (iF - ef) * rate) : iF * rate;
+  return {
+    incomePlan: ip, incomeFact: iF,
+    expensesPlan: ep, expensesFact: ef,
+    taxSystem, taxLabel: TAX_LABELS[taxSystem] ?? "",
+    taxRate: rate, taxPlan: tp, taxFact: tf,
+    profitPlan: ip - ep - tp, profitFact: iF - ef - tf,
+  };
+}
+
 export function fmt(n: number) {
   return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 0 }).format(n);
 }

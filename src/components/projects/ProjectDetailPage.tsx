@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import Icon from "@/components/ui/icon";
-import { PROJECTS_URL, type Project, type Expense, type IncomeLine } from "@/hooks/useProjects";
+import { PROJECTS_URL, type Project, type Expense, type IncomeLine, recalcFinance } from "@/hooks/useProjects";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect } from "react";
 import ProjectDetailHeader from "./ProjectDetailHeader";
@@ -64,7 +64,8 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
       const expenses = p.expenses.map(e=>e.id===id?{...e,...fields}:e);
       const tp = expenses.reduce((s,e)=>s+e.amountPlan,0);
       const tf = expenses.reduce((s,e)=>s+e.amountFact,0);
-      return {...p,expenses,totalExpensesPlan:tp,totalExpensesFact:tf};
+      const finance = recalcFinance(p.totalIncomePlan, p.totalIncomeFact, tp, tf, p.taxSystem);
+      return {...p,expenses,totalExpensesPlan:tp,totalExpensesFact:tf,finance};
     });
   };
   const deleteExpense = async (id:string) => {
@@ -96,7 +97,8 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
       });
       const tp = incomeLines.reduce((s,i)=>s+i.totalPlan,0);
       const tf = incomeLines.reduce((s,i)=>s+i.totalFact,0);
-      return {...p,incomeLines,totalIncomePlan:tp,totalIncomeFact:tf};
+      const finance = recalcFinance(tp, tf, p.totalExpensesPlan, p.totalExpensesFact, p.taxSystem);
+      return {...p,incomeLines,totalIncomePlan:tp,totalIncomeFact:tf,finance};
     });
   };
   const deleteIncome = async (id:string) => {
