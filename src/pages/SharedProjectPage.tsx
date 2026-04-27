@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL, STATUS_CONFIG, fmt, type Project, type IncomeLine } from "@/hooks/useProjects";
 
@@ -25,8 +24,7 @@ function formatSize(bytes: number) {
 
 const IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "image/webp"];
 
-export default function SharedProjectPage() {
-  const { linkId } = useParams<{ linkId: string }>();
+export default function SharedProjectPage({ linkId }: { linkId: string }) {
   const [data, setData] = useState<SharedData | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);

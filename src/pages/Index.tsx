@@ -9,6 +9,7 @@ import ProjectsPage from "@/components/projects/ProjectsPage";
 import SupportChat from "@/components/SupportChat";
 import { useAuth } from "@/context/AuthContext";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
+import SharedProjectPage from "./SharedProjectPage";
 
 type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects";
 const PROTECTED: Page[] = ["chat", "dashboard", "projects"];
@@ -16,6 +17,12 @@ const PAGE_KEY = "gl_active_page";
 const CONV_KEY = "gl_chat_conv";
 
 export default function Index() {
+  const m = window.location.pathname.match(/^\/share\/([^/]+)/);
+  if (m) return <SharedProjectPage linkId={m[1]} />;
+  return <IndexInner />;
+}
+
+function IndexInner() {
   const { user } = useAuth();
   const [activePage, setActivePage] = useState<Page>("home");
   const [openChatConvId, setOpenChatConvId] = useState<string | null>(null);
