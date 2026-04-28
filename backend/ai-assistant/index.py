@@ -152,7 +152,7 @@ def ask_ai(question: str, user_role: str) -> str:
         }
     }).encode("utf-8")
 
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
     req = urllib.request.Request(
         url,
         data=payload,
@@ -206,10 +206,13 @@ def handler(event: dict, context) -> dict:
 
     # ── POST ask ──────────────────────────────────────────────────────────
     if method == "POST" and action == "ask":
+        print(f"[ai] ask: session_id={session_id[:8] if session_id else 'EMPTY'}")
         user = get_session_user(session_id)
         if not user:
+            print(f"[ai] ask: user not found for session")
             return err("Не авторизован", 401)
 
+        print(f"[ai] ask: user={user.get('email','?')} role={user.get('role','?')}")
         body = json.loads(event.get("body") or "{}")
         question = (body.get("question") or "").strip()
         if not question:
@@ -217,7 +220,10 @@ def handler(event: dict, context) -> dict:
         if len(question) > 2000:
             return err("Вопрос слишком длинный (максимум 2000 символов)")
 
+        api_key_present = bool(os.environ.get("GEMINI_API_KEY", ""))
+        print(f"[ai] ask: question_len={len(question)} gemini_key_present={api_key_present}")
         answer = ask_ai(question, user.get("role", ""))
+        print(f"[ai] ask: answer_len={len(answer)}")
 
         conn = get_conn()
         try:
