@@ -170,14 +170,15 @@ function TaskDetailModal({
   const pcfg = PRIORITY_CONFIG[task.priority];
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-start justify-center p-4 pt-16 overflow-y-auto">
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-3xl glass-strong rounded-2xl border border-white/10 shadow-2xl animate-scale-in">
+      <div className="relative z-10 w-full max-w-3xl glass-strong rounded-2xl border border-white/10 shadow-2xl animate-scale-in flex flex-col"
+        style={{ maxHeight: "calc(100vh - 2rem)" }}>
 
-        {/* Header */}
-        <div className="flex items-start gap-4 p-6 border-b border-white/10">
+        {/* Header — фиксирован */}
+        <div className="flex items-start gap-4 px-6 py-4 border-b border-white/10 shrink-0">
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-2 flex-wrap">
+            <div className="flex items-center gap-2 mb-1.5 flex-wrap">
               <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs border ${cfg.cls}`}>
                 <Icon name={cfg.icon as never} size={11} />{cfg.label}
               </span>
@@ -186,117 +187,123 @@ function TaskDetailModal({
               </span>
               {due && <span className={`text-xs ${due.cls}`}><Icon name="CalendarDays" size={11} className="inline mr-0.5" />{due.label}</span>}
             </div>
-            <h2 className="font-oswald font-bold text-xl text-white">{task.title}</h2>
-            {task.description && <p className="text-white/50 text-sm mt-1">{task.description}</p>}
+            <h2 className="font-oswald font-bold text-lg text-white leading-snug">{task.title}</h2>
+            {task.description && <p className="text-white/50 text-xs mt-0.5 line-clamp-2">{task.description}</p>}
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-white/40 hover:text-white hover:bg-white/10 transition-all shrink-0">
             <Icon name="X" size={16} />
           </button>
         </div>
 
-        <div className="grid md:grid-cols-3 gap-0">
-          {/* Left — subtasks + comments */}
-          <div className="md:col-span-2 p-6 border-r border-white/5 space-y-6">
+        {/* Body — скроллится внутри */}
+        <div className="grid md:grid-cols-3 gap-0 min-h-0 flex-1 overflow-hidden">
 
-            {/* Подзадачи */}
-            <div>
-              <div className="flex items-center gap-2 mb-3">
-                <h3 className="font-oswald font-semibold text-white text-sm">Подзадачи</h3>
-                <span className="text-white/30 text-xs">{doneCount}/{subtasks.length}</span>
-                {subtasks.length > 0 && (
-                  <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-neon-purple to-neon-green rounded-full transition-all" style={{ width: `${subtaskProgress}%` }} />
-                  </div>
-                )}
-              </div>
+          {/* Left — подзадачи + комментарии */}
+          <div className="md:col-span-2 flex flex-col border-r border-white/5 min-h-0 overflow-hidden">
+            <div className="flex-1 overflow-y-auto scrollbar-thin px-6 py-4 space-y-5">
 
-              {loadingSubtasks ? (
-                <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-9 glass rounded-xl animate-pulse" />)}</div>
-              ) : (
-                <div className="space-y-2">
-                  {subtasks.map(st => (
-                    <div key={st.id} className={`glass rounded-xl p-3 border transition-all ${st.isDone ? "border-neon-green/20 bg-neon-green/5" : "border-white/5"}`}>
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => toggleSubtask(st)}
-                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
-                            st.isDone ? "bg-neon-green border-neon-green text-white" : "border-white/20 hover:border-neon-purple"
-                          }`}
-                        >
-                          {st.isDone && <Icon name="Check" size={11} />}
-                        </button>
-                        <span className={`flex-1 text-sm ${st.isDone ? "line-through text-white/30" : "text-white/80"}`}>
-                          {st.title}
-                        </span>
-                        {st.isDone && st.doneByName && (
-                          <span className="text-neon-green/60 text-xs shrink-0">{st.doneByName}</span>
+              {/* Подзадачи */}
+              <div>
+                <div className="flex items-center gap-2 mb-2.5">
+                  <h3 className="font-oswald font-semibold text-white text-sm">Подзадачи</h3>
+                  <span className="text-white/30 text-xs">{doneCount}/{subtasks.length}</span>
+                  {subtasks.length > 0 && (
+                    <div className="flex-1 h-1 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-neon-purple to-neon-green rounded-full transition-all" style={{ width: `${subtaskProgress}%` }} />
+                    </div>
+                  )}
+                </div>
+
+                {loadingSubtasks ? (
+                  <div className="space-y-2">{[1,2].map(i => <div key={i} className="h-9 glass rounded-xl animate-pulse" />)}</div>
+                ) : (
+                  <div className="space-y-2">
+                    {subtasks.map(st => (
+                      <div key={st.id} className={`glass rounded-xl p-3 border transition-all ${st.isDone ? "border-neon-green/20 bg-neon-green/5" : "border-white/5"}`}>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => toggleSubtask(st)}
+                            className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-all ${
+                              st.isDone ? "bg-neon-green border-neon-green text-white" : "border-white/20 hover:border-neon-purple"
+                            }`}
+                          >
+                            {st.isDone && <Icon name="Check" size={11} />}
+                          </button>
+                          <span className={`flex-1 text-sm ${st.isDone ? "line-through text-white/30" : "text-white/80"}`}>
+                            {st.title}
+                          </span>
+                          {st.isDone && st.doneByName && (
+                            <span className="text-neon-green/60 text-xs shrink-0">{st.doneByName}</span>
+                          )}
+                        </div>
+                        {!st.isDone && (
+                          <div className="mt-2 ml-8">
+                            <input
+                              value={subtaskComment[st.id] || ""}
+                              onChange={e => setSubtaskComment(prev => ({ ...prev, [st.id]: e.target.value }))}
+                              placeholder="Комментарий при выполнении..."
+                              className="w-full bg-white/5 rounded-lg px-3 py-1.5 text-white/60 placeholder:text-white/20 text-xs outline-none border border-white/5 focus:border-neon-purple/30"
+                            />
+                          </div>
+                        )}
+                        {st.isDone && st.comment && (
+                          <p className="ml-8 mt-1 text-white/30 text-xs italic">{st.comment}</p>
                         )}
                       </div>
-                      {/* Комментарий при выполнении */}
-                      {!st.isDone && (
-                        <div className="mt-2 ml-8">
-                          <input
-                            value={subtaskComment[st.id] || ""}
-                            onChange={e => setSubtaskComment(prev => ({ ...prev, [st.id]: e.target.value }))}
-                            placeholder="Комментарий при выполнении..."
-                            className="w-full bg-white/5 rounded-lg px-3 py-1.5 text-white/60 placeholder:text-white/20 text-xs outline-none border border-white/5 focus:border-neon-purple/30"
-                          />
-                        </div>
-                      )}
-                      {st.isDone && st.comment && (
-                        <p className="ml-8 mt-1 text-white/30 text-xs italic">{st.comment}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+                    ))}
+                  </div>
+                )}
 
-              {/* Новая подзадача */}
-              <div className="flex items-center gap-2 mt-3">
-                <input
-                  value={newSubtask}
-                  onChange={e => setNewSubtask(e.target.value)}
-                  placeholder="Добавить подзадачу..."
-                  className="flex-1 glass rounded-xl px-3 py-2 text-white placeholder:text-white/25 text-sm outline-none border border-white/10 focus:border-neon-purple/40"
-                  onKeyDown={e => e.key === "Enter" && addSubtask()}
-                />
-                <button onClick={addSubtask} disabled={!newSubtask.trim() || addingSubtask}
-                  className="px-3 py-2 bg-neon-purple/20 border border-neon-purple/30 text-neon-purple rounded-xl text-xs hover:bg-neon-purple/30 disabled:opacity-40 transition-all">
-                  {addingSubtask ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Plus" size={13} />}
-                </button>
+                <div className="flex items-center gap-2 mt-2.5">
+                  <input
+                    value={newSubtask}
+                    onChange={e => setNewSubtask(e.target.value)}
+                    placeholder="Добавить подзадачу..."
+                    className="flex-1 glass rounded-xl px-3 py-2 text-white placeholder:text-white/25 text-sm outline-none border border-white/10 focus:border-neon-purple/40"
+                    onKeyDown={e => e.key === "Enter" && addSubtask()}
+                  />
+                  <button onClick={addSubtask} disabled={!newSubtask.trim() || addingSubtask}
+                    className="px-3 py-2 bg-neon-purple/20 border border-neon-purple/30 text-neon-purple rounded-xl text-xs hover:bg-neon-purple/30 disabled:opacity-40 transition-all">
+                    {addingSubtask ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Plus" size={13} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Комментарии */}
+              <div>
+                <h3 className="font-oswald font-semibold text-white text-sm mb-2.5 flex items-center gap-2">
+                  Комментарии
+                  {comments.length > 0 && <span className="text-white/30 text-xs">{comments.length}</span>}
+                </h3>
+                <div ref={commentsRef} className="space-y-2">
+                  {loadingComments ? (
+                    <div className="h-12 glass rounded-xl animate-pulse" />
+                  ) : comments.length === 0 ? (
+                    <p className="text-white/25 text-xs text-center py-3">Комментариев пока нет</p>
+                  ) : (
+                    comments.map(c => (
+                      <div key={c.id} className="glass rounded-xl p-3 border border-white/5">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-neon-purple text-xs font-medium">{c.authorName}</span>
+                          <span className="text-white/25 text-xs">
+                            {new Date(c.createdAt).toLocaleDateString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                        <p className="text-white/70 text-sm">{c.text}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* Комментарии */}
-            <div>
-              <h3 className="font-oswald font-semibold text-white text-sm mb-3 flex items-center gap-2">
-                Комментарии
-                {comments.length > 0 && <span className="text-white/30 text-xs">{comments.length}</span>}
-              </h3>
-              <div ref={commentsRef} className="space-y-2 max-h-60 overflow-y-auto scrollbar-thin pr-1">
-                {loadingComments ? (
-                  <div className="h-12 glass rounded-xl animate-pulse" />
-                ) : comments.length === 0 ? (
-                  <p className="text-white/25 text-xs text-center py-4">Комментариев пока нет</p>
-                ) : (
-                  comments.map(c => (
-                    <div key={c.id} className="glass rounded-xl p-3 border border-white/5">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="text-neon-purple text-xs font-medium">{c.authorName}</span>
-                        <span className="text-white/25 text-xs">
-                          {new Date(c.createdAt).toLocaleDateString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                        </span>
-                      </div>
-                      <p className="text-white/70 text-sm">{c.text}</p>
-                    </div>
-                  ))
-                )}
-              </div>
-              <div className="flex items-end gap-2 mt-3">
+            {/* Поле комментария — прибито к низу левой колонки */}
+            <div className="px-6 py-3 border-t border-white/5 shrink-0">
+              <div className="flex items-end gap-2">
                 <textarea
                   value={newComment}
                   onChange={e => setNewComment(e.target.value)}
-                  placeholder="Написать комментарий..."
+                  placeholder="Написать комментарий... (Ctrl+Enter)"
                   rows={2}
                   className="flex-1 glass rounded-xl px-3 py-2 text-white placeholder:text-white/25 text-sm outline-none border border-white/10 focus:border-neon-purple/40 resize-none"
                   onKeyDown={e => { if (e.key === "Enter" && e.ctrlKey) addComment(); }}
@@ -309,8 +316,8 @@ function TaskDetailModal({
             </div>
           </div>
 
-          {/* Right — info */}
-          <div className="p-6 space-y-4">
+          {/* Right — инфо + статус, тоже скроллится */}
+          <div className="overflow-y-auto scrollbar-thin px-5 py-4 space-y-4">
             <div>
               <p className="text-white/30 text-xs mb-1.5 uppercase tracking-wider">Статус</p>
               <div className="grid grid-cols-1 gap-1">
