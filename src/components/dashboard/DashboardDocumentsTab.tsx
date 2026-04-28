@@ -22,6 +22,9 @@ export default function DashboardDocumentsTab() {
   const [newFolder, setNewFolder] = useState("");
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [extraFolders, setExtraFolders] = useState<string[]>([]);
+  const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
 
   // Upload state
   const [uploading, setUploading] = useState(false);
@@ -157,6 +160,42 @@ export default function DashboardDocumentsTab() {
     setDocs(prev => prev.map(d => d.id === docId ? { ...d, folder } : d));
   };
 
+  // ── Rename folder ──────────────────────────────────────────────────────
+  const renameFolder = async (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed || trimmed === oldName) { setRenamingFolder(null); return; }
+    // Переименовываем все документы в этой папке
+    const toUpdate = docs.filter(d => d.folder === oldName);
+    await Promise.all(toUpdate.map(d =>
+      fetch(`${DOCS_URL}?action=update_folder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+        body: JSON.stringify({ id: d.id, folder: trimmed }),
+      })
+    ));
+    setDocs(prev => prev.map(d => d.folder === oldName ? { ...d, folder: trimmed } : d));
+    setExtraFolders(prev => prev.map(f => f === oldName ? trimmed : f));
+    if (filterFolder === oldName) setFilterFolder(trimmed);
+    setRenamingFolder(null);
+  };
+
+  // ── Delete folder ──────────────────────────────────────────────────────
+  const deleteFolder = async (name: string) => {
+    // Убираем папку у всех документов
+    const toUpdate = docs.filter(d => d.folder === name);
+    await Promise.all(toUpdate.map(d =>
+      fetch(`${DOCS_URL}?action=update_folder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+        body: JSON.stringify({ id: d.id, folder: "" }),
+      })
+    ));
+    setDocs(prev => prev.map(d => d.folder === name ? { ...d, folder: "" } : d));
+    setExtraFolders(prev => prev.filter(f => f !== name));
+    if (filterFolder === name) setFilterFolder("all");
+    setDeletingFolder(null);
+  };
+
   // ── Helpers ────────────────────────────────────────────────────────────
   const catMeta = (cat: string): Category =>
     categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/40", label: "Прочее", value: "other" };
@@ -251,15 +290,59 @@ export default function DashboardDocumentsTab() {
           Без папки
         </button>
         {allFolders.map(f => (
-          <button
-            key={f}
-            onClick={() => setFilterFolder(f)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === f ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
-          >
-            <Icon name="FolderOpen" size={11} />
-            {f}
-            <span className="text-[10px] opacity-60">({docs.filter(d => d.folder === f).length})</span>
-          </button>
+          renamingFolder === f ? (
+            <div key={f} className="flex items-center gap-1">
+              <input
+                value={renameValue}
+                onChange={e => setRenameValue(e.target.value)}
+                className="glass border border-neon-cyan/40 rounded-lg px-2 py-1 text-white text-xs outline-none w-32"
+                autoFocus
+                onKeyDown={e => {
+                  if (e.key === "Enter") renameFolder(f, renameValue);
+                  if (e.key === "Escape") setRenamingFolder(null);
+                }}
+              />
+              <button
+                onClick={() => renameFolder(f, renameValue)}
+                className="text-neon-cyan text-xs px-2 py-1 bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg hover:bg-neon-cyan/20"
+              >
+                ОК
+              </button>
+              <button
+                onClick={() => setRenamingFolder(null)}
+                className="text-white/30 text-xs px-1.5 py-1 hover:text-white/60 rounded-lg"
+              >
+                <Icon name="X" size={12} />
+              </button>
+            </div>
+          ) : (
+            <div key={f} className={`group flex items-center gap-1 rounded-lg border transition-all ${filterFolder === f ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30" : "glass text-white/40 border-white/10 hover:text-white"}`}>
+              <button
+                onClick={() => setFilterFolder(f)}
+                className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-xs font-medium"
+              >
+                <Icon name="FolderOpen" size={11} />
+                {f}
+                <span className="text-[10px] opacity-60">({docs.filter(d => d.folder === f).length})</span>
+              </button>
+              <div className="flex items-center gap-0.5 pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={e => { e.stopPropagation(); setRenamingFolder(f); setRenameValue(f); }}
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/30 hover:text-neon-cyan transition-all"
+                  title="Переименовать"
+                >
+                  <Icon name="Pencil" size={10} />
+                </button>
+                <button
+                  onClick={e => { e.stopPropagation(); setDeletingFolder(f); }}
+                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-neon-pink/10 text-white/30 hover:text-neon-pink transition-all"
+                  title="Удалить папку"
+                >
+                  <Icon name="Trash2" size={10} />
+                </button>
+              </div>
+            </div>
+          )
         ))}
         {showNewFolder ? (
           <div className="flex items-center gap-1.5">
@@ -376,6 +459,39 @@ export default function DashboardDocumentsTab() {
           file={sendChatFile}
           onClose={() => setSendChatFile(null)}
         />
+      )}
+
+      {/* Delete Folder Confirm */}
+      {deletingFolder && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeletingFolder(null)} />
+          <div className="relative glass-strong rounded-2xl border border-white/10 p-6 w-full max-w-sm animate-scale-in">
+            <div className="w-12 h-12 rounded-xl bg-neon-pink/10 border border-neon-pink/20 flex items-center justify-center mx-auto mb-4">
+              <Icon name="FolderX" size={22} className="text-neon-pink" />
+            </div>
+            <h3 className="font-oswald font-bold text-lg text-white text-center mb-1">Удалить папку?</h3>
+            <p className="text-white/50 text-sm text-center mb-1">
+              Папка <span className="text-white font-medium">«{deletingFolder}»</span> будет удалена.
+            </p>
+            <p className="text-white/30 text-xs text-center mb-6">
+              Документы останутся, но будут перемещены в «Без папки»
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeletingFolder(null)}
+                className="flex-1 py-2.5 rounded-xl border border-white/15 text-white/60 text-sm hover:text-white hover:border-white/30 transition-all"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => deleteFolder(deletingFolder)}
+                className="flex-1 py-2.5 rounded-xl bg-neon-pink/20 border border-neon-pink/30 text-neon-pink text-sm font-medium hover:bg-neon-pink/30 transition-all"
+              >
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
