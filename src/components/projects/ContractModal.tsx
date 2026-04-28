@@ -86,21 +86,27 @@ export default function ContractModal({
   const [invoiceId, setInvoiceId]   = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (mounted: { current: boolean }) => {
+    if (!mounted.current) return;
     setLoading(true);
     try {
       const res = await fetch(`${PROJECTS_URL}?action=contract_detail&booking_id=${bookingId}`);
+      if (!mounted.current) return;
       if (res.ok) {
         const data = await res.json();
-        setContract(data.contract || null);
+        if (mounted.current) setContract(data.contract || null);
       } else {
-        setContract(null);
+        if (mounted.current) setContract(null);
       }
-    } catch { setContract(null); }
-    finally { setLoading(false); }
+    } catch { if (mounted.current) setContract(null); }
+    finally { if (mounted.current) setLoading(false); }
   }, [bookingId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const mounted = { current: true };
+    load(mounted);
+    return () => { mounted.current = false; };
+  }, [load]);
 
   const generate = async () => {
     setGenerating(true); setError("");
@@ -111,7 +117,8 @@ export default function ContractModal({
       });
       const data = await res.json();
       if (!res.ok) { setError(data.error || "Ошибка генерации"); return; }
-      await load();
+      const m = { current: true };
+      await load(m);
     } catch { setError("Ошибка соединения"); }
     finally { setGenerating(false); }
   };
@@ -129,7 +136,8 @@ export default function ContractModal({
       if (!res.ok) { setError(data.error || "Ошибка подписания"); return; }
       setSignDone(true);
       if (data.invoiceId) { setInvoiceId(data.invoiceId); }
-      await load();
+      const m = { current: true };
+      await load(m);
       onContractSigned?.(data.invoiceId);
     } catch { setError("Ошибка соединения"); }
     finally { setSigning(false); }

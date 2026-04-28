@@ -103,17 +103,22 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
   const [filterType, setFilterType] = useState<LogType | "all">("all");
   const [filterStatus, setFilterStatus] = useState<LogStatus | "all">("all");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (mounted?: { current: boolean }) => {
+    if (mounted && !mounted.current) return;
     setLoading(true);
     try {
       const res = await fetch(`${PROJECTS_URL}?action=logistics_list&project_id=${projectId}`);
       const data = await res.json();
-      setItems(data.items || []);
-    } catch { setItems([]); }
-    finally { setLoading(false); }
+      if (!mounted || mounted.current) setItems(data.items || []);
+    } catch { if (!mounted || mounted.current) setItems([]); }
+    finally { if (!mounted || mounted.current) setLoading(false); }
   }, [projectId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const mounted = { current: true };
+    load(mounted);
+    return () => { mounted.current = false; };
+  }, [load]);
 
   const openCreate = () => {
     setEditId(null);

@@ -47,24 +47,30 @@ export default function InvoiceModal({ bookingId, contractId, onClose }: Props) 
   const [error, setError]          = useState("");
   const printRef = useRef<HTMLDivElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (mounted: { current: boolean }) => {
+    if (!mounted.current) return;
     setLoading(true);
     try {
       const param = contractId
         ? `contract_id=${contractId}`
         : `booking_id=${bookingId}`;
       const res  = await fetch(`${PROJECTS_URL}?action=invoice_detail&${param}`);
+      if (!mounted.current) return;
       if (res.ok) {
         const data = await res.json();
-        setInvoice(data.invoice || null);
+        if (mounted.current) setInvoice(data.invoice || null);
       } else {
-        setInvoice(null);
+        if (mounted.current) setInvoice(null);
       }
-    } catch { setInvoice(null); }
-    finally { setLoading(false); }
+    } catch { if (mounted.current) setInvoice(null); }
+    finally { if (mounted.current) setLoading(false); }
   }, [bookingId, contractId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    const mounted = { current: true };
+    load(mounted);
+    return () => { mounted.current = false; };
+  }, [load]);
 
   const markPaid = async () => {
     if (!invoice) return;
@@ -75,7 +81,7 @@ export default function InvoiceModal({ bookingId, contractId, onClose }: Props) 
         body: JSON.stringify({ invoiceId: invoice.id }),
       });
       if (!res.ok) { setError("Ошибка"); return; }
-      await load();
+      await load({ current: true });
     } catch { setError("Ошибка соединения"); }
     finally { setMarking(false); }
   };
