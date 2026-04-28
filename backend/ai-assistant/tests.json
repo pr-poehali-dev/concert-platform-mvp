@@ -1,0 +1,33 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Ask without session",
+      "method": "POST",
+      "path": "/?action=ask",
+      "body": {"question": "Как добавить площадку?"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "Не авторизован"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List without admin token",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 403,
+      "expectedBody": {"error": "Доступ запрещён"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Stats without admin token",
+      "method": "GET",
+      "path": "/?action=stats",
+      "expectedStatus": 403
+    }
+  ]
+}

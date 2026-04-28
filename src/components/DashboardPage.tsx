@@ -13,6 +13,7 @@ import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab";
 import DashboardSigningTab from "@/components/dashboard/DashboardSigningTab";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import DashboardAITab from "@/components/dashboard/DashboardAITab";
 import CrmPage from "@/components/crm/CrmPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
 
@@ -95,6 +96,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         { id: "venue_crm",     icon: "Kanban" },
         { id: "notifications", icon: "Bell" },
         { id: "profile",       icon: "User" },
+        { id: "ai_help",       icon: "Sparkles" },
       ]
     : [
         { id: "tours",         icon: "Route" },
@@ -103,6 +105,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         { id: "signing",       icon: "PenLine" },
         { id: "notifications", icon: "Bell" },
         { id: "profile",       icon: "User" },
+        { id: "ai_help",       icon: "Sparkles" },
       ];
 
   return (
@@ -271,6 +274,8 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
                 onProfileUpdate={(fields: Partial<User>) => updateProfile(fields)}
               />
             )}
+
+            {tab === "ai_help" && <DashboardAITab />}
           </div>
         </div>
       </div>

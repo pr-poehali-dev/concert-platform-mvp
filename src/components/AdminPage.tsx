@@ -7,6 +7,7 @@ import AdminUsersTab from "./admin/AdminUsersTab";
 import AdminVenuesTab from "./admin/AdminVenuesTab";
 import AdminSupportTab from "./admin/AdminSupportTab";
 import AdminImportTab from "./admin/AdminImportTab";
+import AdminAITab from "./admin/AdminAITab";
 
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
@@ -87,7 +88,7 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
   const PRESENTATION_URL = "https://functions.poehali.dev/3a1c12fb-cacd-4731-961b-2f37badc2c08";
 
   const [token, setToken] = useState(() => externalToken || localStorage.getItem("gl_admin_token") || "");
-  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import">("overview");
+  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import" | "ai">("overview");
   const [presMenuOpen, setPresMenuOpen] = useState(false);
   const [presLoading, setPresLoading]   = useState<string | null>(null);
   const presRef = useRef<HTMLDivElement>(null);
@@ -242,6 +243,7 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
     { id: "venues", label: "Площадки", icon: "Building2", badge: 0 },
     { id: "support", label: "Поддержка", icon: "Headphones", badge: supportUnread },
     { id: "import", label: "Импорт", icon: "Download", badge: 0 },
+    { id: "ai",     label: "ИИ-запросы", icon: "Sparkles", badge: 0 },
   ] as const;
 
   return (
@@ -394,6 +396,10 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
 
         {tab === "import" && (
           <AdminImportTab token={token} />
+        )}
+
+        {tab === "ai" && (
+          <AdminAITab token={token} />
         )}
       </div>
     </div>
