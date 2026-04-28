@@ -23,8 +23,10 @@ const ORG_TABS: NavItem[] = [
 const VENUE_TABS: NavItem[] = [
   { id: "venues",        label: "Мои площадки",   icon: "Building2" },
   { id: "projects",      label: "Проекты",        icon: "FolderOpen" },
+  { id: "concerts",      label: "Мои концерты",   icon: "Music" },
   { id: "documents",     label: "Документы",      icon: "FileArchive" },
   { id: "signing",       label: "Подписание",     icon: "PenLine" },
+  { id: "venue_crm",     label: "CRM",            icon: "Kanban" },
   { id: "notifications", label: "Уведомления",    icon: "Bell" },
   { id: "company",       label: "Компания",       icon: "Users" },
 ];

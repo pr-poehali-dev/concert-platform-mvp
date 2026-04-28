@@ -22,9 +22,10 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=list&user_id=${user.id}&type=tour`);
+      const res = await fetch(`${PROJECTS_URL}?action=list&user_id=${user.id}`);
       const data = await res.json();
-      setTours((data.projects || []).filter((p: Project) => p.projectType === "tour" || p.artist));
+      // Только туры — проекты с типом "tour"
+      setTours((data.projects || []).filter((p: Project) => p.projectType === "tour"));
     } catch { setTours([]); }
     finally { setLoading(false); }
   };

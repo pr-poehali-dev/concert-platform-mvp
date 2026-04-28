@@ -13,6 +13,8 @@ import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab";
 import DashboardSigningTab from "@/components/dashboard/DashboardSigningTab";
 import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
+import CrmPage from "@/components/crm/CrmPage";
+import ProjectsPage from "@/components/projects/ProjectsPage";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -77,20 +79,22 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
   // Мобильный таб-бар (только на маленьких экранах, до lg)
   const mobileTabs = isVenue
     ? [
-        { id: "venues",    icon: "Building2" },
-        { id: "projects",  icon: "FolderOpen" },
-        { id: "documents", icon: "FileArchive" },
-        { id: "signing",   icon: "PenLine" },
+        { id: "venues",        icon: "Building2" },
+        { id: "projects",      icon: "FolderOpen" },
+        { id: "concerts",      icon: "Music" },
+        { id: "documents",     icon: "FileArchive" },
+        { id: "signing",       icon: "PenLine" },
+        { id: "venue_crm",     icon: "Kanban" },
         { id: "notifications", icon: "Bell" },
-        { id: "profile",   icon: "User" },
+        { id: "profile",       icon: "User" },
       ]
     : [
-        { id: "tours",     icon: "Route" },
-        { id: "history",   icon: "Clock" },
-        { id: "documents", icon: "FileArchive" },
-        { id: "signing",   icon: "PenLine" },
+        { id: "tours",         icon: "Route" },
+        { id: "history",       icon: "Clock" },
+        { id: "documents",     icon: "FileArchive" },
+        { id: "signing",       icon: "PenLine" },
         { id: "notifications", icon: "Bell" },
-        { id: "profile",   icon: "User" },
+        { id: "profile",       icon: "User" },
       ];
 
   return (
@@ -211,6 +215,14 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
               <DashboardVenueProjectsTab
                 onOpenChat={onNavigate ? (convId) => onNavigate(`chat:${convId}`) : undefined}
               />
+            )}
+
+            {tab === "concerts" && isVenue && (
+              <ProjectsPage onNavigate={onNavigate} />
+            )}
+
+            {tab === "venue_crm" && isVenue && (
+              <CrmPage onNavigate={onNavigate} />
             )}
 
             {(tab === "tours" || tab === "history") && (

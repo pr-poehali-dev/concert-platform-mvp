@@ -51,8 +51,10 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
   const dashVenueItems: NavItem[] = [
     { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues" },
     { id: "vprojects",     label: "Проекты",        icon: "FolderOpen",   page: "dashboard", dashTab: "projects" },
+    { id: "concerts",      label: "Мои концерты",   icon: "Music",        page: "dashboard", dashTab: "concerts" },
     { id: "documents",     label: "Документы",      icon: "FileArchive",  page: "dashboard", dashTab: "documents" },
     { id: "signing",       label: "Подписание",     icon: "PenLine",      page: "dashboard", dashTab: "signing" },
+    { id: "venue_crm",     label: "CRM",            icon: "Kanban",       page: "dashboard", dashTab: "venue_crm" },
     { id: "notifications", label: "Уведомления",    icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount },
     { id: "company",       label: "Компания",       icon: "Users",        page: "dashboard", dashTab: "company" },
   ];

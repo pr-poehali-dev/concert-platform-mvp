@@ -1,243 +1,166 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-
-const tours = [
-  {
-    id: 1,
-    name: "Осенний тур 2025",
-    artist: "Звери",
-    status: "active",
-    cities: ["Москва", "Санкт-Петербург", "Екатеринбург", "Новосибирск", "Казань"],
-    dates: "15 сент — 30 окт 2025",
-    confirmed: 3,
-    total: 5,
-    budget: "1 800 000 ₽",
-  },
-  {
-    id: 2,
-    name: "Зимний тур",
-    artist: "Би-2",
-    status: "planning",
-    cities: ["Москва", "Самара", "Уфа"],
-    dates: "10 дек — 25 дек 2025",
-    confirmed: 1,
-    total: 3,
-    budget: "900 000 ₽",
-  },
-  {
-    id: 3,
-    name: "Большой тур 2025",
-    artist: "Noize MC",
-    status: "completed",
-    cities: ["Москва", "СПб", "Ростов", "Краснодар", "Воронеж", "Нижний Новгород"],
-    dates: "Апр — Май 2025",
-    confirmed: 6,
-    total: 6,
-    budget: "3 200 000 ₽",
-  },
-];
-
-const tourCities = [
-  { city: "Москва", venue: "Volta", date: "15 сент", status: "confirmed", capacity: 1200 },
-  { city: "Санкт-Петербург", venue: "Космонавт", date: "20 сент", status: "confirmed", capacity: 700 },
-  { city: "Екатеринбург", venue: "Teleclub", date: "27 сент", status: "confirmed", capacity: 2500 },
-  { city: "Новосибирск", venue: "Поиск...", date: "4 окт", status: "searching", capacity: 0 },
-  { city: "Казань", venue: "Arena", date: "12 окт", status: "negotiating", capacity: 1500 },
-];
-
-const statusConfig: Record<string, { label: string; color: string }> = {
-  active: { label: "Активный", color: "text-neon-green bg-neon-green/10 border-neon-green/30" },
-  planning: { label: "Планируется", color: "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/30" },
-  completed: { label: "Завершён", color: "text-white/40 bg-white/5 border-white/10" },
-  confirmed: { label: "Подтверждено", color: "text-neon-green" },
-  searching: { label: "Ищем площадку", color: "text-neon-pink" },
-  negotiating: { label: "Переговоры", color: "text-neon-cyan" },
-};
+import { useAuth } from "@/context/AuthContext";
+import { PROJECTS_URL, STATUS_CONFIG, fmt, type Project } from "@/hooks/useProjects";
+import ProjectDetailPage from "@/components/projects/ProjectDetailPage";
+import CreateProjectModal from "@/components/projects/CreateProjectModal";
 
 export default function ToursPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
-  const [activeTour, setActiveTour] = useState(1);
-  const selectedTour = tours.find((t) => t.id === activeTour) || tours[0];
+  const { user } = useAuth();
+  const [tours, setTours] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [openTourId, setOpenTourId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
 
-  return (
-    <div className="min-h-screen pt-20">
-      <div className="relative py-16 overflow-hidden">
-        <div className="absolute inset-0 gradient-bg-purple opacity-30" />
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan to-transparent" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <Badge className="bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40 mb-4">Управление турами</Badge>
-              <h1 className="font-oswald font-bold text-5xl sm:text-6xl text-white uppercase">
-                Проекты <span className="gradient-text">туров</span>
-              </h1>
-            </div>
-            <button className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity mt-4">
-              <Icon name="Plus" size={18} />
-              Новый тур
+  const load = async () => {
+    if (!user) { setLoading(false); return; }
+    setLoading(true);
+    try {
+      const res = await fetch(`${PROJECTS_URL}?action=list&user_id=${user.id}`);
+      const data = await res.json();
+      setTours((data.projects || []).filter((p: Project) => p.projectType === "tour"));
+    } catch { setTours([]); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [user]);
+
+  if (openTourId) {
+    return (
+      <ProjectDetailPage
+        projectId={openTourId}
+        onBack={() => { setOpenTourId(null); load(); }}
+        onOpenChat={onNavigate ? (convId) => onNavigate(`chat:${convId}`) : undefined}
+      />
+    );
+  }
+
+  // Не авторизован — публичная витрина
+  if (!user) {
+    return (
+      <div className="min-h-screen pt-20">
+        <div className="relative py-16 overflow-hidden">
+          <div className="absolute inset-0 gradient-bg-purple opacity-30" />
+          <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan to-transparent" />
+          <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <Badge className="bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40 mb-4">Управление турами</Badge>
+            <h1 className="font-oswald font-bold text-5xl sm:text-6xl text-white uppercase mb-4">
+              Проекты <span className="gradient-text">туров</span>
+            </h1>
+            <p className="text-white/50 text-lg mb-8 max-w-xl mx-auto">
+              Создавайте туры, бронируйте площадки, управляйте бюджетом — всё в одном месте
+            </p>
+            <button
+              onClick={() => onNavigate?.("login")}
+              className="inline-flex items-center gap-2 px-8 py-4 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold text-lg rounded-xl hover:opacity-90 transition-opacity"
+            >
+              <Icon name="LogIn" size={20} />Войти и начать
             </button>
           </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Tours list */}
-          <aside className="lg:w-80 shrink-0 space-y-3">
-            {tours.map((tour) => (
-              <div
-                key={tour.id}
-                onClick={() => setActiveTour(tour.id)}
-                className={`glass rounded-2xl p-5 cursor-pointer transition-all duration-200 ${
-                  activeTour === tour.id
-                    ? "neon-border-purple ring-1 ring-neon-purple/40"
-                    : "hover:bg-white/5"
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <h3 className="font-oswald font-semibold text-white text-lg">{tour.name}</h3>
-                  <Badge className={`text-xs border ${statusConfig[tour.status].color}`}>
-                    {statusConfig[tour.status].label}
-                  </Badge>
-                </div>
-                <p className="text-neon-cyan text-sm font-medium mb-2">{tour.artist}</p>
-                <div className="flex items-center gap-1 text-white/40 text-xs mb-3">
-                  <Icon name="Calendar" size={12} />
-                  {tour.dates}
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="flex-1 h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan rounded-full"
-                      style={{ width: `${(tour.confirmed / tour.total) * 100}%` }}
-                    />
-                  </div>
-                  <span className="text-xs text-white/40">{tour.confirmed}/{tour.total} городов</span>
-                </div>
-              </div>
-            ))}
-          </aside>
-
-          {/* Tour detail */}
-          <div className="flex-1 space-y-6">
-            <div className="glass rounded-2xl p-6">
-              <div className="flex items-start justify-between mb-6 flex-wrap gap-4">
-                <div>
-                  <h2 className="font-oswald font-bold text-3xl text-white mb-1">{selectedTour.name}</h2>
-                  <p className="text-neon-cyan font-medium">{selectedTour.artist}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-white/40 text-xs mb-1">Общий бюджет</p>
-                  <p className="font-oswald font-bold text-2xl gradient-text">{selectedTour.budget}</p>
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                {[
-                  { icon: "MapPin", label: "Городов", value: selectedTour.total },
-                  { icon: "CheckCircle", label: "Подтверждено", value: selectedTour.confirmed },
-                  { icon: "Clock", label: "Ожидают", value: selectedTour.total - selectedTour.confirmed },
-                ].map((s, i) => (
-                  <div key={i} className="bg-white/5 rounded-xl p-4 text-center">
-                    <Icon name={s.icon} size={20} className="text-neon-purple mx-auto mb-2" />
-                    <div className="font-oswald font-bold text-2xl text-white">{s.value}</div>
-                    <div className="text-white/40 text-xs">{s.label}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Cities timeline */}
-              <div>
-                <h3 className="font-oswald font-semibold text-white text-lg mb-4 flex items-center gap-2">
-                  <Icon name="Route" size={18} className="text-neon-purple" />
-                  Маршрут тура
-                </h3>
-                <div className="space-y-3">
-                  {tourCities.map((stop, i) => (
-                    <div key={i} className="flex items-center gap-4 bg-white/3 rounded-xl p-4 hover:bg-white/5 transition-colors group">
-                      <div className="flex flex-col items-center">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-oswald font-bold ${
-                          stop.status === "confirmed" ? "bg-neon-green/20 text-neon-green border border-neon-green/40" :
-                          stop.status === "negotiating" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/40" :
-                          "bg-neon-pink/20 text-neon-pink border border-neon-pink/40"
-                        }`}>
-                          {i + 1}
-                        </div>
-                        {i < tourCities.length - 1 && (
-                          <div className="w-px h-4 bg-white/10 mt-1" />
-                        )}
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="font-oswald font-semibold text-white">{stop.city}</span>
-                          <span className={`text-xs ${statusConfig[stop.status].color}`}>
-                            {statusConfig[stop.status].label}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-sm text-white/50">
-                          <span className="flex items-center gap-1">
-                            <Icon name="Building2" size={12} />
-                            {stop.venue}
-                          </span>
-                          {stop.capacity > 0 && (
-                            <span className="flex items-center gap-1">
-                              <Icon name="Users" size={12} />
-                              {stop.capacity.toLocaleString()} чел.
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="text-white/50 text-sm flex items-center gap-1">
-                          <Icon name="Calendar" size={13} />
-                          {stop.date}
-                        </span>
-                      </div>
-
-                      {stop.status === "searching" && (
-                        <button className="ml-2 px-3 py-1.5 bg-neon-purple/20 text-neon-purple text-xs rounded-lg hover:bg-neon-purple/30 transition-colors border border-neon-purple/30 whitespace-nowrap">
-                          Найти площадку
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Rider section */}
-            <div className="glass rounded-2xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-oswald font-semibold text-white text-lg flex items-center gap-2">
-                  <Icon name="FileText" size={18} className="text-neon-cyan" />
-                  Технический райдер
-                </h3>
-                <button className="flex items-center gap-2 px-4 py-2 bg-neon-cyan/20 text-neon-cyan text-sm rounded-lg hover:bg-neon-cyan/30 transition-colors border border-neon-cyan/30">
-                  <Icon name="Download" size={14} />
-                  Скачать PDF
-                </button>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { icon: "Volume2", label: "Звуковое оборудование", count: "12 позиций" },
-                  { icon: "Lightbulb", label: "Световое оборудование", count: "8 позиций" },
-                  { icon: "Users", label: "Гримёрки", count: "3 комнаты" },
-                  { icon: "Wifi", label: "Технические требования", count: "5 позиций" },
-                ].map((item, i) => (
-                  <div key={i} className="bg-white/5 rounded-xl p-4 text-center hover:bg-white/8 transition-colors cursor-pointer">
-                    <Icon name={item.icon} size={22} className="text-neon-cyan mx-auto mb-2" />
-                    <p className="text-xs text-white/60 mb-1">{item.label}</p>
-                    <p className="text-sm font-medium text-white">{item.count}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+  return (
+    <div className="space-y-4 animate-fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="font-oswald font-bold text-2xl text-white">Мои туры</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
+            <Icon name="Plus" size={16} />Новый тур
+          </button>
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate("projects")}
+              className="flex items-center gap-2 px-4 py-2.5 glass text-white/60 hover:text-white rounded-xl border border-white/10 hover:border-white/20 transition-all text-sm">
+              <Icon name="FolderOpen" size={16} />Все проекты
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Stats */}
+      {tours.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { icon: "Route",       label: "Всего туров",    value: tours.length,                                             color: "text-neon-purple" },
+            { icon: "CheckCircle", label: "Завершено",      value: tours.filter(t => t.status === "completed").length,        color: "text-neon-green" },
+            { icon: "TrendingUp",  label: "Доход (план)",   value: fmt(tours.reduce((s, t) => s + t.totalIncomePlan, 0)) + " ₽", color: "text-neon-cyan" },
+            { icon: "BarChart3",   label: "Прибыль (план)", value: fmt(tours.reduce((s, t) => s + t.finance.profitPlan, 0)) + " ₽", color: "text-neon-pink" },
+          ].map((s, i) => (
+            <div key={i} className="glass rounded-2xl p-4 text-center">
+              <Icon name={s.icon} size={18} className={`${s.color} mx-auto mb-1.5`} />
+              <div className={`font-oswald font-bold text-xl ${s.color}`}>{s.value}</div>
+              <div className="text-white/35 text-xs mt-0.5">{s.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {loading ? (
+        <div className="space-y-3">{[1, 2, 3].map(i => <div key={i} className="glass rounded-2xl h-24 animate-pulse" />)}</div>
+      ) : tours.length === 0 ? (
+        <div className="text-center py-16 glass rounded-2xl">
+          <Icon name="Route" size={48} className="text-white/20 mx-auto mb-4" />
+          <p className="text-white/40 text-lg font-oswald">Туров пока нет</p>
+          <p className="text-white/25 text-sm mt-1 mb-5">Создайте первый тур — площадки, бюджет и задачи в одном месте</p>
+          <button onClick={() => setShowCreate(true)}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90">
+            <Icon name="Plus" size={16} />Создать первый тур
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {tours.map(tour => (
+            <div key={tour.id}
+              className="glass rounded-2xl p-5 hover:border-neon-purple/20 border border-transparent transition-all cursor-pointer hover-lift"
+              onClick={() => setOpenTourId(tour.id)}>
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-neon-purple/15 flex items-center justify-center shrink-0">
+                    <Icon name="Route" size={20} className="text-neon-purple" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-oswald font-semibold text-white text-lg">{tour.title}</h3>
+                      <Badge className={`text-xs border ${STATUS_CONFIG[tour.status]?.cls || ""}`}>
+                        {STATUS_CONFIG[tour.status]?.label || tour.status}
+                      </Badge>
+                    </div>
+                    {tour.artist && <p className="text-neon-cyan text-sm">{tour.artist}</p>}
+                    <p className="text-white/35 text-xs mt-0.5">
+                      {tour.dateStart
+                        ? new Date(tour.dateStart).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" })
+                        : "Дата не указана"}
+                      {tour.city && ` · ${tour.city}`}
+                    </p>
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  {tour.totalIncomePlan > 0 && (
+                    <>
+                      <p className="font-oswald font-bold text-xl gradient-text">{fmt(tour.totalIncomePlan)} ₽</p>
+                      <p className="text-white/30 text-xs">доход (план)</p>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {showCreate && (
+        <CreateProjectModal
+          onClose={() => setShowCreate(false)}
+          onCreated={() => { setShowCreate(false); load(); }}
+          defaultType="tour"
+        />
+      )}
     </div>
   );
 }
