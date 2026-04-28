@@ -48,7 +48,7 @@ export default function DashboardSidebar({ activeTab, onTabChange }: Props) {
   const tabs = isVenue ? VENUE_TABS : ORG_TABS;
 
   return (
-    <aside className="hidden flex-col w-56 shrink-0 gap-1 sticky top-24 self-start">
+    <aside className="hidden lg:flex flex-col w-56 shrink-0 gap-1 sticky top-24 self-start">
       {/* Логотип / имя */}
       <div className="glass rounded-2xl border border-white/10 px-4 py-3 mb-2">
         <div className="flex items-center gap-3">
