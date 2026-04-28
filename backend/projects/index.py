@@ -1827,4 +1827,225 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"success": True})
 
+    # ── ЭДО: ДОГОВОРЫ И СЧЕТА ────────────────────────────────────────────
+
+    # POST generate_contract — создать договор из бронирования
+    if method == "POST" and action == "generate_contract":
+        b = json.loads(event.get("body") or "{}")
+        booking_id = b.get("bookingId", "")
+        if not booking_id: return err("bookingId required")
+        conn = get_conn(); cur = conn.cursor()
+
+        # Проверяем — нет ли уже договора
+        cur.execute(f"SELECT id, status FROM {SCHEMA}.contracts WHERE booking_id=%s LIMIT 1", (booking_id,))
+        existing = cur.fetchone()
+        if existing:
+            conn.close()
+            return ok({"contractId": str(existing[0]), "status": existing[1], "existed": True})
+
+        # Данные бронирования
+        cur.execute(
+            f"""SELECT b.organizer_id, b.venue_user_id, b.venue_id,
+                       b.event_date, b.event_time, b.artist, b.rental_amount, b.venue_conditions,
+                       b.project_id, v.name
+                FROM {SCHEMA}.venue_bookings b
+                JOIN {SCHEMA}.venues v ON v.id = b.venue_id
+                WHERE b.id=%s""", (booking_id,))
+        row = cur.fetchone()
+        if not row: conn.close(); return err("Бронирование не найдено", 404)
+        organizer_id = str(row[0])
+        venue_user_id = str(row[1])
+        event_date = row[3]
+        event_time = row[4] or ""
+        artist = row[5] or ""
+        rental_amount = float(row[6]) if row[6] else 0
+        venue_conditions = row[7] or ""
+        project_id = str(row[8]) if row[8] else None
+        venue_name = row[9]
+
+        # Реквизиты организатора
+        cur.execute(
+            f"""SELECT legal_name, inn, kpp, ogrn, legal_address,
+                       bank_name, bank_account, bank_bik, phone
+                FROM {SCHEMA}.users WHERE id=%s""", (organizer_id,))
+        org = cur.fetchone() or ("","","","","","","","","")
+
+        # Реквизиты площадки
+        cur.execute(
+            f"""SELECT legal_name, inn, kpp, ogrn, legal_address,
+                       bank_name, bank_account, bank_bik, phone
+                FROM {SCHEMA}.users WHERE id=%s""", (venue_user_id,))
+        ven = cur.fetchone() or ("","","","","","","","","")
+
+        import random, string
+        contract_number = "GL-" + "".join(random.choices(string.digits, k=8))
+
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.contracts
+                (booking_id, project_id, organizer_id, venue_user_id,
+                 organizer_legal_name, organizer_inn, organizer_kpp, organizer_ogrn, organizer_address,
+                 organizer_bank_name, organizer_bank_account, organizer_bank_bik, organizer_phone,
+                 venue_legal_name, venue_inn, venue_kpp, venue_ogrn, venue_address,
+                 venue_bank_name, venue_bank_account, venue_bank_bik, venue_phone,
+                 venue_name, event_date, event_time, artist, rental_amount, venue_conditions,
+                 contract_number, status)
+                VALUES (%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,
+                        %s,%s,%s,%s,%s,%s, %s,'draft')
+                RETURNING id""",
+            (booking_id, project_id, organizer_id, venue_user_id,
+             org[0],org[1],org[2],org[3],org[4], org[5],org[6],org[7],org[8],
+             ven[0],ven[1],ven[2],ven[3],ven[4], ven[5],ven[6],ven[7],ven[8],
+             venue_name, event_date, event_time, artist, rental_amount, venue_conditions,
+             contract_number))
+        contract_id = str(cur.fetchone()[0])
+        conn.commit(); conn.close()
+
+        send_notification(
+            venue_user_id, "contract",
+            f"Новый договор №{contract_number}",
+            f"Организатор сформировал договор на мероприятие {str(event_date)} в {venue_name}. Ожидается ваша подпись.",
+            "notifications"
+        )
+        return ok({"contractId": contract_id, "contractNumber": contract_number, "status": "draft"}, 201)
+
+    # GET contract_detail — данные договора
+    if method == "GET" and action == "contract_detail":
+        contract_id = params.get("contract_id", "")
+        booking_id  = params.get("booking_id", "")
+        if not contract_id and not booking_id: return err("contract_id or booking_id required")
+        conn = get_conn(); cur = conn.cursor()
+        if contract_id:
+            cur.execute(f"SELECT * FROM {SCHEMA}.contracts WHERE id=%s", (contract_id,))
+        else:
+            cur.execute(f"SELECT * FROM {SCHEMA}.contracts WHERE booking_id=%s ORDER BY created_at DESC LIMIT 1", (booking_id,))
+        row = cur.fetchone()
+        conn.close()
+        if not row: return err("Не найдено", 404)
+        cols = [d[0] for d in cur.description]
+        data = dict(zip(cols, row))
+        data = {k: str(v) if v is not None else "" for k, v in data.items()}
+        return ok({"contract": data})
+
+    # POST sign_contract — подписать договор (сторона: organizer | venue)
+    if method == "POST" and action == "sign_contract":
+        b = json.loads(event.get("body") or "{}")
+        contract_id = b.get("contractId", "")
+        side        = b.get("side", "")       # organizer | venue
+        user_id     = b.get("userId", "")
+        if not contract_id or side not in ("organizer","venue"): return err("contractId + side required")
+
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, status, organizer_id, venue_user_id, organizer_signed_at, venue_signed_at,
+                       contract_number, venue_name, event_date, rental_amount,
+                       organizer_legal_name, organizer_inn, organizer_bank_name, organizer_bank_account, organizer_bank_bik,
+                       venue_legal_name, venue_inn, booking_id
+                FROM {SCHEMA}.contracts WHERE id=%s""", (contract_id,))
+        row = cur.fetchone()
+        if not row: conn.close(); return err("Не найдено", 404)
+
+        cstatus = row[1]
+        organizer_id   = str(row[2])
+        venue_user_id  = str(row[3])
+        org_signed     = row[4]
+        ven_signed     = row[5]
+        contract_number= row[6]
+        venue_name     = row[7]
+        event_date     = str(row[8])
+        rental_amount  = float(row[9]) if row[9] else 0
+        org_legal      = row[10]; org_inn = row[11]
+        org_bank       = row[12]; org_acc = row[13]; org_bik = row[14]
+        ven_legal      = row[15]; ven_inn = row[16]
+        booking_id     = str(row[17])
+
+        if side == "organizer":
+            if org_signed: conn.close(); return ok({"already": True})
+            cur.execute(f"UPDATE {SCHEMA}.contracts SET organizer_signed_at=NOW(), updated_at=NOW() WHERE id=%s", (contract_id,))
+            new_status = "signed" if ven_signed else "signed_organizer"
+        else:
+            if ven_signed: conn.close(); return ok({"already": True})
+            cur.execute(f"UPDATE {SCHEMA}.contracts SET venue_signed_at=NOW(), updated_at=NOW() WHERE id=%s", (contract_id,))
+            new_status = "signed" if org_signed else "signed_venue"
+
+        cur.execute(f"UPDATE {SCHEMA}.contracts SET status=%s WHERE id=%s", (new_status, contract_id))
+
+        invoice_id = None
+        invoice_number = None
+        # Если оба подписали — генерируем счёт
+        if new_status == "signed":
+            import random, string as strmod
+            invoice_number = "INV-" + "".join(random.choices(strmod.digits, k=8))
+            from datetime import date, timedelta
+            due = date.today() + timedelta(days=14)
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.invoices
+                    (contract_id, booking_id, invoice_number,
+                     payer_legal_name, payer_inn,
+                     payee_legal_name, payee_inn,
+                     payee_bank_name, payee_bank_account, payee_bank_bik,
+                     amount, description, due_date, status)
+                    VALUES (%s,%s,%s, %s,%s, %s,%s, %s,%s,%s, %s,%s,%s,'issued')
+                    RETURNING id""",
+                (contract_id, booking_id, invoice_number,
+                 org_legal, org_inn,
+                 ven_legal, ven_inn,
+                 org_bank, org_acc, org_bik,
+                 rental_amount,
+                 f"Аренда площадки {venue_name} {event_date} · Договор №{contract_number}",
+                 due))
+            invoice_id = str(cur.fetchone()[0])
+
+            notify_user = organizer_id if side == "venue" else venue_user_id
+            send_notification(
+                notify_user, "contract",
+                f"Договор №{contract_number} подписан обеими сторонами",
+                f"Счёт №{invoice_number} на сумму {int(rental_amount):,} ₽ сформирован и доступен в платформе.".replace(",", " "),
+                "notifications"
+            )
+        else:
+            notify_user = organizer_id if side == "venue" else venue_user_id
+            send_notification(
+                notify_user, "contract",
+                f"Договор №{contract_number} подписан",
+                f"{'Площадка' if side=='venue' else 'Организатор'} подписал(а) договор. Ожидается ваша подпись.",
+                "notifications"
+            )
+
+        conn.commit(); conn.close()
+        return ok({"status": new_status, "invoiceId": invoice_id, "invoiceNumber": invoice_number})
+
+    # GET invoice_detail — данные счёта
+    if method == "GET" and action == "invoice_detail":
+        invoice_id  = params.get("invoice_id", "")
+        contract_id = params.get("contract_id", "")
+        booking_id  = params.get("booking_id", "")
+        conn = get_conn(); cur = conn.cursor()
+        if invoice_id:
+            cur.execute(f"SELECT * FROM {SCHEMA}.invoices WHERE id=%s", (invoice_id,))
+        elif contract_id:
+            cur.execute(f"SELECT * FROM {SCHEMA}.invoices WHERE contract_id=%s ORDER BY created_at DESC LIMIT 1", (contract_id,))
+        else:
+            cur.execute(f"SELECT * FROM {SCHEMA}.invoices WHERE booking_id=%s ORDER BY created_at DESC LIMIT 1", (booking_id,))
+        row = cur.fetchone()
+        conn.close()
+        if not row: return err("Счёт не найден", 404)
+        cols = [d[0] for d in cur.description]
+        data = {k: str(v) if v is not None else "" for k, v in zip(cols, row)}
+        return ok({"invoice": data})
+
+    # POST mark_invoice_paid
+    if method == "POST" and action == "mark_invoice_paid":
+        b = json.loads(event.get("body") or "{}")
+        invoice_id = b.get("invoiceId", "")
+        if not invoice_id: return err("invoiceId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"UPDATE {SCHEMA}.invoices SET status='paid', paid_at=NOW() WHERE id=%s RETURNING contract_id",
+            (invoice_id,))
+        row = cur.fetchone()
+        if row:
+            cur.execute(f"UPDATE {SCHEMA}.contracts SET status='paid', updated_at=NOW() WHERE id=%s", (row[0],))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
     return err("Not found", 404)
