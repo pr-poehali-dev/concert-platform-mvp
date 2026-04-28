@@ -1744,4 +1744,87 @@ def handler(event: dict, context) -> dict:
         conn.commit(); conn.close()
         return ok({"success": True})
 
+    # ── ЛОГИСТИКА ПРОЕКТА ─────────────────────────────────────────────────
+
+    # GET logistics_list
+    if method == "GET" and action == "logistics_list":
+        project_id = params.get("project_id", "")
+        if not project_id: return err("project_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, project_id, person_name, person_role, type, status,
+                       route_from, route_to, date_depart, date_return,
+                       booking_ref, price, notes, file_url, file_name, created_at
+                FROM {SCHEMA}.project_logistics
+                WHERE project_id = %s
+                ORDER BY date_depart ASC NULLS LAST, created_at""",
+            (project_id,))
+        rows = cur.fetchall(); conn.close()
+        items = [{"id": str(r[0]), "projectId": str(r[1]), "personName": r[2],
+                  "personRole": r[3], "type": r[4], "status": r[5],
+                  "routeFrom": r[6], "routeTo": r[7],
+                  "dateDepart": str(r[8]) if r[8] else None,
+                  "dateReturn": str(r[9]) if r[9] else None,
+                  "bookingRef": r[10], "price": float(r[11]),
+                  "notes": r[12], "fileUrl": r[13], "fileName": r[14],
+                  "createdAt": str(r[15])} for r in rows]
+        return ok({"items": items})
+
+    # POST logistics_create
+    if method == "POST" and action == "logistics_create":
+        b = json.loads(event.get("body") or "{}")
+        project_id = b.get("projectId", "")
+        if not project_id: return err("projectId required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.project_logistics
+                (project_id, person_name, person_role, type, status,
+                 route_from, route_to, date_depart, date_return,
+                 booking_ref, price, notes, created_by)
+                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                RETURNING id""",
+            (project_id, b.get("personName",""), b.get("personRole",""),
+             b.get("type","flight"), b.get("status","needed"),
+             b.get("routeFrom",""), b.get("routeTo",""),
+             b.get("dateDepart") or None, b.get("dateReturn") or None,
+             b.get("bookingRef",""), float(b.get("price",0) or 0),
+             b.get("notes",""), b.get("createdBy") or None))
+        item_id = str(cur.fetchone()[0]); conn.commit(); conn.close()
+        return ok({"id": item_id}, 201)
+
+    # POST logistics_update
+    if method == "POST" and action == "logistics_update":
+        b = json.loads(event.get("body") or "{}")
+        item_id = b.get("id", "")
+        if not item_id: return err("id required")
+        fmap = {
+            "personName": "person_name", "personRole": "person_role",
+            "type": "type", "status": "status",
+            "routeFrom": "route_from", "routeTo": "route_to",
+            "dateDepart": "date_depart", "dateReturn": "date_return",
+            "bookingRef": "booking_ref", "price": "price",
+            "notes": "notes", "fileUrl": "file_url", "fileName": "file_name",
+        }
+        fields = {}
+        for fk, col in fmap.items():
+            if fk in b:
+                fields[col] = b[fk] if b[fk] != "" else None
+        if not fields: return err("No data")
+        set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.project_logistics SET {set_clause} WHERE id=%s",
+                    list(fields.values()) + [item_id])
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
+    # POST logistics_delete
+    if method == "POST" and action == "logistics_delete":
+        b = json.loads(event.get("body") or "{}")
+        item_id = b.get("id", "")
+        if not item_id: return err("id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.project_logistics SET status='cancelled' WHERE id=%s", (item_id,))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
     return err("Not found", 404)

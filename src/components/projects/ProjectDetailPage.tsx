@@ -11,6 +11,7 @@ import ProjectCrmTab from "@/components/projects/ProjectCrmTab";
 import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import ProjectDocumentsTab from "@/components/projects/ProjectDocumentsTab";
 import ProjectMembersTab from "@/components/projects/ProjectMembersTab";
+import ProjectLogisticsTab from "@/components/projects/ProjectLogisticsTab";
 
 interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversationId: string) => void; }
 
@@ -18,7 +19,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const { user } = useAuth();
   const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"company"|"documents"|"members">("budget");
+  const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"logistics"|"company"|"documents"|"members">("budget");
   const [saving, setSaving] = useState<string|null>(null);
   const [exportOpen, setExportOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -140,6 +141,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
     {id:"summary",   label:"Итог / P&L",      icon:"BarChart3",     visible: canViewSummary},
     {id:"venue",     label:"Площадка",        icon:"Building2",     visible: true},
     {id:"crm",       label:"Задачи",          icon:"ClipboardList", visible: true},
+    {id:"logistics", label:"Логистика",       icon:"Briefcase",     visible: true},
     {id:"documents", label:"Документы",       icon:"FileArchive",   visible: true},
     {id:"members",   label:"Участники",       icon:"UserCheck",     visible: true},
     {id:"company",   label:"Компания",        icon:"Building2",     visible: !user?.isEmployee},
@@ -228,6 +230,16 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
         {/* ── CRM ЗАДАЧИ ── */}
         {activeTab==="crm" && (
           <ProjectCrmTab projectId={projectId} />
+        )}
+
+        {/* ── ЛОГИСТИКА ── */}
+        {activeTab==="logistics" && (
+          <ProjectLogisticsTab
+            projectId={projectId}
+            projectCity={project.city}
+            projectDateStart={project.dateStart || ""}
+            projectArtist={project.artist || ""}
+          />
         )}
 
         {/* ── ДОКУМЕНТЫ ── */}
