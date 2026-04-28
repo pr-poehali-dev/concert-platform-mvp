@@ -6,8 +6,9 @@ const IMG_MANAGER = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42
 const IMG_VENUE   = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/1c73dd10-0cee-421e-ae63-02ea7734eacc.jpg";
 const IMG_EDO     = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/d0d3ce56-75b4-4b41-8291-4680576d65de.jpg";
 const IMG_TICKETS = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/edbd98eb-12ac-4b78-8eb8-08e734e3187d.jpg";
+const IMG_PDF     = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/4c3feaa1-e154-431f-a9a5-0c3cf3edb222.jpg";
 
-// ── Slide registry (14 слайдов) ───────────────────────────────────────────
+// ── Slide registry (15 слайдов) ───────────────────────────────────────────
 const SLIDES = [
   { id: "hero" },
   { id: "problem" },
@@ -15,6 +16,7 @@ const SLIDES = [
   { id: "features" },
   { id: "crm" },
   { id: "edo" },
+  { id: "pdf" },
   { id: "tickets" },
   { id: "venue-features" },
   { id: "logistics" },
@@ -209,7 +211,7 @@ export default function PresentationPage() {
               <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white mb-6 leading-tight">
                 Индустрия живёт<br /><span className="text-neon-pink">в хаосе</span>
               </h2>
-              <p className="text-white/50 text-lg leading-relaxed">
+              <p className="text-white/75 text-lg leading-relaxed">
                 Каждый организатор тратит часы на задачи, которые можно автоматизировать.
                 Вместо творчества и музыки — рутина, звонки и Excel.
               </p>
@@ -248,7 +250,7 @@ export default function PresentationPage() {
               <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white mb-6 leading-tight">
                 Всё в одном<br /><span className="text-neon-green">месте</span>
               </h2>
-              <p className="text-white/50 text-lg leading-relaxed mb-8">
+              <p className="text-white/80 text-lg leading-relaxed mb-8">
                 Global Link — операционная система для тур-менеджера.
                 Один вход — весь цикл концерта под контролем.
               </p>
@@ -280,7 +282,7 @@ export default function PresentationPage() {
                   <Icon name={f.icon as never} size={16} className={cm[f.color]} />
                 </div>
                 <h3 className={`font-oswald font-bold text-sm mb-1.5 ${cm[f.color]}`}>{f.title}</h3>
-                <p className="text-white/40 text-xs leading-relaxed">{f.desc}</p>
+                <p className="text-white/65 text-xs leading-relaxed">{f.desc}</p>
               </div>
             ))}
           </div>
@@ -432,7 +434,7 @@ export default function PresentationPage() {
                 ].map((t, i) => (
                   <div key={i} className="flex items-start gap-3">
                     <Icon name="Check" size={16} className="text-neon-purple shrink-0 mt-0.5" />
-                    <p className="text-white/60 text-sm">{t}</p>
+                    <p className="text-white/80 text-sm">{t}</p>
                   </div>
                 ))}
               </div>
@@ -441,8 +443,94 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 6 — СИНХРОНИЗАЦИЯ БИЛЕТОВ ══════════════ */}
+      {/* ══════════════ SLIDE 6 — PDF и скачивание ══════════════ */}
       <section id="slide-6" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+        <div className="absolute inset-0 bg-cover bg-center opacity-12" style={{ backgroundImage: `url(${IMG_PDF})` }} />
+        <div className="absolute inset-0 bg-background/93" />
+        <div className="absolute inset-0 bg-gradient-to-br from-neon-purple/5 to-neon-green/5" />
+
+        <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
+          <div className="grid lg:grid-cols-2 gap-16 items-center">
+            <div>
+              <p className="text-neon-green/70 font-oswald text-sm tracking-[0.3em] uppercase mb-4">PDF экспорт</p>
+              <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white mb-6 leading-tight">
+                Скачать<br /><span className="text-neon-green">одной кнопкой</span>
+              </h2>
+              <p className="text-white/75 text-lg leading-relaxed mb-8">
+                Договор и счёт автоматически формируются в PDF — с реквизитами,
+                подписями и печатью. Готовы к отправке в банк, бухгалтерию или архив.
+              </p>
+              <div className="space-y-4">
+                {[
+                  { icon: "FileText", color: "neon-purple", title: "Договор PDF",   sub: "Реквизиты обеих сторон, условия, даты, статус подписей" },
+                  { icon: "Receipt",  color: "neon-green",  title: "Счёт на оплату PDF", sub: "Плательщик, получатель, банковские реквизиты, сумма" },
+                  { icon: "Archive",  color: "neon-cyan",   title: "Архив документов",   sub: "Все PDF хранятся в облаке и доступны в любой момент" },
+                ].map((t, i) => (
+                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-4 border ${bm[t.color]}`}>
+                    <div className={`w-10 h-10 rounded-xl ${bm[t.color]} border flex items-center justify-center shrink-0`}>
+                      <Icon name={t.icon as never} size={18} className={cm[t.color]} />
+                    </div>
+                    <div>
+                      <p className={`font-oswald font-semibold text-sm ${cm[t.color]}`}>{t.title}</p>
+                      <p className="text-white/60 text-xs mt-0.5">{t.sub}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              {/* Мок интерфейса скачивания */}
+              <div className="glass rounded-2xl p-6 border border-neon-purple/20">
+                <p className="text-white/50 text-xs mb-5 font-oswald uppercase tracking-wider">Готовые документы</p>
+                {[
+                  { name: "Договор №GL-00123412.pdf",   size: "148 КБ", status: "Подписан",  color: "neon-green",  date: "12 апр" },
+                  { name: "Счёт №INV-00094521.pdf",      size: "89 КБ",  status: "Выставлен", color: "neon-cyan",   date: "12 апр" },
+                  { name: "Договор №GL-00098834.pdf",   size: "152 КБ", status: "Черновик",  color: "neon-purple", date: "8 апр" },
+                  { name: "Акт №АКТ-00011203.pdf",      size: "67 КБ",  status: "Подписан",  color: "neon-green",  date: "5 апр" },
+                ].map((f, i) => (
+                  <div key={i} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Icon name="FileText" size={14} className={cm[f.color]} />
+                      <div className="min-w-0">
+                        <p className="text-white/85 text-sm truncate">{f.name}</p>
+                        <p className="text-white/35 text-xs">{f.size} · {f.date}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${bm[f.color]} ${cm[f.color]}`}>{f.status}</span>
+                      <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
+                        <Icon name="Download" size={12} className="text-white/40" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { icon: "Printer",    label: "Печать напрямую",    sub: "Из браузера без конвертации" },
+                  { icon: "Send",       label: "Отправка по почте",  sub: "PDF прикрепляется к письму" },
+                  { icon: "Building",   label: "В банк и ФНС",       sub: "Формат принимается везде" },
+                  { icon: "HardDrive",  label: "Локальный архив",    sub: "Сохраняй на свой компьютер" },
+                ].map((c, i) => (
+                  <div key={i} className="glass rounded-xl p-3.5 border border-white/6 flex items-start gap-3">
+                    <Icon name={c.icon as never} size={15} className="text-neon-green/70 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-white/85 text-xs font-semibold">{c.label}</p>
+                      <p className="text-white/50 text-xs mt-0.5">{c.sub}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ══════════════ SLIDE 7 — СИНХРОНИЗАЦИЯ БИЛЕТОВ ══════════════ */}
+      <section id="slide-7" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+
         <div className="absolute inset-0 bg-cover bg-center opacity-10" style={{ backgroundImage: `url(${IMG_TICKETS})` }} />
         <div className="absolute inset-0 bg-background/94" />
         <div className="absolute left-0 top-0 w-[500px] h-[500px] bg-neon-cyan/6 rounded-full blur-3xl" />
@@ -535,8 +623,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 7 — ДЛЯ ПЛОЩАДКИ ══════════════ */}
-      <section id="slide-7" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 8 — ДЛЯ ПЛОЩАДКИ ══════════════ */}
+      <section id="slide-8" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center opacity-12" style={{ backgroundImage: `url(${IMG_VENUE})` }} />
         <div className="absolute inset-0 bg-background/94" />
         <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-neon-pink/5 rounded-full blur-3xl" />
@@ -547,7 +635,7 @@ export default function PresentationPage() {
             <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white">
               Ваш личный<br /><span className="text-neon-pink">кабинет площадки</span>
             </h2>
-            <p className="text-white/45 text-lg max-w-2xl mx-auto mt-4">
+            <p className="text-white/80 text-lg max-w-2xl mx-auto mt-4">
               Не только для организаторов — площадки получают полноценный инструмент
               для управления бронированиями и репутацией
             </p>
@@ -630,8 +718,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 8 — ЛОГИСТИКА ══════════════ */}
-      <section id="slide-8" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 9 — ЛОГИСТИКА ══════════════ */}
+      <section id="slide-9" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute right-0 top-0 w-[500px] h-[500px] bg-neon-cyan/6 rounded-full blur-3xl" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
@@ -691,8 +779,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 9 — ФИНАНСЫ ══════════════ */}
-      <section id="slide-9" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 10 — ФИНАНСЫ ══════════════ */}
+      <section id="slide-10" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute left-0 top-0 w-[500px] h-[500px] bg-neon-green/5 rounded-full blur-3xl" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
@@ -701,7 +789,7 @@ export default function PresentationPage() {
             <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white mb-4">
               Деньги под<br /><span className="text-neon-green">контролем</span>
             </h2>
-            <p className="text-white/45 text-lg max-w-xl mx-auto">
+            <p className="text-white/80 text-lg max-w-xl mx-auto">
               Полная финансовая картина каждого проекта — в реальном времени, с данными из билетных агрегаторов
             </p>
           </div>
@@ -753,8 +841,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 10 — КОМАНДА / ПРАВА ══════════════ */}
-      <section id="slide-10" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 11 — КОМАНДА / ПРАВА ══════════════ */}
+      <section id="slide-11" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute right-0 bottom-0 w-[500px] h-[500px] bg-neon-purple/5 rounded-full blur-3xl" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
@@ -813,8 +901,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 11 — КАК РАБОТАЕТ ══════════════ */}
-      <section id="slide-11" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 12 — КАК РАБОТАЕТ ══════════════ */}
+      <section id="slide-12" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-neon-cyan/3 via-transparent to-neon-purple/3" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
@@ -834,7 +922,7 @@ export default function PresentationPage() {
                     <span className="font-oswald font-bold text-2xl gradient-text">{w.step}</span>
                   </div>
                   <h3 className="font-oswald font-bold text-white text-sm mb-2">{w.title}</h3>
-                  <p className="text-white/40 text-xs leading-relaxed">{w.desc}</p>
+                  <p className="text-white/70 text-xs leading-relaxed">{w.desc}</p>
                 </div>
               ))}
             </div>
@@ -852,7 +940,7 @@ export default function PresentationPage() {
                 </div>
                 <div>
                   <p className="font-oswald font-bold text-white text-sm mb-1">{c.title}</p>
-                  <p className="text-white/40 text-xs leading-relaxed">{c.desc}</p>
+                  <p className="text-white/70 text-xs leading-relaxed">{c.desc}</p>
                 </div>
               </div>
             ))}
@@ -860,8 +948,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 12 — ЦИФРЫ ══════════════ */}
-      <section id="slide-12" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 13 — ЦИФРЫ ══════════════ */}
+      <section id="slide-13" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center opacity-8" style={{ backgroundImage: `url(${IMG_HERO})` }} />
         <div className="absolute inset-0 bg-background/95" />
         <div className="absolute inset-0 bg-gradient-to-br from-neon-purple/5 to-neon-cyan/5" />
@@ -883,7 +971,7 @@ export default function PresentationPage() {
                 <p className={`font-oswald font-bold text-6xl mb-2 ${cm[s.color]}`}>
                   <Counter to={s.to} suffix={s.suffix} />
                 </p>
-                <p className="text-white/45 text-sm">{s.label}</p>
+                <p className="text-white/70 text-sm">{s.label}</p>
               </div>
             ))}
           </div>
@@ -904,8 +992,8 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ SLIDE 13 — CTA ══════════════ */}
-      <section id="slide-13" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
+      {/* ══════════════ SLIDE 14 — CTA ══════════════ */}
+      <section id="slide-14" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG_VENUE})` }} />
         <div className="absolute inset-0 bg-gradient-to-br from-background/97 via-background/92 to-background/80" />
         <div className="absolute top-1/3 left-1/4 w-[400px] h-[400px] bg-neon-purple/10 rounded-full blur-3xl animate-float" />
@@ -921,7 +1009,7 @@ export default function PresentationPage() {
             <span className="text-white">Готов</span>{" "}<span className="gradient-text">начать?</span>
           </h2>
 
-          <p className="text-white/55 text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
+          <p className="text-white/85 text-xl max-w-2xl mx-auto mb-12 leading-relaxed">
             Global Link — новый стандарт работы в музыкальной индустрии России.
             CRM, ЭДО, финансы, синхронизация билетов и логистика — всё в одной платформе.
           </p>

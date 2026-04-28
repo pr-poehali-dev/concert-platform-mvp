@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL } from "@/hooks/useProjects";
-import { useAuth } from "@/context/AuthContext";
 
 interface Invoice {
   id: string;
@@ -41,11 +40,12 @@ interface Props {
 }
 
 export default function InvoiceModal({ bookingId, contractId, onClose }: Props) {
-  const { user } = useAuth();
   const [invoice, setInvoice] = useState<Invoice | null>(null);
-  const [loading, setLoading]  = useState(true);
-  const [marking, setMarking]  = useState(false);
-  const [error, setError]      = useState("");
+  const [loading, setLoading]      = useState(true);
+  const [marking, setMarking]      = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [error, setError]          = useState("");
+  const printRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -80,6 +80,25 @@ export default function InvoiceModal({ bookingId, contractId, onClose }: Props) 
     finally { setMarking(false); }
   };
 
+  const downloadPdf = async () => {
+    if (!printRef.current || !invoice) return;
+    setDownloading(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const { jsPDF } = await import("jspdf");
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2, useCORS: true, backgroundColor: "#ffffff", logging: false,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
+      pdf.save(`Счёт_${invoice.invoice_number}.pdf`);
+    } catch (e) { console.error(e); }
+    finally { setDownloading(false); }
+  };
+
   const modal = (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
@@ -103,9 +122,18 @@ export default function InvoiceModal({ bookingId, contractId, onClose }: Props) 
               )}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all">
-            <Icon name="X" size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            {invoice && (
+              <button onClick={downloadPdf} disabled={downloading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-green/10 border border-neon-green/20 text-neon-green rounded-lg text-xs hover:bg-neon-green/20 disabled:opacity-50 transition-all">
+                {downloading ? <Icon name="Loader2" size={13} className="animate-spin" /> : <Icon name="Download" size={13} />}
+                {downloading ? "Генерирую..." : "Скачать PDF"}
+              </button>
+            )}
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all">
+              <Icon name="X" size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="p-5 space-y-5">
@@ -128,6 +156,56 @@ export default function InvoiceModal({ bookingId, contractId, onClose }: Props) 
 
           {!loading && invoice && (
             <>
+              {/* Скрытый печатный блок для PDF */}
+              <div ref={printRef} style={{ position: "absolute", left: "-9999px", top: 0, width: "794px", background: "#fff", color: "#111", padding: "48px", fontFamily: "sans-serif", fontSize: "13px", lineHeight: "1.7" }}>
+                <div style={{ textAlign: "center", marginBottom: "24px", borderBottom: "2px solid #111", paddingBottom: "16px" }}>
+                  <div style={{ fontSize: "20px", fontWeight: "bold", textTransform: "uppercase" }}>Счёт на оплату</div>
+                  <div style={{ fontSize: "14px", color: "#555", marginTop: "4px" }}>№{invoice.invoice_number} от {fmtDate(invoice.created_at)}</div>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "24px", gap: "32px" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: "bold", fontSize: "11px", textTransform: "uppercase", color: "#888", marginBottom: "6px" }}>Плательщик</div>
+                    <div style={{ fontWeight: "bold" }}>{invoice.payer_legal_name || "—"}</div>
+                    {invoice.payer_inn && <div style={{ color: "#555" }}>ИНН: {invoice.payer_inn}</div>}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: "bold", fontSize: "11px", textTransform: "uppercase", color: "#888", marginBottom: "6px" }}>Получатель</div>
+                    <div style={{ fontWeight: "bold" }}>{invoice.payee_legal_name || "—"}</div>
+                    {invoice.payee_inn && <div style={{ color: "#555" }}>ИНН: {invoice.payee_inn}</div>}
+                    {invoice.payee_bank_name    && <div style={{ color: "#555" }}>Банк: {invoice.payee_bank_name}</div>}
+                    {invoice.payee_bank_account && <div style={{ color: "#555" }}>Р/счёт: {invoice.payee_bank_account}</div>}
+                    {invoice.payee_bank_bik     && <div style={{ color: "#555" }}>БИК: {invoice.payee_bank_bik}</div>}
+                  </div>
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "24px" }}>
+                  <thead>
+                    <tr style={{ background: "#f5f5f5" }}>
+                      <th style={{ border: "1px solid #ddd", padding: "8px 12px", textAlign: "left", fontSize: "12px" }}>Наименование</th>
+                      <th style={{ border: "1px solid #ddd", padding: "8px 12px", textAlign: "right", fontSize: "12px" }}>Сумма</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={{ border: "1px solid #ddd", padding: "10px 12px", fontSize: "13px" }}>{invoice.description}</td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px 12px", textAlign: "right", fontWeight: "bold", fontSize: "13px" }}>{fmt(invoice.amount)}</td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr style={{ background: "#f9f9f9" }}>
+                      <td style={{ border: "1px solid #ddd", padding: "10px 12px", fontWeight: "bold" }}>Итого к оплате:</td>
+                      <td style={{ border: "1px solid #ddd", padding: "10px 12px", fontWeight: "bold", textAlign: "right", fontSize: "15px" }}>{fmt(invoice.amount)}</td>
+                    </tr>
+                  </tfoot>
+                </table>
+                {invoice.due_date && <div style={{ color: "#555", marginBottom: "24px" }}>Срок оплаты: {fmtDate(invoice.due_date)}</div>}
+                <div style={{ borderTop: "1px solid #eee", paddingTop: "12px", fontSize: "10px", color: "#aaa" }}>
+                  {invoice.status === "paid"
+                    ? `✓ Оплачен ${invoice.paid_at ? fmtDate(invoice.paid_at) : ""}`
+                    : "Статус: Ожидает оплаты"
+                  } · Сгенерировано платформой Global Link
+                </div>
+              </div>
+
               {/* Итоговая сумма */}
               <div className="glass rounded-2xl p-5 border border-neon-green/20 text-center">
                 <p className="text-white/40 text-sm mb-1">Сумма к оплате</p>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL } from "@/hooks/useProjects";
@@ -80,9 +80,11 @@ export default function ContractModal({
   const [loading, setLoading]       = useState(true);
   const [generating, setGenerating] = useState(false);
   const [signing, setSigning]       = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [error, setError]           = useState("");
   const [signDone, setSignDone]     = useState(false);
   const [invoiceId, setInvoiceId]   = useState<string | null>(null);
+  const printRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -146,6 +148,32 @@ export default function ContractModal({
 
   const canSign = !!myRole && !iAlreadySigned && contract?.status !== "signed" && contract?.status !== "paid";
 
+  const downloadPdf = async () => {
+    if (!printRef.current || !contract) return;
+    setDownloading(true);
+    try {
+      const { default: html2canvas } = await import("html2canvas");
+      const { jsPDF } = await import("jspdf");
+      const canvas = await html2canvas(printRef.current, {
+        scale: 2, useCORS: true, backgroundColor: "#ffffff",
+        logging: false,
+      });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfH = (canvas.height * pdfW) / canvas.width;
+      const pageH = pdf.internal.pageSize.getHeight();
+      let y = 0;
+      while (y < pdfH) {
+        pdf.addImage(imgData, "PNG", 0, -y, pdfW, pdfH);
+        y += pageH;
+        if (y < pdfH) pdf.addPage();
+      }
+      pdf.save(`Договор_${contract.contract_number}.pdf`);
+    } catch (e) { console.error(e); }
+    finally { setDownloading(false); }
+  };
+
   const modal = (
     <div className="fixed inset-0 z-[300] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/75 backdrop-blur-sm" onClick={onClose} />
@@ -169,9 +197,20 @@ export default function ContractModal({
               )}
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all">
-            <Icon name="X" size={16} />
-          </button>
+          <div className="flex items-center gap-2">
+            {contract && (
+              <button onClick={downloadPdf} disabled={downloading}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-purple/10 border border-neon-purple/20 text-neon-purple rounded-lg text-xs hover:bg-neon-purple/20 disabled:opacity-50 transition-all">
+                {downloading
+                  ? <Icon name="Loader2" size={13} className="animate-spin" />
+                  : <Icon name="Download" size={13} />}
+                {downloading ? "Генерирую..." : "Скачать PDF"}
+              </button>
+            )}
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-xl text-white/30 hover:text-white hover:bg-white/10 transition-all">
+              <Icon name="X" size={16} />
+            </button>
+          </div>
         </div>
 
         <div className="p-5 space-y-5">
@@ -239,6 +278,71 @@ export default function ContractModal({
                     }
                   </div>
                 ))}
+              </div>
+
+              {/* Скрытый печатный блок для PDF */}
+              <div ref={printRef} style={{ position: "absolute", left: "-9999px", top: 0, width: "794px", background: "#fff", color: "#111", padding: "48px", fontFamily: "serif", fontSize: "13px", lineHeight: "1.7" }}>
+                <div style={{ textAlign: "center", marginBottom: "24px" }}>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>Договор аренды концертной площадки</div>
+                  <div style={{ fontSize: "12px", color: "#555" }}>№{contract.contract_number} от {fmtDate(contract.created_at)}</div>
+                </div>
+                <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Стороны договора</div>
+                  <div><b>Арендатор:</b> {contract.organizer_legal_name || "—"}</div>
+                  <div>ИНН: {contract.organizer_inn || "—"}{contract.organizer_kpp ? ` / КПП: ${contract.organizer_kpp}` : ""}</div>
+                  {contract.organizer_ogrn    && <div>ОГРН: {contract.organizer_ogrn}</div>}
+                  {contract.organizer_address && <div>Адрес: {contract.organizer_address}</div>}
+                  {contract.organizer_phone   && <div>Тел.: {contract.organizer_phone}</div>}
+                </div>
+                <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
+                  <div><b>Арендодатель:</b> {contract.venue_legal_name || contract.venue_name}</div>
+                  <div>ИНН: {contract.venue_inn || "—"}{contract.venue_kpp ? ` / КПП: ${contract.venue_kpp}` : ""}</div>
+                  {contract.venue_ogrn    && <div>ОГРН: {contract.venue_ogrn}</div>}
+                  {contract.venue_address && <div>Адрес: {contract.venue_address}</div>}
+                  {contract.venue_phone   && <div>Тел.: {contract.venue_phone}</div>}
+                </div>
+                <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Предмет договора</div>
+                  <div>Арендодатель предоставляет площадку «{contract.venue_name}» для проведения мероприятия.</div>
+                  {contract.artist && <div><b>Артист:</b> {contract.artist}</div>}
+                  <div><b>Дата мероприятия:</b> {fmtDate(contract.event_date)}{contract.event_time ? ` в ${contract.event_time}` : ""}</div>
+                  <div><b>Стоимость аренды:</b> {fmt(contract.rental_amount)}</div>
+                  {contract.venue_conditions && <div><b>Условия:</b> {contract.venue_conditions}</div>}
+                </div>
+                <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Реквизиты Арендатора</div>
+                  {contract.organizer_bank_name    && <div>Банк: {contract.organizer_bank_name}</div>}
+                  {contract.organizer_bank_account && <div>Расчётный счёт: {contract.organizer_bank_account}</div>}
+                  {contract.organizer_bank_bik     && <div>БИК: {contract.organizer_bank_bik}</div>}
+                </div>
+                <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
+                  <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Реквизиты Арендодателя</div>
+                  {contract.venue_bank_name    && <div>Банк: {contract.venue_bank_name}</div>}
+                  {contract.venue_bank_account && <div>Расчётный счёт: {contract.venue_bank_account}</div>}
+                  {contract.venue_bank_bik     && <div>БИК: {contract.venue_bank_bik}</div>}
+                </div>
+                <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "32px" }}>
+                  <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Подписи сторон</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
+                    <div>
+                      <div style={{ fontWeight: "bold" }}>Арендатор</div>
+                      <div style={{ fontSize: "12px", color: "#555" }}>{contract.organizer_legal_name || "—"}</div>
+                      <div style={{ marginTop: "8px", color: contract.organizer_signed_at ? "#16a34a" : "#999", fontSize: "12px" }}>
+                        {contract.organizer_signed_at ? `✓ Подписано ${fmtDate(contract.organizer_signed_at)}` : "Ожидает подписи"}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontWeight: "bold" }}>Арендодатель</div>
+                      <div style={{ fontSize: "12px", color: "#555" }}>{contract.venue_legal_name || contract.venue_name}</div>
+                      <div style={{ marginTop: "8px", color: contract.venue_signed_at ? "#16a34a" : "#999", fontSize: "12px" }}>
+                        {contract.venue_signed_at ? `✓ Подписано ${fmtDate(contract.venue_signed_at)}` : "Ожидает подписи"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{ borderTop: "1px solid #eee", paddingTop: "12px", fontSize: "10px", color: "#aaa" }}>
+                  Договор составлен в электронной форме. Юридическая сила в соответствии с ФЗ №149-ФЗ и ГК РФ. Сгенерирован платформой Global Link.
+                </div>
               </div>
 
               {/* Тело договора */}
