@@ -129,8 +129,8 @@ def get_session_user(session_id: str) -> dict | None:
 
 
 def ask_ai(question: str, user_role: str) -> str:
-    """Отправляет вопрос в Groq (бесплатно) и возвращает ответ."""
-    api_key = os.environ.get("GROQ_API_KEY", "")
+    """Отправляет вопрос в Google Gemini (бесплатно) и возвращает ответ."""
+    api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         return "ИИ-ассистент временно недоступен — не задан API-ключ. Обратитесь к администратору."
 
@@ -140,35 +140,35 @@ def ask_ai(question: str, user_role: str) -> str:
     elif user_role == "venue":
         role_hint = "\n\nПользователь является владельцем ПЛОЩАДКИ."
 
+    full_prompt = SYSTEM_PROMPT + role_hint + "\n\nВопрос пользователя: " + question
+
     payload = json.dumps({
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT + role_hint},
-            {"role": "user", "content": question},
+        "contents": [
+            {"parts": [{"text": full_prompt}]}
         ],
-        "max_tokens": 1000,
-        "temperature": 0.4,
+        "generationConfig": {
+            "temperature": 0.4,
+            "maxOutputTokens": 1000,
+        }
     }).encode("utf-8")
 
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
     req = urllib.request.Request(
-        "https://api.groq.com/openai/v1/chat/completions",
+        url,
         data=payload,
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        },
+        headers={"Content-Type": "application/json"},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data["choices"][0]["message"]["content"].strip()
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        print(f"[ai] Groq error {e.code}: {body}")
+        print(f"[ai] Gemini error {e.code}: {body}")
         return "Не удалось получить ответ. Попробуйте позже."
     except Exception as ex:
-        print(f"[ai] Groq exception: {ex}")
+        print(f"[ai] Gemini exception: {ex}")
         return "Не удалось получить ответ. Попробуйте позже."
 
 
