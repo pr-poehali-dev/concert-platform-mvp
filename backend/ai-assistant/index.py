@@ -128,11 +128,11 @@ def get_session_user(session_id: str) -> dict | None:
     return row[0] if isinstance(row[0], dict) else json.loads(row[0])
 
 
-def ask_openai(question: str, user_role: str) -> str:
-    """Отправляет вопрос в OpenAI и возвращает ответ."""
-    api_key = os.environ.get("OPENAI_API_KEY", "")
+def ask_ai(question: str, user_role: str) -> str:
+    """Отправляет вопрос в Groq (бесплатно) и возвращает ответ."""
+    api_key = os.environ.get("GROQ_API_KEY", "")
     if not api_key:
-        return "ИИ-ассистент временно недоступен. Обратитесь в поддержку."
+        return "ИИ-ассистент временно недоступен — не задан API-ключ. Обратитесь к администратору."
 
     role_hint = ""
     if user_role == "organizer":
@@ -141,7 +141,7 @@ def ask_openai(question: str, user_role: str) -> str:
         role_hint = "\n\nПользователь является владельцем ПЛОЩАДКИ."
 
     payload = json.dumps({
-        "model": "gpt-4o-mini",
+        "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT + role_hint},
             {"role": "user", "content": question},
@@ -151,7 +151,7 @@ def ask_openai(question: str, user_role: str) -> str:
     }).encode("utf-8")
 
     req = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
+        "https://api.groq.com/openai/v1/chat/completions",
         data=payload,
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -165,10 +165,10 @@ def ask_openai(question: str, user_role: str) -> str:
             return data["choices"][0]["message"]["content"].strip()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        print(f"[ai] OpenAI error {e.code}: {body}")
+        print(f"[ai] Groq error {e.code}: {body}")
         return "Не удалось получить ответ. Попробуйте позже."
     except Exception as ex:
-        print(f"[ai] OpenAI exception: {ex}")
+        print(f"[ai] Groq exception: {ex}")
         return "Не удалось получить ответ. Попробуйте позже."
 
 
@@ -217,7 +217,7 @@ def handler(event: dict, context) -> dict:
         if len(question) > 2000:
             return err("Вопрос слишком длинный (максимум 2000 символов)")
 
-        answer = ask_openai(question, user.get("role", ""))
+        answer = ask_ai(question, user.get("role", ""))
 
         conn = get_conn()
         try:
