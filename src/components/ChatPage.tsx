@@ -54,6 +54,11 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
   useEffect(() => { loadConversations(); }, [loadConversations]);
 
   useEffect(() => {
+    // Всегда чистим предыдущий интервал при любом изменении
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
     if (!activeConvId || !user) return;
     loadMessages(activeConvId);
     fetch(`${CHAT_URL}?action=read`, {
@@ -62,9 +67,14 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
       body: JSON.stringify({ conversationId: activeConvId, userId: user.id }),
     });
     setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unread: 0 } : c));
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(() => loadMessages(activeConvId, true), 5000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    const convId = activeConvId;
+    pollingRef.current = setInterval(() => loadMessages(convId, true), 5000);
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
   }, [activeConvId, user, loadMessages]);
 
   // ── Upload file to S3 via chat backend ──────────────────────────────────

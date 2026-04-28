@@ -59,15 +59,32 @@ export default function FindUserById({ currentUserId, sessionId, onConversationC
   const handleStartChat = async () => {
     if (!found) return;
     setStarting(true);
+    setError("");
     try {
-      const res = await fetch(`${CHAT_URL}?action=create_conversation`, {
+      // Определяем роли: если найденный — площадка, текущий — организатор, и наоборот
+      const isFoundVenue = found.role === "venue";
+      const body = isFoundVenue
+        ? {
+            organizerId: currentUserId,
+            venueId: found.id,
+            venueUserId: found.id,
+            venueName: found.legalName || found.name,
+          }
+        : {
+            organizerId: found.id,
+            venueId: currentUserId,
+            venueUserId: currentUserId,
+            venueName: found.legalName || found.name,
+          };
+
+      const res = await fetch(`${CHAT_URL}?action=start`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
-        body: JSON.stringify({ participant_id: found.id }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (data.conversation_id || data.id) {
-        onConversationCreated(data.conversation_id || data.id);
+      if (data.conversationId) {
+        onConversationCreated(data.conversationId);
         setOpen(false);
         setQuery("");
         setFound(null);

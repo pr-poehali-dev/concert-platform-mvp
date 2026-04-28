@@ -152,48 +152,67 @@ export default function DashboardDocumentsTab() {
 
   // ── Move to folder ─────────────────────────────────────────────────────
   const moveToFolder = async (docId: string, folder: string) => {
-    await fetch(`${DOCS_URL}?action=update_folder`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Session-Id": session() },
-      body: JSON.stringify({ id: docId, folder }),
-    });
+    // Оптимистичное обновление UI
     setDocs(prev => prev.map(d => d.id === docId ? { ...d, folder } : d));
+    try {
+      const res = await fetch(`${DOCS_URL}?action=update_folder`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+        body: JSON.stringify({ id: docId, folder }),
+      });
+      if (!res.ok) {
+        // Откатываем если ошибка
+        await loadDocs();
+      }
+    } catch {
+      await loadDocs();
+    }
   };
 
   // ── Rename folder ──────────────────────────────────────────────────────
   const renameFolder = async (oldName: string, newName: string) => {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === oldName) { setRenamingFolder(null); return; }
-    // Переименовываем все документы в этой папке
     const toUpdate = docs.filter(d => d.folder === oldName);
-    await Promise.all(toUpdate.map(d =>
-      fetch(`${DOCS_URL}?action=update_folder`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
-        body: JSON.stringify({ id: d.id, folder: trimmed }),
-      })
-    ));
+    // Оптимистичное обновление
     setDocs(prev => prev.map(d => d.folder === oldName ? { ...d, folder: trimmed } : d));
     setExtraFolders(prev => prev.map(f => f === oldName ? trimmed : f));
     if (filterFolder === oldName) setFilterFolder(trimmed);
     setRenamingFolder(null);
+    try {
+      const results = await Promise.all(toUpdate.map(d =>
+        fetch(`${DOCS_URL}?action=update_folder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+          body: JSON.stringify({ id: d.id, folder: trimmed }),
+        })
+      ));
+      if (results.some(r => !r.ok)) await loadDocs();
+    } catch {
+      await loadDocs();
+    }
   };
 
   // ── Delete folder ──────────────────────────────────────────────────────
   const deleteFolder = async (name: string) => {
-    // Убираем папку у всех документов
     const toUpdate = docs.filter(d => d.folder === name);
-    await Promise.all(toUpdate.map(d =>
-      fetch(`${DOCS_URL}?action=update_folder`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
-        body: JSON.stringify({ id: d.id, folder: "" }),
-      })
-    ));
+    // Оптимистичное обновление
     setDocs(prev => prev.map(d => d.folder === name ? { ...d, folder: "" } : d));
     setExtraFolders(prev => prev.filter(f => f !== name));
     if (filterFolder === name) setFilterFolder("all");
     setDeletingFolder(null);
+    try {
+      const results = await Promise.all(toUpdate.map(d =>
+        fetch(`${DOCS_URL}?action=update_folder`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+          body: JSON.stringify({ id: d.id, folder: "" }),
+        })
+      ));
+      if (results.some(r => !r.ok)) await loadDocs();
+    } catch {
+      await loadDocs();
+    }
   };
 
   // ── Helpers ────────────────────────────────────────────────────────────

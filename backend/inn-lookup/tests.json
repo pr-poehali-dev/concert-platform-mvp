@@ -1,0 +1,28 @@
+{
+  "tests": [
+    {
+      "name": "Missing inn param",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Invalid inn (letters)",
+      "method": "GET",
+      "path": "/?inn=abc",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Invalid inn (wrong length)",
+      "method": "GET",
+      "path": "/?inn=123",
+      "expectedStatus": 400,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    }
+  ]
+}

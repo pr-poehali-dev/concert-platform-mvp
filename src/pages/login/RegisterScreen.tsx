@@ -16,23 +16,28 @@ interface DadataCompany {
   };
 }
 
+const INN_LOOKUP_URL = "https://functions.poehali.dev/b803c937-089e-4820-afe4-17882ef3baef";
+
 async function searchByInn(inn: string): Promise<DadataCompany | null> {
   try {
-    const res = await fetch(
-      `https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": "Token 3b46ee0e8c9f2a69c06c1cbcc26fffcb00b81451",
-          "Accept": "application/json",
-        },
-        body: JSON.stringify({ query: inn, count: 1 }),
-      }
-    );
+    const res = await fetch(`${INN_LOOKUP_URL}?inn=${encodeURIComponent(inn)}`);
     if (!res.ok) return null;
     const data = await res.json();
-    return data.suggestions?.[0] ?? null;
+    if (data.error) return null;
+    // Приводим к формату DadataCompany для совместимости
+    return {
+      value: data.shortName || data.name || "",
+      data: {
+        inn: data.inn,
+        kpp: data.kpp || "",
+        ogrn: data.ogrn || "",
+        address: data.address ? { value: data.address } : undefined,
+        name: {
+          full_with_opf: data.fullName || data.name || "",
+          short_with_opf: data.shortName || data.name || "",
+        },
+      },
+    } as DadataCompany;
   } catch {
     return null;
   }

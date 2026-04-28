@@ -18,7 +18,6 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [authModal, setAuthModal] = useState<{ open: boolean; tab: "login" | "register" }>({ open: false, tab: "login" });
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [chatUnread, setChatUnread] = useState(0);
 
   const fetchChatUnread = useCallback(async () => {

@@ -7,6 +7,32 @@
       "expectedStatus": 401,
       "expectedBody": {"error": "Требуется авторизация"},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "update_folder requires auth",
+      "method": "POST",
+      "path": "/?action=update_folder",
+      "body": {"id": "00000000-0000-0000-0000-000000000000", "folder": "Тест"},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "upload requires auth",
+      "method": "POST",
+      "path": "/?action=upload",
+      "body": {},
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "unknown action",
+      "method": "GET",
+      "path": "/?action=unknown_xyz",
+      "expectedStatus": 401,
+      "expectedBody": {"error": "string"},
+      "bodyMatcher": "partial"
     }
   ]
 }
