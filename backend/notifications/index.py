@@ -159,9 +159,13 @@ def send_web_push(subscription: dict, payload: dict) -> bool:
         if status in (404, 410):
             # Подписка устарела — удаляем
             try:
-                conn = get_conn(); cur = conn.cursor()
-                cur.execute(f"DELETE FROM {SCHEMA}.push_subscriptions WHERE endpoint=%s", (endpoint,))
-                conn.commit(); conn.close()
+                conn = get_conn()
+                try:
+                    cur = conn.cursor()
+                    cur.execute(f"DELETE FROM {SCHEMA}.push_subscriptions WHERE endpoint=%s", (endpoint,))
+                    conn.commit()
+                finally:
+                    conn.close()
             except Exception:
                 pass
         print(f"[push] HTTPError {status}: {e.reason}")
@@ -174,11 +178,15 @@ def send_web_push(subscription: dict, payload: dict) -> bool:
 def push_to_user(user_id: str, title: str, body: str, link_page: str = "", notif_type: str = "system"):
     """Отправляет Web Push всем подпискам пользователя."""
     try:
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"SELECT endpoint, p256dh, auth FROM {SCHEMA}.push_subscriptions WHERE user_id=%s",
-            (user_id,))
-        rows = cur.fetchall(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT endpoint, p256dh, auth FROM {SCHEMA}.push_subscriptions WHERE user_id=%s",
+                (user_id,))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
     except Exception:
         return
 
@@ -217,24 +225,32 @@ def handler(event: dict, context) -> dict:
         user_id = params.get("user_id", "")
         if not user_id: return err("user_id required")
         limit = int(params.get("limit", 50))
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""SELECT id, user_id, type, title, body, link_page, is_read, created_at
-                FROM {SCHEMA}.notifications WHERE user_id=%s
-                ORDER BY created_at DESC LIMIT %s""",
-            (user_id, limit))
-        rows = cur.fetchall(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id, user_id, type, title, body, link_page, is_read, created_at
+                    FROM {SCHEMA}.notifications WHERE user_id=%s
+                    ORDER BY created_at DESC LIMIT %s""",
+                (user_id, limit))
+            rows = cur.fetchall()
+        finally:
+            conn.close()
         return ok({"notifications": [row_to_notif(r) for r in rows]})
 
     # GET unread_count
     if method == "GET" and action == "unread_count":
         user_id = params.get("user_id", "")
         if not user_id: return err("user_id required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"SELECT COUNT(*) FROM {SCHEMA}.notifications WHERE user_id=%s AND is_read=FALSE",
-            (user_id,))
-        count = cur.fetchone()[0]; conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT COUNT(*) FROM {SCHEMA}.notifications WHERE user_id=%s AND is_read=FALSE",
+                (user_id,))
+            count = cur.fetchone()[0]
+        finally:
+            conn.close()
         return ok({"count": count})
 
     # POST read
@@ -242,9 +258,13 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         notif_id = body.get("id", "")
         if not notif_id: return err("id required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"UPDATE {SCHEMA}.notifications SET is_read=TRUE WHERE id=%s", (notif_id,))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"UPDATE {SCHEMA}.notifications SET is_read=TRUE WHERE id=%s", (notif_id,))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # POST read_all
@@ -252,11 +272,15 @@ def handler(event: dict, context) -> dict:
         body = json.loads(event.get("body") or "{}")
         user_id = body.get("userId", "")
         if not user_id: return err("userId required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {SCHEMA}.notifications SET is_read=TRUE WHERE user_id=%s AND is_read=FALSE",
-            (user_id,))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.notifications SET is_read=TRUE WHERE user_id=%s AND is_read=FALSE",
+                (user_id,))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # POST create — создать уведомление + отправить push
@@ -271,13 +295,17 @@ def handler(event: dict, context) -> dict:
 
         if not user_id or not title: return err("userId и title обязательны")
 
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.notifications (user_id, type, title, body, link_page)
-                VALUES (%s, %s, %s, %s, %s) RETURNING id""",
-            (user_id, notif_type, title, notif_body, link_page))
-        notif_id = str(cur.fetchone()[0])
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.notifications (user_id, type, title, body, link_page)
+                    VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                (user_id, notif_type, title, notif_body, link_page))
+            notif_id = str(cur.fetchone()[0])
+            conn.commit()
+        finally:
+            conn.close()
 
         # Отправляем Web Push асинхронно (не блокируем ответ)
         if send_push:
@@ -300,15 +328,19 @@ def handler(event: dict, context) -> dict:
         if not user_id or not endpoint or not p256dh or not auth_key:
             return err("userId, endpoint, p256dh, auth required")
 
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (endpoint) DO UPDATE
-                SET user_id=%s, p256dh=%s, auth=%s, user_agent=%s""",
-            (user_id, endpoint, p256dh, auth_key, ua,
-             user_id, p256dh, auth_key, ua))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.push_subscriptions (user_id, endpoint, p256dh, auth, user_agent)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (endpoint) DO UPDATE
+                    SET user_id=%s, p256dh=%s, auth=%s, user_agent=%s""",
+                (user_id, endpoint, p256dh, auth_key, ua,
+                 user_id, p256dh, auth_key, ua))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"subscribed": True})
 
     # POST push_unsubscribe — удалить подписку
@@ -316,9 +348,13 @@ def handler(event: dict, context) -> dict:
         body     = json.loads(event.get("body") or "{}")
         endpoint = (body.get("endpoint") or "").strip()
         if not endpoint: return err("endpoint required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"DELETE FROM {SCHEMA}.push_subscriptions WHERE endpoint=%s", (endpoint,))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.push_subscriptions WHERE endpoint=%s", (endpoint,))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"unsubscribed": True})
 
     return err("Not found", 404)

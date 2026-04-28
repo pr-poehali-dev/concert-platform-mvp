@@ -71,9 +71,17 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
 
   const handleSave = async () => {
     setSaving(true);
-    await new Promise(r => setTimeout(r, 600));
-    setSaving(false);
-    setEditMode(false);
+    try {
+      await updateProfile({
+        name: editForm.name.trim(),
+        city: editForm.city.trim(),
+      });
+      setEditMode(false);
+    } catch (e) {
+      // Ошибка показывается через toast в updateProfile
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Мобильный таб-бар (только на маленьких экранах, до lg)

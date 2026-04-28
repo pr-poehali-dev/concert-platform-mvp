@@ -26,7 +26,7 @@ export default function AdminOverviewTab({ stats, statsLoading, onGoToPending }:
     <div className="animate-fade-in space-y-8">
       {statsLoading ? (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[...Array(8)].map((_, i) => <div key={i} className="glass rounded-2xl h-28 animate-pulse" />)}
+          {Array.from({ length: 8 }).map((_, i) => <div key={`skeleton-${i}`} className="glass rounded-2xl h-28 animate-pulse" />)}
         </div>
       ) : stats ? (
         <>

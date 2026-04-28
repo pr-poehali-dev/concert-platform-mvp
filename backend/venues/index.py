@@ -102,35 +102,37 @@ def handler(event: dict, context) -> dict:
         capacity_min = int(params.get("capacity_min", 0) or 0)
 
         conn = get_conn()
-        cur = conn.cursor()
-        query = f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
-                           description, photo_url, rider_url, rider_name, tags, rating,
-                           reviews_count, verified, created_at, schema_url, schema_name,
-                           phone, website, imported_from, owner_user_id
-                    FROM {SCHEMA}.venues WHERE 1=1"""
-        args = []
-        if city:
-            query += " AND city = %s"; args.append(city)
-        if venue_type:
-            query += " AND venue_type = %s"; args.append(venue_type)
-        if capacity_min:
-            query += " AND capacity >= %s"; args.append(capacity_min)
-        query += " ORDER BY rating DESC, created_at DESC LIMIT 50"
-        cur.execute(query, args)
-        rows = cur.fetchall()
+        try:
+            cur = conn.cursor()
+            query = f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
+                               description, photo_url, rider_url, rider_name, tags, rating,
+                               reviews_count, verified, created_at, schema_url, schema_name,
+                               phone, website, imported_from, owner_user_id
+                        FROM {SCHEMA}.venues WHERE 1=1"""
+            args = []
+            if city:
+                query += " AND city = %s"; args.append(city)
+            if venue_type:
+                query += " AND venue_type = %s"; args.append(venue_type)
+            if capacity_min:
+                query += " AND capacity >= %s"; args.append(capacity_min)
+            query += " ORDER BY rating DESC, created_at DESC LIMIT 50"
+            cur.execute(query, args)
+            rows = cur.fetchall()
 
-        # Подтягиваем все фото для этих площадок
-        venue_ids = [str(r[0]) for r in rows]
-        photos_map: dict = {}
-        if venue_ids:
-            placeholders = ",".join(["%s"] * len(venue_ids))
-            cur.execute(
-                f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
-                venue_ids,
-            )
-            for pr in cur.fetchall():
-                photos_map.setdefault(str(pr[0]), []).append(pr[1])
-        conn.close()
+            # Подтягиваем все фото для этих площадок
+            venue_ids = [str(r[0]) for r in rows]
+            photos_map: dict = {}
+            if venue_ids:
+                placeholders = ",".join(["%s"] * len(venue_ids))
+                cur.execute(
+                    f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
+                    venue_ids,
+                )
+                for pr in cur.fetchall():
+                    photos_map.setdefault(str(pr[0]), []).append(pr[1])
+        finally:
+            conn.close()
 
         result = []
         for r in rows:
@@ -145,37 +147,38 @@ def handler(event: dict, context) -> dict:
         if not user_id:
             return err("user_id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
-                       description, photo_url, rider_url, rider_name, tags, rating,
-                       reviews_count, verified, created_at, schema_url, schema_name,
-                       phone, website, imported_from, owner_user_id
-                FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
-            (user_id,)
-        )
-        rows = cur.fetchall()
-
-        venue_ids = [str(r[0]) for r in rows]
-        photos_map: dict = {}
-        busy_map: dict = {}
-
-        if venue_ids:
-            placeholders = ",".join(["%s"] * len(venue_ids))
+        try:
+            cur = conn.cursor()
             cur.execute(
-                f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
-                venue_ids,
+                f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
+                           description, photo_url, rider_url, rider_name, tags, rating,
+                           reviews_count, verified, created_at, schema_url, schema_name,
+                           phone, website, imported_from, owner_user_id
+                    FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
+                (user_id,)
             )
-            for pr in cur.fetchall():
-                photos_map.setdefault(str(pr[0]), []).append(pr[1])
-            cur.execute(
-                f"SELECT venue_id, busy_date, note FROM {SCHEMA}.venue_busy_dates WHERE venue_id IN ({placeholders})",
-                venue_ids,
-            )
-            for bd in cur.fetchall():
-                busy_map.setdefault(str(bd[0]), []).append({"date": str(bd[1]), "note": bd[2]})
+            rows = cur.fetchall()
 
-        conn.close()
+            venue_ids = [str(r[0]) for r in rows]
+            photos_map: dict = {}
+            busy_map: dict = {}
+
+            if venue_ids:
+                placeholders = ",".join(["%s"] * len(venue_ids))
+                cur.execute(
+                    f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
+                    venue_ids,
+                )
+                for pr in cur.fetchall():
+                    photos_map.setdefault(str(pr[0]), []).append(pr[1])
+                cur.execute(
+                    f"SELECT venue_id, busy_date, note FROM {SCHEMA}.venue_busy_dates WHERE venue_id IN ({placeholders})",
+                    venue_ids,
+                )
+                for bd in cur.fetchall():
+                    busy_map.setdefault(str(bd[0]), []).append({"date": str(bd[1]), "note": bd[2]})
+        finally:
+            conn.close()
         venues = []
         for r in rows:
             v = row_to_venue(r)
@@ -238,33 +241,35 @@ def handler(event: dict, context) -> dict:
             schema_name = schema_orig
 
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.venues
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.venues
+                    (user_id, name, city, address, venue_type, capacity, price_from, description,
+                     photo_url, rider_url, rider_name, tags, schema_url, schema_name)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (user_id, name, city, address, venue_type, capacity, price_from, description,
                  photo_url, rider_url, rider_name, tags, schema_url, schema_name)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (user_id, name, city, address, venue_type, capacity, price_from, description,
-             photo_url, rider_url, rider_name, tags, schema_url, schema_name)
-        )
-        venue_id = str(cur.fetchone()[0])
-
-        # Сохраняем все фото в venue_photos
-        for i, url in enumerate(uploaded_photos):
-            cur.execute(
-                f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
-                (venue_id, url, i)
             )
+            venue_id = str(cur.fetchone()[0])
 
-        # Занятые даты
-        for bd in busy_dates:
-            if bd.get("date"):
+            # Сохраняем все фото в venue_photos
+            for i, url in enumerate(uploaded_photos):
                 cur.execute(
-                    f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
-                    (venue_id, bd["date"], bd.get("note", ""))
+                    f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
+                    (venue_id, url, i)
                 )
-        conn.commit()
-        conn.close()
+
+            # Занятые даты
+            for bd in busy_dates:
+                if bd.get("date"):
+                    cur.execute(
+                        f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
+                        (venue_id, bd["date"], bd.get("note", ""))
+                    )
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"venueId": venue_id}, 201)
 
     # ── POST add_photos ───────────────────────────────────────────────────
@@ -278,30 +283,32 @@ def handler(event: dict, context) -> dict:
 
         s3 = get_s3()
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(f"SELECT MAX(sort_order) FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
-        row = cur.fetchone()
-        start_order = (row[0] or -1) + 1
+        try:
+            cur = conn.cursor()
+            cur.execute(f"SELECT MAX(sort_order) FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
+            row = cur.fetchone()
+            start_order = (row[0] or -1) + 1
 
-        urls = []
-        for i, ph in enumerate(photos_b64):
-            if not ph.get("data"): continue
-            ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
-            url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
-            cur.execute(
-                f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
-                (venue_id, url, start_order + i)
-            )
-            urls.append(url)
+            urls = []
+            for i, ph in enumerate(photos_b64):
+                if not ph.get("data"): continue
+                ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
+                url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
+                    (venue_id, url, start_order + i)
+                )
+                urls.append(url)
 
-        # Если у площадки нет главного фото — ставим первое
-        cur.execute(f"SELECT photo_url FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
-        vrow = cur.fetchone()
-        if vrow and not vrow[0] and urls:
-            cur.execute(f"UPDATE {SCHEMA}.venues SET photo_url = %s WHERE id = %s", (urls[0], venue_id))
+            # Если у площадки нет главного фото — ставим первое
+            cur.execute(f"SELECT photo_url FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+            vrow = cur.fetchone()
+            if vrow and not vrow[0] and urls:
+                cur.execute(f"UPDATE {SCHEMA}.venues SET photo_url = %s WHERE id = %s", (urls[0], venue_id))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"added": len(urls), "urls": urls})
 
     # ── POST update ───────────────────────────────────────────────────────
@@ -312,90 +319,94 @@ def handler(event: dict, context) -> dict:
         if not venue_id:
             return err("venueId обязателен")
 
-        conn = get_conn(); cur = conn.cursor()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
 
-        # Проверяем владение (userId опционален — используем сессию если не передан)
-        owner_check = user_id if user_id else None
-        if owner_check:
-            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s", (venue_id, owner_check))
-        else:
-            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
-        if not cur.fetchone():
-            conn.close(); return err("Площадка не найдена или нет прав", 403)
+            # Проверяем владение (userId опционален — используем сессию если не передан)
+            owner_check = user_id if user_id else None
+            if owner_check:
+                cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s", (venue_id, owner_check))
+            else:
+                cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+            if not cur.fetchone():
+                conn.close(); return err("Площадка не найдена или нет прав", 403)
 
-        # Основные поля
-        fields = {}
-        for key, col in [("name","name"),("city","city"),("address","address"),("venueType","venue_type"),
-                         ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags")]:
-            if key in body:
-                fields[col] = body[key]
+            # Основные поля
+            fields = {}
+            for key, col in [("name","name"),("city","city"),("address","address"),("venueType","venue_type"),
+                             ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags")]:
+                if key in body:
+                    fields[col] = body[key]
 
-        s3 = get_s3()
+            s3 = get_s3()
 
-        # Новые фотографии
-        new_photos_b64 = body.get("photosBase64") or []
-        uploaded_photo_urls = []
-        for ph in new_photos_b64:
-            if not ph.get("data"): continue
-            ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
-            url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
-            uploaded_photo_urls.append(url)
+            # Новые фотографии
+            new_photos_b64 = body.get("photosBase64") or []
+            uploaded_photo_urls = []
+            for ph in new_photos_b64:
+                if not ph.get("data"): continue
+                ext = ph.get("mime", "image/jpeg").split("/")[-1].replace("jpeg", "jpg")
+                url = upload_file(s3, ph["data"], ph.get("mime", "image/jpeg"), "venues", ext)
+                uploaded_photo_urls.append(url)
 
-        # Существующие фото (те что оставил пользователь)
-        existing_photos = body.get("existingPhotos") or []
-        all_photos = existing_photos + uploaded_photo_urls
+            # Существующие фото (те что оставил пользователь)
+            existing_photos = body.get("existingPhotos") or []
+            all_photos = existing_photos + uploaded_photo_urls
 
-        # Обновляем главное фото
-        if all_photos:
-            fields["photo_url"] = all_photos[0]
-        elif body.get("existingPhotos") is not None:
-            fields["photo_url"] = ""
+            # Обновляем главное фото
+            if all_photos:
+                fields["photo_url"] = all_photos[0]
+            elif body.get("existingPhotos") is not None:
+                fields["photo_url"] = ""
 
-        # Райдер
-        if body.get("riderBase64"):
-            rider_orig = body.get("riderFileName", "rider.pdf")
-            ext = rider_orig.rsplit(".", 1)[-1] if "." in rider_orig else "pdf"
-            fields["rider_url"]  = upload_file(s3, body["riderBase64"], body.get("riderMime", "application/pdf"), "riders", ext)
-            fields["rider_name"] = rider_orig
-        elif body.get("clearRider"):
-            fields["rider_url"]  = ""
-            fields["rider_name"] = ""
+            # Райдер
+            if body.get("riderBase64"):
+                rider_orig = body.get("riderFileName", "rider.pdf")
+                ext = rider_orig.rsplit(".", 1)[-1] if "." in rider_orig else "pdf"
+                fields["rider_url"]  = upload_file(s3, body["riderBase64"], body.get("riderMime", "application/pdf"), "riders", ext)
+                fields["rider_name"] = rider_orig
+            elif body.get("clearRider"):
+                fields["rider_url"]  = ""
+                fields["rider_name"] = ""
 
-        # Схема
-        if body.get("schemaBase64"):
-            schema_orig = body.get("schemaFileName", "schema.pdf")
-            ext = schema_orig.rsplit(".", 1)[-1] if "." in schema_orig else "pdf"
-            fields["schema_url"]  = upload_file(s3, body["schemaBase64"], body.get("schemaMime", "application/pdf"), "schemas", ext)
-            fields["schema_name"] = schema_orig
-        elif body.get("clearSchema"):
-            fields["schema_url"]  = ""
-            fields["schema_name"] = ""
+            # Схема
+            if body.get("schemaBase64"):
+                schema_orig = body.get("schemaFileName", "schema.pdf")
+                ext = schema_orig.rsplit(".", 1)[-1] if "." in schema_orig else "pdf"
+                fields["schema_url"]  = upload_file(s3, body["schemaBase64"], body.get("schemaMime", "application/pdf"), "schemas", ext)
+                fields["schema_name"] = schema_orig
+            elif body.get("clearSchema"):
+                fields["schema_url"]  = ""
+                fields["schema_name"] = ""
 
-        # Сохраняем основные поля
-        if fields:
-            set_clause = ", ".join(f"{c} = %s" for c in fields)
-            cur.execute(f"UPDATE {SCHEMA}.venues SET {set_clause} WHERE id = %s", list(fields.values()) + [venue_id])
+            # Сохраняем основные поля
+            if fields:
+                set_clause = ", ".join(f"{c} = %s" for c in fields)
+                cur.execute(f"UPDATE {SCHEMA}.venues SET {set_clause} WHERE id = %s", list(fields.values()) + [venue_id])
 
-        # Обновляем фото в venue_photos
-        if body.get("existingPhotos") is not None or uploaded_photo_urls:
-            cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
-            for i, url in enumerate(all_photos):
-                cur.execute(
-                    f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
-                    (venue_id, url, i)
-                )
-
-        # Обновляем занятые даты
-        if "busyDates" in body:
-            cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
-            for bd in (body["busyDates"] or []):
-                if bd.get("date"):
+            # Обновляем фото в venue_photos
+            if body.get("existingPhotos") is not None or uploaded_photo_urls:
+                cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
+                for i, url in enumerate(all_photos):
                     cur.execute(
-                        f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
-                        (venue_id, bd["date"], bd.get("note", ""))
+                        f"INSERT INTO {SCHEMA}.venue_photos (venue_id, photo_url, sort_order) VALUES (%s, %s, %s)",
+                        (venue_id, url, i)
                     )
 
-        conn.commit(); conn.close()
+            # Обновляем занятые даты
+            if "busyDates" in body:
+                cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
+                for bd in (body["busyDates"] or []):
+                    if bd.get("date"):
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
+                            (venue_id, bd["date"], bd.get("note", ""))
+                        )
+
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # ── POST update_busy_dates — обновить только занятые даты площадки ──────
@@ -408,44 +419,51 @@ def handler(event: dict, context) -> dict:
         if not venue_id:
             return err("venueId required")
 
-        conn = get_conn(); cur = conn.cursor()
-        # Проверяем владение
-        if user_id:
-            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s", (venue_id, user_id))
-        else:
-            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
-        if not cur.fetchone():
-            conn.close(); return err("Площадка не найдена или нет прав", 403)
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Проверяем владение
+            if user_id:
+                cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s", (venue_id, user_id))
+            else:
+                cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+            if not cur.fetchone():
+                conn.close(); return err("Площадка не найдена или нет прав", 403)
 
-        # Получаем текущие даты чтобы вернуть актуальный список
-        cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
-        saved = []
-        for bd in busy_dates:
-            date_str = bd.get("date", "")
-            note     = (bd.get("note") or "").strip()
-            if not date_str:
-                continue
-            cur.execute(
-                f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
-                (venue_id, date_str, note)
-            )
-            saved.append({"date": date_str, "note": note})
+            # Получаем текущие даты чтобы вернуть актуальный список
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
+            saved = []
+            for bd in busy_dates:
+                date_str = bd.get("date", "")
+                note     = (bd.get("note") or "").strip()
+                if not date_str:
+                    continue
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
+                    (venue_id, date_str, note)
+                )
+                saved.append({"date": date_str, "note": note})
 
-        conn.commit(); conn.close()
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True, "busyDates": saved, "count": len(saved)})
 
     # ── GET home_stats — реальная статистика для главной страницы ─────────
     if method == "GET" and action == "home_stats":
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues")
-        total_venues = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE role = 'organizer'")
-        total_organizers = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(DISTINCT city) FROM {SCHEMA}.venues WHERE city != ''")
-        total_cities = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users")
-        total_users = cur.fetchone()[0]
-        conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues")
+            total_venues = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE role = 'organizer'")
+            total_organizers = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(DISTINCT city) FROM {SCHEMA}.venues WHERE city != ''")
+            total_cities = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users")
+            total_users = cur.fetchone()[0]
+        finally:
+            conn.close()
         return ok({
             "venues": total_venues,
             "organizers": total_organizers,
@@ -455,26 +473,29 @@ def handler(event: dict, context) -> dict:
 
     # ── GET top — топ площадки для главной (реальные из БД) ───────────────
     if method == "GET" and action == "top":
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""SELECT id, name, city, venue_type, capacity, price_from,
-                       photo_url, rating, tags
-                FROM {SCHEMA}.venues
-                ORDER BY rating DESC, created_at DESC LIMIT 3""",
-        )
-        rows = cur.fetchall()
-        # Фото из venue_photos
-        venue_ids = [str(r[0]) for r in rows]
-        photos_map: dict = {}
-        if venue_ids:
-            placeholders = ",".join(["%s"] * len(venue_ids))
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
             cur.execute(
-                f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
-                venue_ids,
+                f"""SELECT id, name, city, venue_type, capacity, price_from,
+                           photo_url, rating, tags
+                    FROM {SCHEMA}.venues
+                    ORDER BY rating DESC, created_at DESC LIMIT 3""",
             )
-            for pr in cur.fetchall():
-                photos_map.setdefault(str(pr[0]), []).append(pr[1])
-        conn.close()
+            rows = cur.fetchall()
+            # Фото из venue_photos
+            venue_ids = [str(r[0]) for r in rows]
+            photos_map: dict = {}
+            if venue_ids:
+                placeholders = ",".join(["%s"] * len(venue_ids))
+                cur.execute(
+                    f"SELECT venue_id, photo_url FROM {SCHEMA}.venue_photos WHERE venue_id IN ({placeholders}) ORDER BY sort_order ASC",
+                    venue_ids,
+                )
+                for pr in cur.fetchall():
+                    photos_map.setdefault(str(pr[0]), []).append(pr[1])
+        finally:
+            conn.close()
         venues = []
         for r in rows:
             vid = str(r[0])

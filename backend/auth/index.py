@@ -86,8 +86,29 @@ def cdn_url(key: str) -> str:
     return f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{key}"
 
 
+PBKDF2_ITERATIONS = 120_000
+
+
 def hash_pw(pw: str) -> str:
-    return hashlib.sha256(pw.encode()).hexdigest()
+    """PBKDF2-HMAC-SHA256 с уникальной солью.
+    Формат: pbkdf2$<iterations>$<salt_hex>$<hash_hex>"""
+    salt = secrets.token_bytes(16)
+    h = hashlib.pbkdf2_hmac("sha256", pw.encode(), salt, PBKDF2_ITERATIONS)
+    return f"pbkdf2${PBKDF2_ITERATIONS}${salt.hex()}${h.hex()}"
+
+
+def verify_pw(pw: str, stored: str) -> bool:
+    """Проверяет пароль. Поддерживает старый формат SHA256 для миграции."""
+    if not stored:
+        return False
+    if stored.startswith("pbkdf2$"):
+        try:
+            _, iters, salt_hex, hash_hex = stored.split("$")
+            h = hashlib.pbkdf2_hmac("sha256", pw.encode(), bytes.fromhex(salt_hex), int(iters))
+            return secrets.compare_digest(h.hex(), hash_hex)
+        except Exception:
+            return False
+    return secrets.compare_digest(hashlib.sha256(pw.encode()).hexdigest(), stored)
 
 
 def initials(name: str) -> str:
@@ -159,8 +180,9 @@ def send_2fa_email(email: str, name: str, code: str) -> bool:
     """Отправляет письмо с кодом двухфакторной аутентификации."""
     api_key = os.environ.get("RESEND_API_KEY", "")
     if not api_key:
-        print(f"[auth] 2FA code for {email}: {code}")  # fallback — в логи
-        return True
+        # Не логируем код в открытом виде — это критическая утечка
+        print(f"[auth] 2FA email skipped for {email}: RESEND_API_KEY not set")
+        return False
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -381,13 +403,15 @@ def handler(event: dict, context) -> dict:
         if not email or not password:
             return err("Введите email и пароль")
 
-        pw_hash = hash_pw(password)
         conn = get_conn(); cur = conn.cursor()
 
-        # Пробуем как основной пользователь
-        cur.execute(USER_SELECT + " WHERE email = %s AND password_hash = %s",
-                    (email, pw_hash))
-        row = cur.fetchone()
+        # Пробуем как основной пользователь — сначала достаём хеш, проверяем через verify_pw
+        cur.execute(f"SELECT password_hash FROM {SCHEMA}.users WHERE email = %s", (email,))
+        pw_row = cur.fetchone()
+        row = None
+        if pw_row and verify_pw(password, pw_row[0]):
+            cur.execute(USER_SELECT + " WHERE email = %s", (email,))
+            row = cur.fetchone()
         if row:
             user = build_user(row)
 
@@ -414,7 +438,16 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return ok({"sessionId": session_id, "user": user})
 
-        # Пробуем как сотрудник компании
+        # Пробуем как сотрудник компании — сначала проверяем пароль через verify_pw
+        cur.execute(
+            f"SELECT password_hash FROM {SCHEMA}.employees WHERE email = %s AND is_active = TRUE",
+            (email,),
+        )
+        emp_pw = cur.fetchone()
+        if not emp_pw or not verify_pw(password, emp_pw[0]):
+            conn.close()
+            return err("Неверный email или пароль", 401)
+
         cur.execute(
             f"""SELECT e.id, e.name, e.email, e.role_in_company, e.company_user_id,
                        e.avatar, e.avatar_color,
@@ -426,8 +459,8 @@ def handler(event: dict, context) -> dict:
                        e.access_permissions
                 FROM {SCHEMA}.employees e
                 JOIN {SCHEMA}.users u ON u.id = e.company_user_id
-                WHERE e.email = %s AND e.password_hash = %s AND e.is_active = TRUE""",
-            (email, pw_hash),
+                WHERE e.email = %s AND e.is_active = TRUE""",
+            (email,),
         )
         emp = cur.fetchone()
         conn.close()
@@ -638,7 +671,7 @@ def handler(event: dict, context) -> dict:
         conn = get_conn(); cur = conn.cursor()
         cur.execute(f"SELECT password_hash FROM {SCHEMA}.users WHERE id = %s", (uid,))
         row = cur.fetchone()
-        if not row or row[0] != hash_pw(current_pw):
+        if not row or not verify_pw(current_pw, row[0]):
             conn.close()
             return err("Неверный текущий пароль")
         cur.execute(f"UPDATE {SCHEMA}.users SET password_hash = %s WHERE id = %s",

@@ -101,7 +101,7 @@ export default function InvoiceModal({ bookingId, contractId, onClose }: Props) 
       const pdfH = (canvas.height * pdfW) / canvas.width;
       pdf.addImage(imgData, "PNG", 0, 0, pdfW, pdfH);
       pdf.save(`Счёт_${invoice.invoice_number}.pdf`);
-    } catch (e) { console.error(e); }
+    } catch { /* PDF generation failed */ }
     finally { setDownloading(false); }
   };
 

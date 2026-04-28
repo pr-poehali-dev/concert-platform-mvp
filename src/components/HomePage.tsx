@@ -68,8 +68,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const [installed, setInstalled] = useState(false);
 
   useEffect(() => {
-    fetch(`${VENUES_URL}?action=home_stats`).then(r => r.json()).then(d => setStats(d)).catch(() => {});
-    fetch(`${VENUES_URL}?action=top`).then(r => r.json()).then(d => setTopVenues(d.venues || [])).catch(() => {});
+    const safeFetch = async (url: string): Promise<unknown> => {
+      try {
+        const r = await fetch(url);
+        if (!r.ok) return null;
+        return await r.json();
+      } catch {
+        return null;
+      }
+    };
+    safeFetch(`${VENUES_URL}?action=home_stats`).then(d => { if (d) setStats(d as HomeStats); });
+    safeFetch(`${VENUES_URL}?action=top`).then(d => {
+      if (d && typeof d === "object" && "venues" in d) setTopVenues((d as { venues: VenueTop[] }).venues || []);
+    });
 
     const handler = (e: Event) => {
       e.preventDefault();

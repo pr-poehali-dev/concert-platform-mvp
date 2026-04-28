@@ -104,16 +104,18 @@ def handler(event: dict, context) -> dict:
             return err("Доступ запрещён", 403)
 
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(f"""
-            SELECT
-                COUNT(*) FILTER (WHERE photo_url = '' AND website != '') as needs_fetch,
-                COUNT(*) FILTER (WHERE photo_url != '') as has_photo,
-                COUNT(*) as total
-            FROM {SCHEMA}.venues WHERE imported_from = 'openstreetmap'
-        """)
-        row = cur.fetchone()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT
+                    COUNT(*) FILTER (WHERE photo_url = '' AND website != '') as needs_fetch,
+                    COUNT(*) FILTER (WHERE photo_url != '') as has_photo,
+                    COUNT(*) as total
+                FROM {SCHEMA}.venues WHERE imported_from = 'openstreetmap'
+            """)
+            row = cur.fetchone()
+        finally:
+            conn.close()
         return ok({
             "needsFetch": row[0],
             "hasPhoto": row[1],
@@ -125,44 +127,48 @@ def handler(event: dict, context) -> dict:
         if admin_secret != os.environ.get("ADMIN_SECRET", ""):
             return err("Доступ запрещён", 403)
 
-        body = json.loads(event.get("body") or "{}")
-        limit = int(body.get("limit", 20))
+        try:
+            body = json.loads(event.get("body") or "{}")
+            limit = int(body.get("limit", 20))
+            if limit < 1 or limit > 200:
+                limit = 20
+        except (ValueError, TypeError):
+            limit = 20
 
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(f"""
-            SELECT id, name, website
-            FROM {SCHEMA}.venues
-            WHERE imported_from = 'openstreetmap'
-              AND photo_url = ''
-              AND website != ''
-            LIMIT {limit}
-        """)
-        venues = cur.fetchall()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"""
+                SELECT id, name, website
+                FROM {SCHEMA}.venues
+                WHERE imported_from = 'openstreetmap'
+                  AND photo_url = ''
+                  AND website != ''
+                LIMIT %s
+            """, (limit,))
+            venues = cur.fetchall()
 
-        updated = 0
-        failed = 0
-        results = []
+            updated = 0
+            failed = 0
+            results = []
 
-        for venue_id, name, website in venues:
-            print(f"[og] fetching {name} → {website}")
-            img_url = fetch_og_image(website)
-            if img_url:
-                cur.execute(f"""
-                    UPDATE {SCHEMA}.venues
-                    SET photo_url = '{img_url.replace("'", "''")}'
-                    WHERE id = '{venue_id}'
-                """)
-                updated += 1
-                results.append({"name": name, "photo": img_url, "status": "ok"})
-                print(f"[og] ✓ {name}: {img_url}")
-            else:
-                failed += 1
-                results.append({"name": name, "photo": None, "status": "no_image"})
-                print(f"[og] ✗ {name}: no og:image found")
+            for venue_id, name, website in venues:
+                print(f"[og] fetching {name}")
+                img_url = fetch_og_image(website)
+                if img_url:
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.venues SET photo_url = %s WHERE id = %s",
+                        (img_url, venue_id)
+                    )
+                    updated += 1
+                    results.append({"name": name, "photo": img_url, "status": "ok"})
+                else:
+                    failed += 1
+                    results.append({"name": name, "photo": None, "status": "no_image"})
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+        finally:
+            conn.close()
 
         return ok({
             "updated": updated,

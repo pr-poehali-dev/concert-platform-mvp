@@ -140,22 +140,24 @@ def handler(event: dict, context) -> dict:
         if not user_id:
             return err("user_id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"""SELECT c.id, c.organizer_id, c.venue_id, c.venue_user_id, c.venue_name,
-                       c.last_message, c.last_message_at, c.organizer_unread, c.venue_unread, c.created_at,
-                       COALESCE(uorg.name, 'Организатор') as organizer_name,
-                       COALESCE(uorg.legal_name, uorg.name, 'Организатор') as organizer_company,
-                       COALESCE(uvn.legal_name, uvn.name, c.venue_name) as venue_company
-                FROM {SCHEMA}.conversations c
-                LEFT JOIN {SCHEMA}.users uorg ON uorg.id = c.organizer_id
-                LEFT JOIN {SCHEMA}.users uvn  ON uvn.id  = c.venue_user_id
-                WHERE c.organizer_id = %s OR c.venue_user_id = %s
-                ORDER BY c.last_message_at DESC""",
-            (user_id, user_id),
-        )
-        rows = cur.fetchall()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT c.id, c.organizer_id, c.venue_id, c.venue_user_id, c.venue_name,
+                           c.last_message, c.last_message_at, c.organizer_unread, c.venue_unread, c.created_at,
+                           COALESCE(uorg.name, 'Организатор') as organizer_name,
+                           COALESCE(uorg.legal_name, uorg.name, 'Организатор') as organizer_company,
+                           COALESCE(uvn.legal_name, uvn.name, c.venue_name) as venue_company
+                    FROM {SCHEMA}.conversations c
+                    LEFT JOIN {SCHEMA}.users uorg ON uorg.id = c.organizer_id
+                    LEFT JOIN {SCHEMA}.users uvn  ON uvn.id  = c.venue_user_id
+                    WHERE c.organizer_id = %s OR c.venue_user_id = %s
+                    ORDER BY c.last_message_at DESC""",
+                (user_id, user_id),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
 
         result = []
         for r in rows:
@@ -187,18 +189,20 @@ def handler(event: dict, context) -> dict:
             return err("conversation_id required")
         limit = int(params.get("limit", 100))
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"""SELECT m.id, m.conversation_id, m.sender_id, m.text, m.created_at,
-                       m.attachment_url, m.attachment_name, m.attachment_size, m.attachment_mime,
-                       m.sender_name, m.sender_role, m.sender_company
-                FROM {SCHEMA}.messages m
-                WHERE m.conversation_id = %s
-                ORDER BY m.created_at ASC LIMIT %s""",
-            (conv_id, limit),
-        )
-        rows = cur.fetchall()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT m.id, m.conversation_id, m.sender_id, m.text, m.created_at,
+                           m.attachment_url, m.attachment_name, m.attachment_size, m.attachment_mime,
+                           m.sender_name, m.sender_role, m.sender_company
+                    FROM {SCHEMA}.messages m
+                    WHERE m.conversation_id = %s
+                    ORDER BY m.created_at ASC LIMIT %s""",
+                (conv_id, limit),
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
         return ok({"messages": [msg_to_dict(r) for r in rows]})
 
     # ── POST start ─────────────────────────────────────────────────────────
@@ -215,42 +219,45 @@ def handler(event: dict, context) -> dict:
             return err("organizerId, venueId, venueUserId обязательны")
 
         conn = get_conn()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        cur.execute(
-            f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s AND venue_id = %s",
-            (organizer_id, venue_id),
-        )
-        row = cur.fetchone()
-
-        if row:
-            conv_id = str(row[0])
-        else:
             cur.execute(
-                f"""INSERT INTO {SCHEMA}.conversations
-                    (organizer_id, venue_id, venue_user_id, venue_name, last_message, last_message_at)
-                    VALUES (%s, %s, %s, %s, %s, NOW()) RETURNING id""",
-                (organizer_id, venue_id, venue_user_id, venue_name, first_msg or "Начало диалога"),
+                f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s AND venue_id = %s",
+                (organizer_id, venue_id),
             )
-            conv_id = str(cur.fetchone()[0])
+            row = cur.fetchone()
+
+            if row:
+                conv_id = str(row[0])
+            else:
+                cur.execute(
+                    f"""INSERT INTO {SCHEMA}.conversations
+                        (organizer_id, venue_id, venue_user_id, venue_name, last_message, last_message_at)
+                        VALUES (%s, %s, %s, %s, %s, NOW()) RETURNING id""",
+                    (organizer_id, venue_id, venue_user_id, venue_name, first_msg or "Начало диалога"),
+                )
+                conv_id = str(cur.fetchone()[0])
+
+            if first_msg:
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.messages (conversation_id, sender_id, text) VALUES (%s, %s, %s)",
+                    (conv_id, organizer_id, first_msg),
+                )
+                cur.execute(
+                    f"""UPDATE {SCHEMA}.conversations
+                        SET last_message = %s, last_message_at = NOW(), venue_unread = venue_unread + 1
+                        WHERE id = %s""",
+                    (first_msg, conv_id),
+                )
+                conn.commit()
+            else:
+                conn.commit()
+        finally:
+            conn.close()
 
         if first_msg:
-            cur.execute(
-                f"INSERT INTO {SCHEMA}.messages (conversation_id, sender_id, text) VALUES (%s, %s, %s)",
-                (conv_id, organizer_id, first_msg),
-            )
-            cur.execute(
-                f"""UPDATE {SCHEMA}.conversations
-                    SET last_message = %s, last_message_at = NOW(), venue_unread = venue_unread + 1
-                    WHERE id = %s""",
-                (first_msg, conv_id),
-            )
-            conn.commit()
-            conn.close()
             notify(venue_user_id, f"Новое сообщение от {organizer_name}", first_msg[:80])
-        else:
-            conn.commit()
-            conn.close()
 
         return ok({"conversationId": conv_id}, 201)
 
@@ -310,80 +317,82 @@ def handler(event: dict, context) -> dict:
             return err("Нужен текст или вложение")
 
         conn = get_conn()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        sender_position = (body.get("senderPosition") or "").strip()
+            sender_position = (body.get("senderPosition") or "").strip()
 
-        # Подтягиваем из БД имя, роль, компанию и должность
-        if not sender_name:
+            # Подтягиваем из БД имя, роль, компанию и должность
+            if not sender_name:
+                cur.execute(
+                    f"""SELECT name, role, COALESCE(legal_name, '') FROM {SCHEMA}.users WHERE id=%s""",
+                    (sender_id,)
+                )
+                urow = cur.fetchone()
+                if urow:
+                    sender_name    = urow[0] or ""
+                    sender_role    = sender_role or urow[1] or ""
+                    sender_company = sender_company or urow[2] or ""
+
+            # Проверяем — может это сотрудник? Подтягиваем должность из employees
+            if not sender_position:
+                cur.execute(
+                    f"""SELECT e.role_in_company, u2.id as company_user_id,
+                               COALESCE(u2.legal_name, u2.name, '') as company_name
+                        FROM {SCHEMA}.employees e
+                        JOIN {SCHEMA}.users u2 ON u2.id = e.company_user_id
+                        WHERE LOWER(e.email) = (SELECT LOWER(email) FROM {SCHEMA}.users WHERE id=%s LIMIT 1)
+                          AND e.is_active = true
+                        LIMIT 1""",
+                    (sender_id,)
+                )
+                emp_row = cur.fetchone()
+                if emp_row:
+                    sender_position = emp_row[0] or ""
+                    if not sender_company:
+                        sender_company = emp_row[2] or ""
+
             cur.execute(
-                f"""SELECT name, role, COALESCE(legal_name, '') FROM {SCHEMA}.users WHERE id=%s""",
-                (sender_id,)
+                f"SELECT organizer_id, venue_user_id FROM {SCHEMA}.conversations WHERE id = %s",
+                (conv_id,),
             )
-            urow = cur.fetchone()
-            if urow:
-                sender_name    = urow[0] or ""
-                sender_role    = sender_role or urow[1] or ""
-                sender_company = sender_company or urow[2] or ""
+            row = cur.fetchone()
+            if not row:
+                conn.close()
+                return err("Диалог не найден", 404)
 
-        # Проверяем — может это сотрудник? Подтягиваем должность из employees
-        if not sender_position:
+            organizer_id, venue_user_id = str(row[0]), str(row[1])
+            is_organizer = sender_id == organizer_id
+            recipient_id = venue_user_id if is_organizer else organizer_id
+
             cur.execute(
-                f"""SELECT e.role_in_company, u2.id as company_user_id,
-                           COALESCE(u2.legal_name, u2.name, '') as company_name
-                    FROM {SCHEMA}.employees e
-                    JOIN {SCHEMA}.users u2 ON u2.id = e.company_user_id
-                    WHERE LOWER(e.email) = (SELECT LOWER(email) FROM {SCHEMA}.users WHERE id=%s LIMIT 1)
-                      AND e.is_active = true
-                    LIMIT 1""",
-                (sender_id,)
+                f"""INSERT INTO {SCHEMA}.messages
+                    (conversation_id, sender_id, text,
+                     attachment_url, attachment_name, attachment_size, attachment_mime,
+                     sender_name, sender_role, sender_company)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id, created_at""",
+                (conv_id, sender_id, text or "",
+                 att_url, att_name, att_size, att_mime,
+                 sender_name, sender_role,
+                 f"{sender_company}|{sender_position}" if sender_position else sender_company),
             )
-            emp_row = cur.fetchone()
-            if emp_row:
-                sender_position = emp_row[0] or ""
-                if not sender_company:
-                    sender_company = emp_row[2] or ""
+            msg_row = cur.fetchone()
+            msg_id     = str(msg_row[0])
+            created_at = str(msg_row[1])
 
-        cur.execute(
-            f"SELECT organizer_id, venue_user_id FROM {SCHEMA}.conversations WHERE id = %s",
-            (conv_id,),
-        )
-        row = cur.fetchone()
-        if not row:
+            last_msg_preview = text if text else f"📎 {att_name}"
+            unread_col = "venue_unread" if is_organizer else "organizer_unread"
+
+            cur.execute(
+                f"""UPDATE {SCHEMA}.conversations
+                    SET last_message = %s, last_message_at = NOW(), {unread_col} = {unread_col} + 1
+                    WHERE id = %s""",
+                (last_msg_preview[:200], conv_id),
+            )
+            conn.commit()
+        finally:
             conn.close()
-            return err("Диалог не найден", 404)
-
-        organizer_id, venue_user_id = str(row[0]), str(row[1])
-        is_organizer = sender_id == organizer_id
-        recipient_id = venue_user_id if is_organizer else organizer_id
-
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.messages
-                (conversation_id, sender_id, text,
-                 attachment_url, attachment_name, attachment_size, attachment_mime,
-                 sender_name, sender_role, sender_company)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, created_at""",
-            (conv_id, sender_id, text or "",
-             att_url, att_name, att_size, att_mime,
-             sender_name, sender_role,
-             f"{sender_company}|{sender_position}" if sender_position else sender_company),
-        )
-        msg_row = cur.fetchone()
-        msg_id     = str(msg_row[0])
-        created_at = str(msg_row[1])
-
-        last_msg_preview = text if text else f"📎 {att_name}"
-        unread_col = "venue_unread" if is_organizer else "organizer_unread"
-
-        cur.execute(
-            f"""UPDATE {SCHEMA}.conversations
-                SET last_message = %s, last_message_at = NOW(), {unread_col} = {unread_col} + 1
-                WHERE id = %s""",
-            (last_msg_preview[:200], conv_id),
-        )
-        conn.commit()
-        conn.close()
 
         notif_body = text[:80] if text else f"Прикреплён файл: {att_name}"
         notify(recipient_id, f"Новое сообщение от {sender_name or 'пользователя'}", notif_body)
@@ -415,19 +424,21 @@ def handler(event: dict, context) -> dict:
             return err("conversationId, userId обязательны")
 
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"SELECT organizer_id FROM {SCHEMA}.conversations WHERE id = %s", (conv_id,)
-        )
-        row = cur.fetchone()
-        if row:
-            is_organizer = str(row[0]) == user_id
-            col = "organizer_unread" if is_organizer else "venue_unread"
+        try:
+            cur = conn.cursor()
             cur.execute(
-                f"UPDATE {SCHEMA}.conversations SET {col} = 0 WHERE id = %s", (conv_id,)
+                f"SELECT organizer_id FROM {SCHEMA}.conversations WHERE id = %s", (conv_id,)
             )
-            conn.commit()
-        conn.close()
+            row = cur.fetchone()
+            if row:
+                is_organizer = str(row[0]) == user_id
+                col = "organizer_unread" if is_organizer else "venue_unread"
+                cur.execute(
+                    f"UPDATE {SCHEMA}.conversations SET {col} = 0 WHERE id = %s", (conv_id,)
+                )
+                conn.commit()
+        finally:
+            conn.close()
         return ok({"ok": True})
 
     return err("Неизвестное действие", 404)

@@ -178,7 +178,7 @@ export default function ContractModal({
         if (y < pdfH) pdf.addPage();
       }
       pdf.save(`Договор_${contract.contract_number}.pdf`);
-    } catch (e) { console.error(e); }
+    } catch { /* PDF generation failed */ }
     finally { setDownloading(false); }
   };
 

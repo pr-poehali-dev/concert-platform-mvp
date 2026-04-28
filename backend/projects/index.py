@@ -151,43 +151,45 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and action == "list":
         uid = params.get("user_id", "")
         if not uid: return err("user_id required")
-        conn = get_conn(); cur = conn.cursor()
-        # Свои проекты
-        cur.execute(
-            f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
-                       city,venue_name,description,tax_system,total_expenses_plan,
-                       total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
-                FROM {SCHEMA}.projects WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
-        own_rows = cur.fetchall()
-        own_ids = {str(r[0]) for r in own_rows}
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Свои проекты
+            cur.execute(
+                f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
+                           city,venue_name,description,tax_system,total_expenses_plan,
+                           total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
+                    FROM {SCHEMA}.projects WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
+            own_rows = cur.fetchall()
+            own_ids = {str(r[0]) for r in own_rows}
 
-        # Проекты где пользователь — партнёр
-        cur.execute(
-            f"""SELECT p.id,p.user_id,p.title,p.artist,p.project_type,p.status,p.date_start,p.date_end,
-                       p.city,p.venue_name,p.description,p.tax_system,p.total_expenses_plan,
-                       p.total_expenses_fact,p.total_income_plan,p.total_income_fact,p.created_at,p.updated_at
-                FROM {SCHEMA}.projects p
-                JOIN {SCHEMA}.project_members pm ON pm.project_id = p.id
-                WHERE pm.user_id=%s AND pm.role != 'removed'
-                ORDER BY p.created_at DESC""", (uid,))
-        partner_rows = cur.fetchall()
+            # Проекты где пользователь — партнёр
+            cur.execute(
+                f"""SELECT p.id,p.user_id,p.title,p.artist,p.project_type,p.status,p.date_start,p.date_end,
+                           p.city,p.venue_name,p.description,p.tax_system,p.total_expenses_plan,
+                           p.total_expenses_fact,p.total_income_plan,p.total_income_fact,p.created_at,p.updated_at
+                    FROM {SCHEMA}.projects p
+                    JOIN {SCHEMA}.project_members pm ON pm.project_id = p.id
+                    WHERE pm.user_id=%s AND pm.role != 'removed'
+                    ORDER BY p.created_at DESC""", (uid,))
+            partner_rows = cur.fetchall()
 
-        cur.execute(
-            f"""SELECT DISTINCT project_id FROM {SCHEMA}.project_tasks
-                WHERE status NOT IN ('done') AND due_date IS NOT NULL AND due_date < CURRENT_DATE
-                  AND project_id IN (SELECT id FROM {SCHEMA}.projects WHERE user_id=%s)""", (uid,))
-        overdue_ids = {str(r[0]) for r in cur.fetchall()}
+            cur.execute(
+                f"""SELECT DISTINCT project_id FROM {SCHEMA}.project_tasks
+                    WHERE status NOT IN ('done') AND due_date IS NOT NULL AND due_date < CURRENT_DATE
+                      AND project_id IN (SELECT id FROM {SCHEMA}.projects WHERE user_id=%s)""", (uid,))
+            overdue_ids = {str(r[0]) for r in cur.fetchall()}
 
-        # Имена владельцев партнёрских проектов
-        partner_owner_ids = [str(r[1]) for r in partner_rows if str(r[0]) not in own_ids]
-        owner_names = {}
-        if partner_owner_ids:
-            placeholders = ",".join(["%s"] * len(partner_owner_ids))
-            cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE id IN ({placeholders})", partner_owner_ids)
-            for row in cur.fetchall():
-                owner_names[str(row[0])] = row[1]
-
-        conn.close()
+            # Имена владельцев партнёрских проектов
+            partner_owner_ids = [str(r[1]) for r in partner_rows if str(r[0]) not in own_ids]
+            owner_names = {}
+            if partner_owner_ids:
+                placeholders = ",".join(["%s"] * len(partner_owner_ids))
+                cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE id IN ({placeholders})", partner_owner_ids)
+                for row in cur.fetchall():
+                    owner_names[str(row[0])] = row[1]
+        finally:
+            conn.close()
         projects = []
         for r in own_rows:
             p = row_to_project(r)
@@ -209,24 +211,27 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and action == "detail":
         pid = params.get("project_id", "")
         if not pid: return err("project_id required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
-                       city,venue_name,description,tax_system,total_expenses_plan,
-                       total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
-                FROM {SCHEMA}.projects WHERE id=%s""", (pid,))
-        row = cur.fetchone()
-        if not row: conn.close(); return err("Проект не найден", 404)
-        project = row_to_project(row)
-        cur.execute(
-            f"SELECT id,category,title,amount_plan,amount_fact,note,sort_order FROM {SCHEMA}.project_expenses WHERE project_id=%s ORDER BY sort_order,created_at",
-            (pid,))
-        project["expenses"] = [{"id":str(r[0]),"category":r[1],"title":r[2],"amountPlan":float(r[3]),"amountFact":float(r[4]),"note":r[5],"sortOrder":r[6]} for r in cur.fetchall()]
-        cur.execute(
-            f"SELECT id,category,ticket_count,ticket_price,sold_count,note,sort_order FROM {SCHEMA}.project_income_lines WHERE project_id=%s ORDER BY sort_order,created_at",
-            (pid,))
-        project["incomeLines"] = [{"id":str(r[0]),"category":r[1],"ticketCount":r[2],"ticketPrice":float(r[3]),"soldCount":r[4],"note":r[5],"sortOrder":r[6],"totalPlan":r[2]*float(r[3]),"totalFact":r[4]*float(r[3])} for r in cur.fetchall()]
-        conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
+                           city,venue_name,description,tax_system,total_expenses_plan,
+                           total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
+                    FROM {SCHEMA}.projects WHERE id=%s""", (pid,))
+            row = cur.fetchone()
+            if not row: conn.close(); return err("Проект не найден", 404)
+            project = row_to_project(row)
+            cur.execute(
+                f"SELECT id,category,title,amount_plan,amount_fact,note,sort_order FROM {SCHEMA}.project_expenses WHERE project_id=%s ORDER BY sort_order,created_at",
+                (pid,))
+            project["expenses"] = [{"id":str(r[0]),"category":r[1],"title":r[2],"amountPlan":float(r[3]),"amountFact":float(r[4]),"note":r[5],"sortOrder":r[6]} for r in cur.fetchall()]
+            cur.execute(
+                f"SELECT id,category,ticket_count,ticket_price,sold_count,note,sort_order FROM {SCHEMA}.project_income_lines WHERE project_id=%s ORDER BY sort_order,created_at",
+                (pid,))
+            project["incomeLines"] = [{"id":str(r[0]),"category":r[1],"ticketCount":r[2],"ticketPrice":float(r[3]),"soldCount":r[4],"note":r[5],"sortOrder":r[6],"totalPlan":r[2]*float(r[3]),"totalFact":r[4]*float(r[3])} for r in cur.fetchall()]
+        finally:
+            conn.close()
         return ok({"project": project, "expenseCategories": DEFAULT_EXPENSE_CATEGORIES})
 
     # POST create
@@ -235,30 +240,34 @@ def handler(event: dict, context) -> dict:
         uid, title = b.get("userId",""), (b.get("title") or "").strip()
         if not uid: return err("userId required")
         if not title: return err("Введите название проекта")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.projects
-                (user_id,title,artist,project_type,status,date_start,date_end,city,venue_name,description,tax_system)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
-            (uid,title,b.get("artist",""),b.get("projectType","single"),b.get("status","planning"),
-             b.get("dateStart") or None,b.get("dateEnd") or None,
-             b.get("city",""),b.get("venueName",""),b.get("description",""),b.get("taxSystem","none")))
-        pid = str(cur.fetchone()[0])
-        def to_float(v, default=0.0):
-            try: return float(v)
-            except (TypeError, ValueError): return default
-        def to_int(v, default=0):
-            try: return int(v)
-            except (TypeError, ValueError): return default
-        for i,exp in enumerate(b.get("expenses") or []):
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
             cur.execute(
-                f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (pid,exp.get("category","Прочее"),exp.get("title",""),to_float(exp.get("amountPlan")),to_float(exp.get("amountFact")),exp.get("note",""),i))
-        for i,inc in enumerate(b.get("incomeLines") or []):
-            cur.execute(
-                f"INSERT INTO {SCHEMA}.project_income_lines (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s)",
-                (pid,inc.get("category","Стандарт"),to_int(inc.get("ticketCount")),to_float(inc.get("ticketPrice")),to_int(inc.get("soldCount")),inc.get("note",""),i))
-        recalc_totals(cur, pid); conn.commit(); conn.close()
+                f"""INSERT INTO {SCHEMA}.projects
+                    (user_id,title,artist,project_type,status,date_start,date_end,city,venue_name,description,tax_system)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (uid,title,b.get("artist",""),b.get("projectType","single"),b.get("status","planning"),
+                 b.get("dateStart") or None,b.get("dateEnd") or None,
+                 b.get("city",""),b.get("venueName",""),b.get("description",""),b.get("taxSystem","none")))
+            pid = str(cur.fetchone()[0])
+            def to_float(v, default=0.0):
+                try: return float(v)
+                except (TypeError, ValueError): return default
+            def to_int(v, default=0):
+                try: return int(v)
+                except (TypeError, ValueError): return default
+            for i,exp in enumerate(b.get("expenses") or []):
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    (pid,exp.get("category","Прочее"),exp.get("title",""),to_float(exp.get("amountPlan")),to_float(exp.get("amountFact")),exp.get("note",""),i))
+            for i,inc in enumerate(b.get("incomeLines") or []):
+                cur.execute(
+                    f"INSERT INTO {SCHEMA}.project_income_lines (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s)",
+                    (pid,inc.get("category","Стандарт"),to_int(inc.get("ticketCount")),to_float(inc.get("ticketPrice")),to_int(inc.get("soldCount")),inc.get("note",""),i))
+            recalc_totals(cur, pid); conn.commit()
+        finally:
+            conn.close()
         return ok({"projectId": pid}, 201)
 
     # POST update
@@ -272,9 +281,13 @@ def handler(event: dict, context) -> dict:
         fields = {col: (b[fk] or None if fk in ("dateStart","dateEnd") else b[fk]) for fk,col in key_map.items() if fk in b}
         if fields:
             set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
-            conn = get_conn(); cur = conn.cursor()
-            cur.execute(f"UPDATE {SCHEMA}.projects SET {set_clause} WHERE id=%s", list(fields.values())+[pid])
-            conn.commit(); conn.close()
+            conn = get_conn()
+            try:
+                cur = conn.cursor()
+                cur.execute(f"UPDATE {SCHEMA}.projects SET {set_clause} WHERE id=%s", list(fields.values())+[pid])
+                conn.commit()
+            finally:
+                conn.close()
         return ok({"success": True})
 
     # POST delete
@@ -282,11 +295,15 @@ def handler(event: dict, context) -> dict:
         b = json.loads(event.get("body") or "{}")
         pid = b.get("projectId","")
         if not pid: return err("projectId required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE project_id=%s",(pid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id=%s",(pid,))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE project_id=%s",(pid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id=%s",(pid,))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # POST add_expense
@@ -295,16 +312,20 @@ def handler(event: dict, context) -> dict:
         pid, title = b.get("projectId",""), (b.get("title") or "").strip()
         if not pid: return err("projectId required")
         if not title: return err("Введите название статьи")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
-        order = cur.fetchone()[0]
-        def _f(v):
-            try: return float(v)
-            except (TypeError, ValueError): return 0.0
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-            (pid,b.get("category","Прочее"),title,_f(b.get("amountPlan")),_f(b.get("amountFact")),b.get("note",""),order))
-        eid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
+            order = cur.fetchone()[0]
+            def _f(v):
+                try: return float(v)
+                except (TypeError, ValueError): return 0.0
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (pid,b.get("category","Прочее"),title,_f(b.get("amountPlan")),_f(b.get("amountFact")),b.get("note",""),order))
+            eid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit()
+        finally:
+            conn.close()
         return ok({"id": eid}, 201)
 
     # POST update_expense
@@ -315,12 +336,16 @@ def handler(event: dict, context) -> dict:
         fmap = {"category":"category","title":"title","amountPlan":"amount_plan","amountFact":"amount_fact","note":"note"}
         fields = {col: b[fk] for fk,col in fmap.items() if fk in b}
         if not fields: return err("Нет данных")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"UPDATE {SCHEMA}.project_expenses SET {', '.join(f'{c}=%s' for c in fields)} WHERE id=%s RETURNING project_id",
-                    list(fields.values())+[eid])
-        row = cur.fetchone()
-        if row: recalc_totals(cur, str(row[0]))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"UPDATE {SCHEMA}.project_expenses SET {', '.join(f'{c}=%s' for c in fields)} WHERE id=%s RETURNING project_id",
+                        list(fields.values())+[eid])
+            row = cur.fetchone()
+            if row: recalc_totals(cur, str(row[0]))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # POST delete_expense
@@ -328,11 +353,15 @@ def handler(event: dict, context) -> dict:
         b = json.loads(event.get("body") or "{}")
         eid = b.get("id","")
         if not eid: return err("id required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE id=%s RETURNING project_id",(eid,))
-        row = cur.fetchone()
-        if row: recalc_totals(cur, str(row[0]))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE id=%s RETURNING project_id",(eid,))
+            row = cur.fetchone()
+            if row: recalc_totals(cur, str(row[0]))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # POST add_income
@@ -340,13 +369,17 @@ def handler(event: dict, context) -> dict:
         b = json.loads(event.get("body") or "{}")
         pid = b.get("projectId","")
         if not pid: return err("projectId required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_income_lines WHERE project_id=%s",(pid,))
-        order = cur.fetchone()[0]
-        cur.execute(
-            f"INSERT INTO {SCHEMA}.project_income_lines (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-            (pid,b.get("category","Стандарт"),int(b.get("ticketCount",0)),float(b.get("ticketPrice",0)),int(b.get("soldCount",0)),b.get("note",""),order))
-        iid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_income_lines WHERE project_id=%s",(pid,))
+            order = cur.fetchone()[0]
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.project_income_lines (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
+                (pid,b.get("category","Стандарт"),int(b.get("ticketCount",0)),float(b.get("ticketPrice",0)),int(b.get("soldCount",0)),b.get("note",""),order))
+            iid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit()
+        finally:
+            conn.close()
         return ok({"id": iid}, 201)
 
     # POST update_income
@@ -357,12 +390,16 @@ def handler(event: dict, context) -> dict:
         fmap = {"category":"category","ticketCount":"ticket_count","ticketPrice":"ticket_price","soldCount":"sold_count","note":"note"}
         fields = {col: b[fk] for fk,col in fmap.items() if fk in b}
         if not fields: return err("Нет данных")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"UPDATE {SCHEMA}.project_income_lines SET {', '.join(f'{c}=%s' for c in fields)} WHERE id=%s RETURNING project_id",
-                    list(fields.values())+[iid])
-        row = cur.fetchone()
-        if row: recalc_totals(cur, str(row[0]))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"UPDATE {SCHEMA}.project_income_lines SET {', '.join(f'{c}=%s' for c in fields)} WHERE id=%s RETURNING project_id",
+                        list(fields.values())+[iid])
+            row = cur.fetchone()
+            if row: recalc_totals(cur, str(row[0]))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # POST delete_income
@@ -370,24 +407,32 @@ def handler(event: dict, context) -> dict:
         b = json.loads(event.get("body") or "{}")
         iid = b.get("id","")
         if not iid: return err("id required")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE id=%s RETURNING project_id",(iid,))
-        row = cur.fetchone()
-        if row: recalc_totals(cur, str(row[0]))
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE id=%s RETURNING project_id",(iid,))
+            row = cur.fetchone()
+            if row: recalc_totals(cur, str(row[0]))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"success": True})
 
     # GET venues_list — список площадок для выбора в проекте
     if method == "GET" and action == "venues_list":
         city = params.get("city", "")
-        conn = get_conn(); cur = conn.cursor()
-        q = f"SELECT id, user_id, name, city, venue_type, capacity, price_from, photo_url FROM {SCHEMA}.venues WHERE 1=1"
-        args = []
-        if city:
-            q += " AND city=%s"; args.append(city)
-        q += " ORDER BY name"
-        cur.execute(q, args)
-        rows = cur.fetchall(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            q = f"SELECT id, user_id, name, city, venue_type, capacity, price_from, photo_url FROM {SCHEMA}.venues WHERE 1=1"
+            args = []
+            if city:
+                q += " AND city=%s"; args.append(city)
+            q += " ORDER BY name"
+            cur.execute(q, args)
+            rows = cur.fetchall()
+        finally:
+            conn.close()
         return ok({"venues": [
             {"id": str(r[0]), "userId": str(r[1]), "name": r[2], "city": r[3],
              "venueType": r[4], "capacity": r[5], "priceFrom": r[6], "photoUrl": r[7]}
@@ -398,15 +443,18 @@ def handler(event: dict, context) -> dict:
     if method == "GET" and action == "booked_dates":
         vid = params.get("venue_id", "")
         if not vid: return err("venue_id required")
-        conn = get_conn(); cur = conn.cursor()
-        # Из venue_busy_dates
-        cur.execute(f"SELECT busy_date, note FROM {SCHEMA}.venue_busy_dates WHERE venue_id=%s", (vid,))
-        busy = [{"date": str(r[0]), "note": r[1], "source": "manual"} for r in cur.fetchall()]
-        # Из подтверждённых бронирований
-        cur.execute(f"SELECT event_date, artist FROM {SCHEMA}.venue_bookings WHERE venue_id=%s AND status='confirmed'", (vid,))
-        for r in cur.fetchall():
-            busy.append({"date": str(r[0]), "note": r[1] or "Забронировано", "source": "booking"})
-        conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Из venue_busy_dates
+            cur.execute(f"SELECT busy_date, note FROM {SCHEMA}.venue_busy_dates WHERE venue_id=%s", (vid,))
+            busy = [{"date": str(r[0]), "note": r[1], "source": "manual"} for r in cur.fetchall()]
+            # Из подтверждённых бронирований
+            cur.execute(f"SELECT event_date, artist FROM {SCHEMA}.venue_bookings WHERE venue_id=%s AND status='confirmed'", (vid,))
+            for r in cur.fetchall():
+                busy.append({"date": str(r[0]), "note": r[1] or "Забронировано", "source": "booking"})
+        finally:
+            conn.close()
         return ok({"bookedDates": busy})
 
     # POST request_booking — запрос на бронирование площадки
@@ -423,31 +471,35 @@ def handler(event: dict, context) -> dict:
         expected_guests = int(b.get("expectedGuests", 0))
         if not all([project_id, venue_id, organizer_id, venue_user_id, event_date]):
             return err("Не заполнены обязательные поля")
-        conn = get_conn(); cur = conn.cursor()
-        # Проверяем, не занята ли дата
-        cur.execute(f"SELECT id FROM {SCHEMA}.venue_busy_dates WHERE venue_id=%s AND busy_date=%s", (venue_id, event_date))
-        if cur.fetchone():
-            conn.close(); return err("Эта дата уже занята на площадке")
-        cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE venue_id=%s AND event_date=%s AND status IN ('pending','confirmed')", (venue_id, event_date))
-        if cur.fetchone():
-            conn.close(); return err("На эту дату уже есть запрос бронирования")
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.venue_bookings
-                (project_id,venue_id,organizer_id,venue_user_id,event_date,event_time,artist,age_limit,expected_guests,status)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id""",
-            (project_id, venue_id, organizer_id, venue_user_id, event_date, event_time, artist, age_limit, expected_guests))
-        booking_id = str(cur.fetchone()[0])
-        # Получаем название площадки, имя и email организатора и площадки
-        cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (venue_id,))
-        vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
-        cur.execute(f"SELECT name, email FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
-        orow = cur.fetchone(); org_name = orow[0] if orow else "Организатор"; org_email = orow[1] if orow else ""
-        cur.execute(f"SELECT email, name, email_notifications_enabled FROM {SCHEMA}.users WHERE id=%s", (venue_user_id,))
-        vurow = cur.fetchone()
-        venue_email = vurow[0] if vurow else ""
-        venue_user_name = vurow[1] if vurow else ""
-        venue_email_ok = bool(vurow[2]) if vurow else True
-        conn.commit(); conn.close()
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Проверяем, не занята ли дата
+            cur.execute(f"SELECT id FROM {SCHEMA}.venue_busy_dates WHERE venue_id=%s AND busy_date=%s", (venue_id, event_date))
+            if cur.fetchone():
+                conn.close(); return err("Эта дата уже занята на площадке")
+            cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE venue_id=%s AND event_date=%s AND status IN ('pending','confirmed')", (venue_id, event_date))
+            if cur.fetchone():
+                conn.close(); return err("На эту дату уже есть запрос бронирования")
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.venue_bookings
+                    (project_id,venue_id,organizer_id,venue_user_id,event_date,event_time,artist,age_limit,expected_guests,status)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,'pending') RETURNING id""",
+                (project_id, venue_id, organizer_id, venue_user_id, event_date, event_time, artist, age_limit, expected_guests))
+            booking_id = str(cur.fetchone()[0])
+            # Получаем название площадки, имя и email организатора и площадки
+            cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (venue_id,))
+            vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
+            cur.execute(f"SELECT name, email FROM {SCHEMA}.users WHERE id=%s", (organizer_id,))
+            orow = cur.fetchone(); org_name = orow[0] if orow else "Организатор"; org_email = orow[1] if orow else ""
+            cur.execute(f"SELECT email, name, email_notifications_enabled FROM {SCHEMA}.users WHERE id=%s", (venue_user_id,))
+            vurow = cur.fetchone()
+            venue_email = vurow[0] if vurow else ""
+            venue_user_name = vurow[1] if vurow else ""
+            venue_email_ok = bool(vurow[2]) if vurow else True
+            conn.commit()
+        finally:
+            conn.close()
 
         # Уведомление площадке (в приложении)
         body_text = (f"Дата: {event_date}" + (f" {event_time}" if event_time else "") +
@@ -508,46 +560,49 @@ def handler(event: dict, context) -> dict:
         venue_user_name  = b.get("venueUserName", "Площадка")
         if not booking_id or response not in ("confirmed", "rejected"):
             return err("Некорректные данные")
-        conn = get_conn(); cur = conn.cursor()
-        cur.execute(
-            f"""UPDATE {SCHEMA}.venue_bookings
-                SET status=%s, rental_amount=%s, venue_conditions=%s, updated_at=NOW()
-                WHERE id=%s
-                RETURNING organizer_id, venue_id, venue_user_id, event_date, event_time,
-                          artist, project_id""",
-            (response, rental_amount, venue_conditions, booking_id))
-        row = cur.fetchone()
-        if not row: conn.close(); return err("Бронирование не найдено", 404)
-        organizer_id  = str(row[0])
-        vid           = str(row[1])
-        venue_user_id = str(row[2])
-        edate         = str(row[3])
-        event_time    = row[4] or ""
-        artist        = row[5] or ""
-        project_id    = str(row[6])
-        cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (vid,))
-        vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""UPDATE {SCHEMA}.venue_bookings
+                    SET status=%s, rental_amount=%s, venue_conditions=%s, updated_at=NOW()
+                    WHERE id=%s
+                    RETURNING organizer_id, venue_id, venue_user_id, event_date, event_time,
+                              artist, project_id""",
+                (response, rental_amount, venue_conditions, booking_id))
+            row = cur.fetchone()
+            if not row: conn.close(); return err("Бронирование не найдено", 404)
+            organizer_id  = str(row[0])
+            vid           = str(row[1])
+            venue_user_id = str(row[2])
+            edate         = str(row[3])
+            event_time    = row[4] or ""
+            artist        = row[5] or ""
+            project_id    = str(row[6])
+            cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (vid,))
+            vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
 
-        conversation_id = ""
-        if response == "confirmed":
-            # Создаём задачи для организатора
-            cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
-            if not cur.fetchone():
-                for i, (key, title, desc) in enumerate(BOOKING_TASKS):
-                    cur.execute(
-                        f"INSERT INTO {SCHEMA}.booking_tasks (booking_id, project_id, title, description, sort_order) VALUES (%s,%s,%s,%s,%s)",
-                        (booking_id, project_id, title, desc, i))
+            conversation_id = ""
+            if response == "confirmed":
+                # Создаём задачи для организатора
+                cur.execute(f"SELECT id FROM {SCHEMA}.booking_tasks WHERE booking_id=%s", (booking_id,))
+                if not cur.fetchone():
+                    for i, (key, title, desc) in enumerate(BOOKING_TASKS):
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.booking_tasks (booking_id, project_id, title, description, sort_order) VALUES (%s,%s,%s,%s,%s)",
+                            (booking_id, project_id, title, desc, i))
 
-            # Создаём чеклист для площадки
-            cur.execute(f"SELECT id FROM {SCHEMA}.booking_checklist WHERE booking_id=%s", (booking_id,))
-            if not cur.fetchone():
-                for i, (step_key, step_title) in enumerate(VENUE_CHECKLIST):
-                    is_done = step_key == "date_confirmed"
-                    cur.execute(
-                        f"INSERT INTO {SCHEMA}.booking_checklist (booking_id, venue_id, step_key, step_title, is_done, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
-                        (booking_id, vid, step_key, step_title, is_done, i))
+                # Создаём чеклист для площадки
+                cur.execute(f"SELECT id FROM {SCHEMA}.booking_checklist WHERE booking_id=%s", (booking_id,))
+                if not cur.fetchone():
+                    for i, (step_key, step_title) in enumerate(VENUE_CHECKLIST):
+                        is_done = step_key == "date_confirmed"
+                        cur.execute(
+                            f"INSERT INTO {SCHEMA}.booking_checklist (booking_id, venue_id, step_key, step_title, is_done, sort_order) VALUES (%s,%s,%s,%s,%s,%s)",
+                            (booking_id, vid, step_key, step_title, is_done, i))
 
-            conn.commit()
+                conn.commit()
+        finally:
             conn.close()
 
             # Создаём чат с условиями бронирования

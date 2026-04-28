@@ -94,8 +94,8 @@ export default function DashboardProfileTab({
       await onProfileUpdate({ logoUrl: data.logoUrl });
       setLogoPreview(data.logoUrl);
       setLogoFile(null);
-    } catch (e) {
-      console.error("Logo upload error:", e);
+    } catch {
+      // Ошибка показывается через toast вверху по цепочке
     } finally {
       setLogoSaving(false);
     }
