@@ -457,38 +457,41 @@ export default function PresentationPage() {
 
       {/* ══════════════ SLIDE 6 — PDF и скачивание ══════════════ */}
       <section id="slide-6" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(${IMG_PDF})` }} />
-        <div className="absolute inset-0 bg-black/75" />
-        <div className="absolute inset-0 bg-gradient-to-r from-background/95 via-background/75 to-background/50" />
-        <div className="absolute inset-0 bg-gradient-to-br from-neon-purple/5 to-neon-green/5" />
+        {/* Новый тематический фон — документы и офис */}
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/d258e57a-ae32-42f8-a5de-d2ff908e214d.jpg)` }} />
+        {/* Многослойное затемнение для максимальной читаемости */}
+        <div className="absolute inset-0 bg-black/88" />
+        <div className="absolute inset-0 bg-gradient-to-br from-[#060810]/95 via-[#060810]/80 to-[#060810]/70" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#060810]/90 via-transparent to-[#060810]/60" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
-          <div className="grid lg:grid-cols-2 gap-16 items-center">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
-              {/* Тёмная подложка */}
-              <div className="bg-black/45 backdrop-blur-sm rounded-2xl p-6 border border-neon-green/10 mb-6">
+              {/* Максимально тёмная подложка под заголовок */}
+              <div className="bg-black/75 backdrop-blur-md rounded-2xl p-7 border border-neon-green/25 mb-5 shadow-2xl shadow-black/60">
                 <p className="text-neon-green font-oswald text-sm tracking-[0.3em] uppercase mb-4">PDF экспорт</p>
-                <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white mb-6 leading-tight">
+                <h2 className="font-oswald font-bold text-5xl lg:text-6xl uppercase text-white mb-5 leading-tight">
                   Скачать<br /><span className="text-neon-green">одной кнопкой</span>
                 </h2>
-                <p className="text-white/90 text-lg leading-relaxed">
+                <p className="text-white text-lg leading-relaxed">
                   Договор и счёт автоматически формируются в PDF — с реквизитами,
                   подписями и печатью. Готовы к отправке в банк, бухгалтерию или архив.
                 </p>
               </div>
-              <div className="space-y-4">
+              {/* Карточки типов документов с тёмной подложкой */}
+              <div className="space-y-3">
                 {[
-                  { icon: "FileText", color: "neon-purple", title: "Договор PDF",   sub: "Реквизиты обеих сторон, условия, даты, статус подписей" },
+                  { icon: "FileText", color: "neon-purple", title: "Договор PDF",        sub: "Реквизиты обеих сторон, условия, даты, статус подписей" },
                   { icon: "Receipt",  color: "neon-green",  title: "Счёт на оплату PDF", sub: "Плательщик, получатель, банковские реквизиты, сумма" },
                   { icon: "Archive",  color: "neon-cyan",   title: "Архив документов",   sub: "Все PDF хранятся в облаке и доступны в любой момент" },
                 ].map((t, i) => (
-                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-4 border ${bm[t.color]}`}>
+                  <div key={i} className={`flex items-center gap-4 bg-black/70 backdrop-blur-sm rounded-xl p-4 border ${bm[t.color]}`}>
                     <div className={`w-10 h-10 rounded-xl ${bm[t.color]} border flex items-center justify-center shrink-0`}>
                       <Icon name={t.icon as never} size={18} className={cm[t.color]} />
                     </div>
                     <div>
                       <p className={`font-oswald font-semibold text-sm ${cm[t.color]}`}>{t.title}</p>
-                      <p className="text-white/60 text-xs mt-0.5">{t.sub}</p>
+                      <p className="text-white/80 text-xs mt-0.5">{t.sub}</p>
                     </div>
                   </div>
                 ))}
@@ -496,27 +499,27 @@ export default function PresentationPage() {
             </div>
 
             <div className="space-y-4">
-              {/* Мок интерфейса скачивания */}
-              <div className="glass rounded-2xl p-6 border border-neon-purple/20">
-                <p className="text-white/50 text-xs mb-5 font-oswald uppercase tracking-wider">Готовые документы</p>
+              {/* Мок интерфейса — тёмная подложка */}
+              <div className="bg-black/75 backdrop-blur-md rounded-2xl p-6 border border-neon-purple/30 shadow-2xl shadow-black/60">
+                <p className="text-white/70 text-xs mb-5 font-oswald uppercase tracking-wider">Готовые документы</p>
                 {[
-                  { name: "Договор №GL-00123412.pdf",   size: "148 КБ", status: "Подписан",  color: "neon-green",  date: "12 апр" },
-                  { name: "Счёт №INV-00094521.pdf",      size: "89 КБ",  status: "Выставлен", color: "neon-cyan",   date: "12 апр" },
-                  { name: "Договор №GL-00098834.pdf",   size: "152 КБ", status: "Черновик",  color: "neon-purple", date: "8 апр" },
-                  { name: "Акт №АКТ-00011203.pdf",      size: "67 КБ",  status: "Подписан",  color: "neon-green",  date: "5 апр" },
+                  { name: "Договор №GL-00123412.pdf",  size: "148 КБ", status: "Подписан",  color: "neon-green",  date: "12 апр" },
+                  { name: "Счёт №INV-00094521.pdf",     size: "89 КБ",  status: "Выставлен", color: "neon-cyan",   date: "12 апр" },
+                  { name: "Договор №GL-00098834.pdf",  size: "152 КБ", status: "Черновик",  color: "neon-purple", date: "8 апр" },
+                  { name: "Акт №АКТ-00011203.pdf",     size: "67 КБ",  status: "Подписан",  color: "neon-green",  date: "5 апр" },
                 ].map((f, i) => (
-                  <div key={i} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0 gap-3">
+                  <div key={i} className="flex items-center justify-between py-3 border-b border-white/8 last:border-0 gap-3">
                     <div className="flex items-center gap-3 min-w-0">
                       <Icon name="FileText" size={14} className={cm[f.color]} />
                       <div className="min-w-0">
-                        <p className="text-white/85 text-sm truncate">{f.name}</p>
-                        <p className="text-white/35 text-xs">{f.size} · {f.date}</p>
+                        <p className="text-white text-sm truncate font-medium">{f.name}</p>
+                        <p className="text-white/50 text-xs">{f.size} · {f.date}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className={`text-xs px-2 py-0.5 rounded-full border ${bm[f.color]} ${cm[f.color]}`}>{f.status}</span>
-                      <div className="w-7 h-7 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
-                        <Icon name="Download" size={12} className="text-white/40" />
+                      <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
+                        <Icon name="Download" size={12} className="text-white/60" />
                       </div>
                     </div>
                   </div>
@@ -525,16 +528,16 @@ export default function PresentationPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 {[
-                  { icon: "Printer",    label: "Печать напрямую",    sub: "Из браузера без конвертации" },
-                  { icon: "Send",       label: "Отправка по почте",  sub: "PDF прикрепляется к письму" },
-                  { icon: "Building",   label: "В банк и ФНС",       sub: "Формат принимается везде" },
-                  { icon: "HardDrive",  label: "Локальный архив",    sub: "Сохраняй на свой компьютер" },
+                  { icon: "Printer",   label: "Печать напрямую",   sub: "Из браузера без конвертации" },
+                  { icon: "Send",      label: "Отправка по почте", sub: "PDF прикрепляется к письму" },
+                  { icon: "Building",  label: "В банк и ФНС",      sub: "Формат принимается везде" },
+                  { icon: "HardDrive", label: "Локальный архив",   sub: "Сохраняй на свой компьютер" },
                 ].map((c, i) => (
-                  <div key={i} className="glass rounded-xl p-3.5 border border-white/6 flex items-start gap-3">
-                    <Icon name={c.icon as never} size={15} className="text-neon-green/70 shrink-0 mt-0.5" />
+                  <div key={i} className="bg-black/70 backdrop-blur-sm rounded-xl p-3.5 border border-white/15 flex items-start gap-3">
+                    <Icon name={c.icon as never} size={15} className="text-neon-green shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-white/85 text-xs font-semibold">{c.label}</p>
-                      <p className="text-white/50 text-xs mt-0.5">{c.sub}</p>
+                      <p className="text-white text-xs font-semibold">{c.label}</p>
+                      <p className="text-white/65 text-xs mt-0.5">{c.sub}</p>
                     </div>
                   </div>
                 ))}
@@ -1065,134 +1068,6 @@ export default function PresentationPage() {
         </div>
       </section>
 
-      {/* ══════════════ ФИНАЛЬНАЯ СЕКЦИЯ — СКАЧАТЬ ПРЕЗЕНТАЦИЮ ══════════════ */}
-      <PdfDownloadSection />
-
-    </div>
-  );
-}
-
-// ── Секция скачивания всей презентации в PDF ────────────────────────────────
-function PdfDownloadSection() {
-  const [downloading, setDownloading] = useState(false);
-  const [progress, setProgress]       = useState(0);
-  const [done, setDone]               = useState(false);
-
-  const downloadAll = async () => {
-    setDownloading(true);
-    setDone(false);
-    setProgress(0);
-    try {
-      const { jsPDF } = await import("jspdf");
-      const { default: html2canvas } = await import("html2canvas");
-
-      const slides = document.querySelectorAll<HTMLElement>("section[id^='slide-']");
-      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pdfW = pdf.internal.pageSize.getWidth();   // 297
-      const pdfH = pdf.internal.pageSize.getHeight();  // 210
-
-      for (let i = 0; i < slides.length; i++) {
-        setProgress(Math.round(((i + 1) / slides.length) * 100));
-        const el = slides[i];
-        const canvas = await html2canvas(el, {
-          scale: 1.5,
-          useCORS: true,
-          backgroundColor: "#0d0f17",
-          logging: false,
-          windowWidth: 1280,
-          windowHeight: 720,
-        });
-        const imgData = canvas.toDataURL("image/jpeg", 0.9);
-        if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, "JPEG", 0, 0, pdfW, pdfH);
-      }
-
-      pdf.save("GlobalLink_Presentation.pdf");
-      setDone(true);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setDownloading(false);
-      setProgress(0);
-    }
-  };
-
-  return (
-    <div className="relative overflow-hidden bg-background border-t border-white/5">
-      <div className="absolute inset-0 bg-gradient-to-br from-neon-purple/5 via-transparent to-neon-cyan/5" />
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[2px] bg-gradient-to-r from-transparent via-neon-purple/40 to-transparent" />
-
-      <div className="relative z-10 max-w-4xl mx-auto px-8 py-20 text-center">
-        <div className="inline-flex items-center gap-2 px-4 py-2 glass rounded-full border border-neon-purple/20 mb-8">
-          <Icon name="FileDown" size={14} className="text-neon-purple" />
-          <span className="text-white/60 text-sm">Скачать материалы</span>
-        </div>
-
-        <h2 className="font-oswald font-bold text-4xl lg:text-5xl uppercase text-white mb-4">
-          Сохрани презентацию<br />
-          <span className="gradient-text">в PDF</span>
-        </h2>
-        <p className="text-white/65 text-lg max-w-xl mx-auto mb-10 leading-relaxed">
-          Все 15 слайдов в одном файле — для показа инвесторам, партнёрам или команде.
-          Высокое качество, сохранённые цвета и оформление.
-        </p>
-
-        {/* Прогресс */}
-        {downloading && (
-          <div className="mb-8 space-y-3">
-            <div className="h-2 bg-white/10 rounded-full overflow-hidden max-w-sm mx-auto">
-              <div
-                className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan rounded-full transition-all duration-300"
-                style={{ width: `${progress}%` }}
-              />
-            </div>
-            <p className="text-white/50 text-sm">
-              Генерирую слайды... {progress}%
-            </p>
-          </div>
-        )}
-
-        {done && !downloading && (
-          <div className="flex items-center justify-center gap-3 mb-8 p-4 glass rounded-xl border border-neon-green/20 max-w-sm mx-auto">
-            <Icon name="CheckCircle2" size={20} className="text-neon-green" />
-            <p className="text-neon-green font-semibold text-sm">PDF успешно скачан!</p>
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-center gap-4">
-          <button
-            onClick={downloadAll}
-            disabled={downloading}
-            className="group flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-bold text-xl rounded-xl hover:opacity-90 disabled:opacity-60 transition-all hover:shadow-xl hover:shadow-neon-purple/30"
-          >
-            {downloading ? (
-              <><Icon name="Loader2" size={22} className="animate-spin" />Генерирую PDF...</>
-            ) : (
-              <><Icon name="FileDown" size={22} className="group-hover:translate-y-0.5 transition-transform" />Скачать презентацию PDF</>
-            )}
-          </button>
-
-          <a href="/"
-            className="flex items-center gap-3 px-8 py-5 glass text-white font-oswald font-bold text-lg rounded-xl hover:bg-white/10 transition-all border border-white/10">
-            <Icon name="ArrowLeft" size={20} />
-            На главную
-          </a>
-        </div>
-
-        <div className="mt-12 grid grid-cols-3 gap-5 max-w-2xl mx-auto">
-          {[
-            { icon: "Layers",     label: "15 слайдов",       sub: "Полная презентация" },
-            { icon: "Maximize",   label: "Формат A4",        sub: "Альбомная ориентация" },
-            { icon: "Palette",    label: "Цветная печать",   sub: "Сохранённые градиенты" },
-          ].map((c, i) => (
-            <div key={i} className="glass rounded-xl p-4 border border-white/5 text-center">
-              <Icon name={c.icon as never} size={20} className="text-neon-purple/70 mx-auto mb-2" />
-              <p className="text-white/80 text-sm font-semibold">{c.label}</p>
-              <p className="text-white/40 text-xs mt-0.5">{c.sub}</p>
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
