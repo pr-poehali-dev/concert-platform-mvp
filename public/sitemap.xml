@@ -8,7 +8,7 @@
 
   <!-- Главная страница — максимальный приоритет -->
   <url>
-    <loc>https://concert-platform-mvp.poehali.dev/</loc>
+    <loc>https://глобаллинк.рф/</loc>
     <lastmod>2025-04-28</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
@@ -21,7 +21,7 @@
 
   <!-- Презентация продукта -->
   <url>
-    <loc>https://concert-platform-mvp.poehali.dev/presentation</loc>
+    <loc>https://глобаллинк.рф/presentation</loc>
     <lastmod>2025-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -33,7 +33,7 @@
 
   <!-- Инвесторская презентация -->
   <url>
-    <loc>https://concert-platform-mvp.poehali.dev/investor</loc>
+    <loc>https://глобаллинк.рф/investor</loc>
     <lastmod>2025-04-28</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
@@ -41,7 +41,7 @@
 
   <!-- Политика конфиденциальности -->
   <url>
-    <loc>https://concert-platform-mvp.poehali.dev/privacy</loc>
+    <loc>https://глобаллинк.рф/privacy</loc>
     <lastmod>2025-04-28</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

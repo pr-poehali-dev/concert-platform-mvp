@@ -53,4 +53,4 @@ Disallow: /verify
 Crawl-delay: 5
 
 # Sitemap
-Sitemap: https://concert-platform-mvp.poehali.dev/sitemap.xml
+Sitemap: https://глобаллинк.рф/sitemap.xml
