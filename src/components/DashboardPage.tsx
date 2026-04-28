@@ -12,7 +12,6 @@ import DashboardVenueProjectsTab from "@/components/dashboard/DashboardVenueProj
 import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab";
 import DashboardSigningTab from "@/components/dashboard/DashboardSigningTab";
-import DashboardSidebar from "@/components/dashboard/DashboardSidebar";
 import DashboardAITab from "@/components/dashboard/DashboardAITab";
 import CrmPage from "@/components/crm/CrmPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
@@ -159,12 +158,9 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         </div>
       </div>
 
-      {/* Основной layout: сайдбар + контент */}
+      {/* Основной layout: контент */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 lg:pt-6">
         <div className="flex gap-6 items-start">
-
-          {/* Левая плашка — только на десктопе */}
-          <DashboardSidebar activeTab={tab} onTabChange={setTab} />
 
           {/* Контент */}
           <div className="flex-1 min-w-0">
