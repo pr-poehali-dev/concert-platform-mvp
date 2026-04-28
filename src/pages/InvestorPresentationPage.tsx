@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
+import SEOHead, { SEO_PAGES } from "@/components/SEOHead";
 
 const IMG_MEETING = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/b5ad0ca1-b75d-4082-a2dc-04e63ada26ba.jpg";
 const IMG_CHARTS  = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/5dcf06cd-b2c9-4d3f-89a4-a28979fcdd16.jpg";
@@ -80,6 +81,8 @@ export default function InvestorPresentationPage() {
   }, [current]);
 
   return (
+    <>
+    <SEOHead {...SEO_PAGES.investor} />
     <div className="bg-[#04060e] text-white font-golos">
 
       {/* Навигационные точки */}
@@ -813,5 +816,6 @@ export default function InvestorPresentationPage() {
       </section>
 
     </div>
+    </>
   );
 }

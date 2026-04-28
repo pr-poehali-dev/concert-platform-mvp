@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import Icon from "@/components/ui/icon";
+import SEOHead, { SEO_PAGES } from "@/components/SEOHead";
 
 const SECTIONS = [
   {
@@ -92,6 +93,8 @@ export default function PrivacyPolicyPage() {
   const navigate = useNavigate();
 
   return (
+    <>
+    <SEOHead {...SEO_PAGES.privacy} />
     <div className="min-h-screen bg-background text-white">
       {/* Header */}
       <div className="border-b border-white/10 sticky top-0 z-10" style={{ background: "#0d0d1a" }}>
@@ -153,5 +156,6 @@ export default function PrivacyPolicyPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import SharedProjectPage from "./SharedProjectPage";
 import Navbar from "@/components/Navbar";
+import SEOHead, { SEO_PAGES } from "@/components/SEOHead";
 import HomePage from "@/components/HomePage";
 import SearchPage from "@/components/SearchPage";
 import ToursPage from "@/components/ToursPage";
@@ -22,7 +23,12 @@ const CONV_KEY = "gl_chat_conv";
 export default function Index() {
   const shareId = new URLSearchParams(window.location.search).get("share");
   if (shareId) return <SharedProjectPage linkId={shareId} />;
-  return <IndexInner />;
+  return (
+    <>
+      <SEOHead {...SEO_PAGES.home} />
+      <IndexInner />
+    </>
+  );
 }
 
 function IndexInner() {

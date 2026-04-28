@@ -1,36 +1,56 @@
 {
-  "name": "GLOBAL LINK — платформа для музыкантов и площадок",
+  "name": "GLOBAL LINK — платформа для организаторов концертов",
   "short_name": "GLOBAL LINK",
-  "description": "Соединяем организаторов туров и концертные площадки по всей стране",
+  "description": "Организуйте концерты и туры по всей России. Поиск площадок, ЭДО, финансы, CRM и логистика тура в одном сервисе.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d0d1a",
   "theme_color": "#0d0d1a",
   "orientation": "any",
   "lang": "ru",
+  "dir": "ltr",
+  "scope": "/",
+  "id": "global-link-app",
   "icons": [
     {
       "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
       "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Найти площадку",
+      "short_name": "Площадки",
+      "description": "Поиск концертных площадок по России",
+      "url": "/?page=search",
+      "icons": [{ "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png", "sizes": "96x96" }]
+    },
+    {
+      "name": "Мои проекты",
+      "short_name": "Проекты",
+      "description": "Управление концертными проектами",
+      "url": "/?page=projects",
+      "icons": [{ "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png", "sizes": "96x96" }]
     }
   ],
   "screenshots": [
     {
-      "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
+      "src": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg",
       "sizes": "1280x720",
-      "type": "image/png",
+      "type": "image/jpeg",
       "form_factor": "wide",
       "label": "GLOBAL LINK — главная страница"
     }
   ],
-  "categories": ["business", "music"],
-  "scope": "/"
+  "categories": ["business", "music", "productivity"],
+  "iarc_rating_id": "",
+  "prefer_related_applications": false
 }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
+import SEOHead, { SEO_PAGES } from "@/components/SEOHead";
 
 const IMG_HERO    = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg";
 const IMG_MANAGER = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/e24cb88c-1adb-4258-84e2-d18ac7fab139.jpg";
@@ -138,6 +139,8 @@ export default function PresentationPage() {
   };
 
   return (
+    <>
+    <SEOHead {...SEO_PAGES.presentation} />
     <div className="bg-background text-white font-golos">
 
       {/* Nav dots */}
@@ -1069,5 +1072,6 @@ export default function PresentationPage() {
       </section>
 
     </div>
+    </>
   );
 }

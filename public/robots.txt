@@ -1,14 +1,56 @@
+# ─────────────────────────────────────────────
+# GLOBAL LINK — robots.txt
+# ─────────────────────────────────────────────
+
+# Яндекс
+User-agent: Yandex
+Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /verify
+Disallow: /login/organizer
+Disallow: /login/venue
+Disallow: /login/admin
+Crawl-delay: 2
+
+# Google
 User-agent: Googlebot
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /verify
 
+# Bing
 User-agent: Bingbot
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /verify
+Crawl-delay: 2
 
+# Социальные парсеры — пускаем везде
 User-agent: Twitterbot
 Allow: /
 
 User-agent: facebookexternalhit
 Allow: /
 
+User-agent: vkShare
+Allow: /
+
+User-agent: TelegramBot
+Allow: /
+
+User-agent: LinkedInBot
+Allow: /
+
+# Все остальные
 User-agent: *
 Allow: /
+Disallow: /admin
+Disallow: /login
+Disallow: /verify
+Crawl-delay: 5
+
+# Sitemap
+Sitemap: https://concert-platform-mvp.poehali.dev/sitemap.xml

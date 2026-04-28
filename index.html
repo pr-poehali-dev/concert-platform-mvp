@@ -1,34 +1,188 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru" prefix="og: https://ogp.me/ns#">
 <head>
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>GLOBAL LINK — платформа для музыкантов и площадок</title>
-    <meta name="description" content="Соединяем организаторов туров и площадки по всей стране"/>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <meta name="author" content="poehali.dev"/>
-    <link rel="icon" type="image/png" href="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png">
-    <link rel="manifest" href="/manifest.json">
-    <meta name="theme-color" content="#0d0d1a">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="GLOBAL LINK">
-    <link rel="apple-touch-icon" href="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png">
-    <meta property="og:title" content="GLOBAL LINK — платформа для музыкантов и площадок">
-    <meta property="og:description" content="Соединяем организаторов туров и концертные площадки по всей стране">
-    <meta property="og:image:width" content="1200">
-    <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="GLOBAL LINK — платформа для музыкантов и площадок">
-    <meta property="og:image" content="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png">
-    <meta property="og:site_name" content="GLOBAL LINK">
-    <meta property="og:type" content="website">
-    <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content="GLOBAL LINK — платформа для музыкантов и площадок">
-    <meta name="twitter:description" content="Соединяем организаторов туров и концертные площадки по всей стране">
-    <meta name="twitter:image" content="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png">
+
+    <!-- ═══════════════════════════════════════════════════
+         ОСНОВНЫЕ SEO МЕТА-ТЕГИ
+    ═══════════════════════════════════════════════════ -->
+    <title>GLOBAL LINK — платформа для организаторов концертов и площадок</title>
+    <meta name="description" content="Организуйте концерты и туры по всей России. Поиск площадок, ЭДО с подписью, финансы и P&L, CRM, логистика команды, синхронизация продаж билетов — всё в одном сервисе."/>
+    <meta name="keywords" content="организация концертов, аренда концертной площадки, тур-менеджмент, бронирование площадки, концертный зал, организатор концертов, планирование тура, концертная площадка Москва, концертная площадка Санкт-Петербург, управление мероприятиями, ЭДО для концертов, билетная система, P&L концерт, CRM для организаторов"/>
+    <meta name="author" content="GLOBAL LINK"/>
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1"/>
+    <meta name="googlebot" content="index, follow"/>
+    <meta name="yandex" content="index, follow"/>
+
+    <!-- Canonical URL -->
+    <link rel="canonical" href="https://concert-platform-mvp.poehali.dev/"/>
+
+    <!-- Язык и регион -->
+    <meta name="language" content="Russian"/>
+    <meta name="geo.region" content="RU"/>
+    <meta name="geo.placename" content="Россия"/>
+    <meta http-equiv="content-language" content="ru"/>
+
+    <!-- ═══════════════════════════════════════════════════
+         OPEN GRAPH (VK, Telegram, Facebook)
+    ═══════════════════════════════════════════════════ -->
+    <meta property="og:type" content="website"/>
+    <meta property="og:site_name" content="GLOBAL LINK"/>
+    <meta property="og:locale" content="ru_RU"/>
+    <meta property="og:url" content="https://concert-platform-mvp.poehali.dev/"/>
+    <meta property="og:title" content="GLOBAL LINK — платформа для организаторов концертов"/>
+    <meta property="og:description" content="Поиск площадок, ЭДО, финансы, CRM и логистика тура в одном сервисе. 500+ площадок по всей России."/>
+    <meta property="og:image" content="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg"/>
+    <meta property="og:image:width" content="1200"/>
+    <meta property="og:image:height" content="630"/>
+    <meta property="og:image:alt" content="GLOBAL LINK — платформа для организаторов концертов и площадок"/>
+    <meta property="og:image:type" content="image/jpeg"/>
+
+    <!-- ═══════════════════════════════════════════════════
+         TWITTER CARD
+    ═══════════════════════════════════════════════════ -->
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:site" content="@globallink_ru"/>
+    <meta name="twitter:title" content="GLOBAL LINK — платформа для организаторов концертов"/>
+    <meta name="twitter:description" content="Поиск площадок, ЭДО, финансы, CRM и логистика тура. 500+ площадок по всей России."/>
+    <meta name="twitter:image" content="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg"/>
+    <meta name="twitter:image:alt" content="GLOBAL LINK — платформа для организаторов концертов"/>
+
+    <!-- ═══════════════════════════════════════════════════
+         ИКОНКИ И PWA
+    ═══════════════════════════════════════════════════ -->
+    <link rel="icon" type="image/png" href="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png"/>
+    <link rel="shortcut icon" href="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png"/>
+    <link rel="apple-touch-icon" href="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png"/>
+    <link rel="apple-touch-icon" sizes="180x180" href="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png"/>
+    <link rel="manifest" href="/manifest.json"/>
+    <meta name="theme-color" content="#0d0d1a"/>
+    <meta name="msapplication-TileColor" content="#0d0d1a"/>
+    <meta name="msapplication-TileImage" content="https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png"/>
+    <meta name="mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-capable" content="yes"/>
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+    <meta name="apple-mobile-web-app-title" content="GLOBAL LINK"/>
+
+    <!-- ═══════════════════════════════════════════════════
+         ШРИФТЫ — preconnect + preload для скорости
+    ═══════════════════════════════════════════════════ -->
+    <link rel="preconnect" href="https://fonts.googleapis.com"/>
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Golos+Text:wght@400;500;600;700&display=swap"/>
+    <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+    <!-- Preconnect к CDN и API -->
+    <link rel="preconnect" href="https://cdn.poehali.dev"/>
+    <link rel="preconnect" href="https://functions.poehali.dev"/>
+
+    <!-- ═══════════════════════════════════════════════════
+         JSON-LD СТРУКТУРИРОВАННЫЕ ДАННЫЕ
+    ═══════════════════════════════════════════════════ -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://concert-platform-mvp.poehali.dev/#website",
+          "url": "https://concert-platform-mvp.poehali.dev/",
+          "name": "GLOBAL LINK",
+          "description": "Платформа для организаторов концертов и площадок",
+          "inLanguage": "ru-RU",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://concert-platform-mvp.poehali.dev/?search={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "SoftwareApplication",
+          "@id": "https://concert-platform-mvp.poehali.dev/#app",
+          "name": "GLOBAL LINK",
+          "url": "https://concert-platform-mvp.poehali.dev/",
+          "description": "B2B SaaS платформа для организации концертов, туров и управления площадками по всей России. Поиск площадок, ЭДО, финансы, CRM, логистика.",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Web, iOS, Android",
+          "inLanguage": "ru-RU",
+          "offers": {
+            "@type": "Offer",
+            "price": "2990",
+            "priceCurrency": "RUB",
+            "priceValidUntil": "2026-12-31",
+            "availability": "https://schema.org/InStock"
+          },
+          "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": "4.8",
+            "reviewCount": "47",
+            "bestRating": "5"
+          },
+          "featureList": [
+            "Поиск и бронирование концертных площадок",
+            "Электронный документооборот с подписью",
+            "Финансовое планирование и P&L отчёты",
+            "CRM система для управления задачами",
+            "Логистика тура — авиа, ЖД, отели",
+            "Синхронизация продаж билетов из агрегаторов",
+            "Генерация PDF договоров и счетов"
+          ],
+          "screenshot": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg"
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://concert-platform-mvp.poehali.dev/#organization",
+          "name": "GLOBAL LINK",
+          "url": "https://concert-platform-mvp.poehali.dev/",
+          "logo": {
+            "@type": "ImageObject",
+            "url": "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/favicon-1777125880131.png",
+            "width": 512,
+            "height": 512
+          },
+          "description": "Платформа для организаторов концертов и концертных площадок России",
+          "areaServed": {
+            "@type": "Country",
+            "name": "Россия"
+          },
+          "sameAs": []
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "Как найти концертную площадку для мероприятия?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "На GLOBAL LINK более 500 площадок по всей России с фильтрацией по городу, вместимости, цене и оборудованию. Найдите подходящую за 2 минуты и сразу отправьте запрос на бронирование."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Как оформить договор аренды концертной площадки?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Через встроенный ЭДО: система автоматически заполняет реквизиты обеих сторон из профилей, договор создаётся в один клик и подписывается электронной подписью с юридической силой."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "Можно ли вести финансы и P&L концерта в платформе?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Да. GLOBAL LINK позволяет вести все расходы и доходы, автоматически считает налоги (УСН 6%, 15%, ОСН) и формирует P&L отчёт. Продажи билетов синхронизируются из Яндекс Афиши, Kassir.ru и других агрегаторов."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
 
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
 
@@ -39,8 +193,8 @@
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS COMMENT! -->
 
     <meta name="pp-name" value="concert-platform-mvp">
-      <script src="https://cdn.poehali.dev/intertnal/js/inspector-min.js"></script>
-  </head>
+    <script src="https://cdn.poehali.dev/intertnal/js/inspector-min.js"></script>
+</head>
 
 <body>
 <div id="root"></div>
@@ -72,7 +226,7 @@
     });
 </script>
 <noscript>
-    <div><img src="https://mc.yandex.ru/watch/101026698" style="position:absolute; left:-9999px;" alt=""/></div>
+    <div><img src="https://mc.yandex.ru/watch/101026698" style="position:absolute; left:-9999px;" alt="Яндекс Метрика"/></div>
 </noscript>
 <!-- /Yandex.Metrika counter -->
 </body>

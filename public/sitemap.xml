@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xsi:schemaLocation="
+          http://www.sitemaps.org/schemas/sitemap/0.9
+          http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd">
+
+  <!-- Главная страница — максимальный приоритет -->
+  <url>
+    <loc>https://concert-platform-mvp.poehali.dev/</loc>
+    <lastmod>2025-04-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <image:image>
+      <image:loc>https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg</image:loc>
+      <image:title>GLOBAL LINK — платформа для организаторов концертов и площадок</image:title>
+      <image:caption>Организуйте концерты и туры по всей России</image:caption>
+    </image:image>
+  </url>
+
+  <!-- Презентация продукта -->
+  <url>
+    <loc>https://concert-platform-mvp.poehali.dev/presentation</loc>
+    <lastmod>2025-04-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg</image:loc>
+      <image:title>GLOBAL LINK — презентация возможностей платформы</image:title>
+    </image:image>
+  </url>
+
+  <!-- Инвесторская презентация -->
+  <url>
+    <loc>https://concert-platform-mvp.poehali.dev/investor</loc>
+    <lastmod>2025-04-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Политика конфиденциальности -->
+  <url>
+    <loc>https://concert-platform-mvp.poehali.dev/privacy</loc>
+    <lastmod>2025-04-28</lastmod>
+    <changefreq>yearly</changefreq>
+    <priority>0.3</priority>
+  </url>
+
+</urlset>
