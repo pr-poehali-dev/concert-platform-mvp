@@ -5,6 +5,7 @@ export type CompanyType = "individual" | "ip" | "ooo" | "other";
 
 export interface User {
   id: string;
+  displayId?: string;
   name: string;
   email: string;
   role: UserRole;

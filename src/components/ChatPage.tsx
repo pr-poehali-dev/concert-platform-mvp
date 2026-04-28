@@ -172,8 +172,14 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
             loadingConvs={loadingConvs}
             search={search}
             userRole={user?.role}
+            currentUserId={user?.id}
+            sessionId={localStorage.getItem("tourlink_session") || ""}
             onSearchChange={setSearch}
             onSelectConv={setActiveConvId}
+            onConversationCreated={(convId) => {
+              loadConversations();
+              setActiveConvId(convId);
+            }}
           />
 
           {/* ── Chat window ── */}

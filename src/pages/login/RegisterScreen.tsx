@@ -1,8 +1,42 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import type { RegisterData, UserRole } from "@/context/AuthContext";
 import { CITIES, COMPANY_TYPES, ROLE_META, Bg, BackBtn, Field, ErrorBox } from "./loginShared";
+
+interface DadataCompany {
+  value: string;
+  data: {
+    inn: string;
+    kpp: string;
+    ogrn: string;
+    address?: { value: string };
+    name?: { full_with_opf?: string; short_with_opf?: string };
+    opf?: { short: string };
+  };
+}
+
+async function searchByInn(inn: string): Promise<DadataCompany | null> {
+  try {
+    const res = await fetch(
+      `https://suggestions.dadata.ru/suggestions/api/4_1/rs/findById/party`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Token 3b46ee0e8c9f2a69c06c1cbcc26fffcb00b81451",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ query: inn, count: 1 }),
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.suggestions?.[0] ?? null;
+  } catch {
+    return null;
+  }
+}
 
 interface Props {
   role: UserRole;
@@ -27,6 +61,41 @@ export default function RegisterScreen({
 }: Props) {
   const [agreed, setAgreed] = useState(false);
   const meta = ROLE_META[role];
+
+  // ── ИНН автопоиск ─────────────────────────────────────────────────────
+  const [innSearching, setInnSearching] = useState(false);
+  const [innFound, setInnFound] = useState<DadataCompany | null>(null);
+  const [innError, setInnError] = useState("");
+  const innTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const inn = regData.inn.replace(/\D/g, "");
+    if (inn.length !== 10 && inn.length !== 12) {
+      setInnFound(null);
+      setInnError("");
+      return;
+    }
+    if (innTimerRef.current) clearTimeout(innTimerRef.current);
+    innTimerRef.current = setTimeout(async () => {
+      setInnSearching(true);
+      setInnError("");
+      const result = await searchByInn(inn);
+      setInnSearching(false);
+      if (!result) {
+        setInnFound(null);
+        setInnError("Компания с таким ИНН не найдена — проверьте номер");
+        return;
+      }
+      setInnFound(result);
+      // Автозаполняем поля
+      const d = result.data;
+      onSetReg("legalName", d.name?.full_with_opf || result.value || "");
+      if (d.kpp) onSetReg("kpp", d.kpp);
+      if (d.ogrn) onSetReg("ogrn", d.ogrn);
+      if (d.address?.value) onSetReg("legalAddress", d.address.value);
+    }, 600);
+    return () => { if (innTimerRef.current) clearTimeout(innTimerRef.current); };
+  }, [regData.inn]);
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4 relative overflow-hidden">
@@ -140,20 +209,53 @@ export default function RegisterScreen({
 
                 {needsCompany ? (
                   <>
+                    {/* ИНН — главное поле, всё остальное заполняется автоматически */}
+                    <Field label="ИНН" icon="Hash">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={regData.inn}
+                          onChange={e => onSetReg("inn", e.target.value.replace(/\D/g, ""))}
+                          placeholder="Введите ИНН — поля заполнятся автоматически"
+                          className="gl-input pr-8"
+                          maxLength={12}
+                        />
+                        {innSearching && (
+                          <Icon name="Loader2" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-neon-cyan animate-spin" />
+                        )}
+                        {innFound && !innSearching && (
+                          <Icon name="CheckCircle2" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-neon-green" />
+                        )}
+                      </div>
+                      {innError && (
+                        <p className="text-neon-pink text-xs mt-1 flex items-center gap-1">
+                          <Icon name="AlertCircle" size={11} />{innError}
+                        </p>
+                      )}
+                    </Field>
+
+                    {/* Карточка найденной компании */}
+                    {innFound && (
+                      <div className="flex items-start gap-2.5 bg-neon-green/5 border border-neon-green/20 rounded-xl px-3.5 py-3">
+                        <Icon name="Building2" size={15} className="text-neon-green mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                          <p className="text-neon-green text-xs font-medium truncate">{innFound.value}</p>
+                          <p className="text-white/30 text-[11px] mt-0.5">Данные заполнены автоматически из ЕГРЮЛ/ЕГРИП</p>
+                        </div>
+                      </div>
+                    )}
+
                     <Field label="Юридическое название" icon="Building">
                       <input type="text" value={regData.legalName} onChange={e => onSetReg("legalName", e.target.value)} placeholder='ООО «Концерт Груп»' className="gl-input" />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="ИНН" icon="Hash">
-                        <input type="text" value={regData.inn} onChange={e => onSetReg("inn", e.target.value)} placeholder="1234567890" className="gl-input" maxLength={12} />
-                      </Field>
                       <Field label="КПП" icon="Hash">
                         <input type="text" value={regData.kpp} onChange={e => onSetReg("kpp", e.target.value)} placeholder="123456789" className="gl-input" maxLength={9} />
                       </Field>
+                      <Field label="ОГРН/ОГРНИП" icon="FileText">
+                        <input type="text" value={regData.ogrn} onChange={e => onSetReg("ogrn", e.target.value)} placeholder="1234567890123" className="gl-input" maxLength={15} />
+                      </Field>
                     </div>
-                    <Field label="ОГРН/ОГРНИП" icon="FileText">
-                      <input type="text" value={regData.ogrn} onChange={e => onSetReg("ogrn", e.target.value)} placeholder="1234567890123" className="gl-input" maxLength={15} />
-                    </Field>
                     <Field label="Юридический адрес" icon="MapPin">
                       <input type="text" value={regData.legalAddress} onChange={e => onSetReg("legalAddress", e.target.value)} placeholder="г. Москва, ул. Примерная, д. 1" className="gl-input" />
                     </Field>

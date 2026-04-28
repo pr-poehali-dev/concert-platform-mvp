@@ -80,7 +80,14 @@ export default function ProfileSection({
             <div>
               <p className="text-white font-medium">{user.name}</p>
               <p className="text-white/40 text-sm">{user.email}</p>
-              <p className="text-white/30 text-xs">{COMPANY_LABELS[user.companyType] || "—"}</p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <p className="text-white/30 text-xs">{COMPANY_LABELS[user.companyType] || "—"}</p>
+                {user.displayId && (
+                  <span className="flex items-center gap-1 text-[11px] font-mono bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan px-1.5 py-0.5 rounded-md select-all">
+                    ID {user.displayId}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           {!editMode ? (

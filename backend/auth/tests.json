@@ -34,6 +34,22 @@
       "expectedStatus": 200,
       "expectedBody": { "sent": false },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "search_by_id invalid",
+      "method": "GET",
+      "path": "/?action=search_by_id&display_id=0",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "search_by_id not a number",
+      "method": "GET",
+      "path": "/?action=search_by_id&display_id=abc",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

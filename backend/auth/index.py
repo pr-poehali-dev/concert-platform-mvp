@@ -117,7 +117,8 @@ def err(msg: str, status: int = 400) -> dict:
 def build_user(row) -> dict:
     """row: id,name,email,role,city,verified,avatar,avatar_color,status,
              company_type,legal_name,inn,kpp,ogrn,legal_address,actual_address,
-             bank_name,bank_account,bank_bik,logo_url,phone,email_notifications_enabled"""
+             bank_name,bank_account,bank_bik,logo_url,phone,email_notifications_enabled,
+             twofa_enabled,email_confirmed,display_id"""
     return {
         "id": str(row[0]), "name": row[1], "email": row[2],
         "role": row[3], "city": row[4], "verified": row[5],
@@ -138,6 +139,7 @@ def build_user(row) -> dict:
         "emailNotificationsEnabled": row[21] if len(row) > 21 and row[21] is not None else True,
         "twofaEnabled": row[22] if len(row) > 22 and row[22] is not None else False,
         "emailConfirmed": row[23] if len(row) > 23 and row[23] is not None else False,
+        "displayId": str(row[24]) if len(row) > 24 and row[24] is not None else None,
     }
 
 
@@ -145,7 +147,7 @@ USER_SELECT = f"""
     SELECT id, name, email, role, city, verified, avatar, avatar_color, status,
            company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address,
            bank_name, bank_account, bank_bik, logo_url, phone, email_notifications_enabled,
-           twofa_enabled, email_confirmed
+           twofa_enabled, email_confirmed, display_id
     FROM {SCHEMA}.users
 """
 
@@ -328,11 +330,13 @@ def handler(event: dict, context) -> dict:
                 (name, email, password_hash, role, city, avatar, avatar_color, status,
                  company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone)
                 VALUES (%s,%s,%s,%s,%s,%s,%s,'pending',%s,%s,%s,%s,%s,%s,%s,%s)
-                RETURNING id""",
+                RETURNING id, display_id""",
             (name, email, pw_hash, role, city, avatar, avatar_color,
              company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone),
         )
-        user_id = str(cur.fetchone()[0])
+        reg_row = cur.fetchone()
+        user_id = str(reg_row[0])
+        display_id = str(reg_row[1]) if reg_row[1] else None
 
         # Создаём токен подтверждения и отправляем письмо
         token = create_verification_token(conn, user_id, email)
@@ -354,6 +358,7 @@ def handler(event: dict, context) -> dict:
             "kpp": kpp, "ogrn": ogrn, "legalAddress": legal_address,
             "actualAddress": actual_address, "phone": phone,
             "bankName": "", "bankAccount": "", "bankBik": "", "logoUrl": "",
+            "displayId": display_id,
         }
         session_id = secrets.token_hex(32)
         _sessions[session_id] = user_data
@@ -860,5 +865,35 @@ def handler(event: dict, context) -> dict:
             _sessions[session_id] = user
             return ok({"status": row[1], "verified": row[0]})
         return err("Пользователь не найден", 404)
+
+    # ── GET search_by_id ──────────────────────────────────────────────────
+    if action == "search_by_id":
+        query = (event.get("queryStringParameters") or {})
+        display_id = (query.get("display_id") or "").strip()
+        if not display_id:
+            return err("display_id обязателен")
+        if not display_id.isdigit():
+            return err("ID должен быть числом")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            USER_SELECT + " WHERE display_id = %s",
+            (int(display_id),)
+        )
+        row = cur.fetchone()
+        conn.close()
+        if not row:
+            return err("Пользователь не найден", 404)
+        u = build_user(row)
+        return ok({
+            "id": u["id"],
+            "displayId": u["displayId"],
+            "name": u["name"],
+            "role": u["role"],
+            "city": u["city"],
+            "avatar": u["avatar"],
+            "avatarColor": u["avatarColor"],
+            "verified": u["verified"],
+            "legalName": u["legalName"],
+        })
 
     return err("Not found", 404)

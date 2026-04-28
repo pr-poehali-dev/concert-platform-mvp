@@ -1,5 +1,6 @@
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
+import FindUserById from "./FindUserById";
 import { type Conversation, getAvatarColor, getInitial, formatTime } from "./chatTypes";
 
 interface Props {
@@ -8,8 +9,11 @@ interface Props {
   loadingConvs: boolean;
   search: string;
   userRole?: string;
+  currentUserId?: string;
+  sessionId?: string;
   onSearchChange: (value: string) => void;
   onSelectConv: (id: string) => void;
+  onConversationCreated?: (convId: string) => void;
 }
 
 export default function ChatSidebar({
@@ -18,8 +22,11 @@ export default function ChatSidebar({
   loadingConvs,
   search,
   userRole,
+  currentUserId,
+  sessionId,
   onSearchChange,
   onSelectConv,
+  onConversationCreated,
 }: Props) {
   const totalUnread = conversations.reduce((s, c) => s + (c.unread || 0), 0);
 
@@ -35,8 +42,17 @@ export default function ChatSidebar({
     <aside className={`shrink-0 flex flex-col glass sm:rounded-2xl overflow-hidden w-full sm:w-72 ${activeConvId ? "hidden sm:flex" : "flex"}`}>
       <div className="p-4 border-b border-white/10 shrink-0">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-oswald font-bold text-xl text-white">Сообщения</h2>
-          {totalUnread > 0 && <Badge className="bg-neon-purple text-white text-xs">{totalUnread}</Badge>}
+          <div className="flex items-center gap-2">
+            <h2 className="font-oswald font-bold text-xl text-white">Сообщения</h2>
+            {totalUnread > 0 && <Badge className="bg-neon-purple text-white text-xs">{totalUnread}</Badge>}
+          </div>
+          {currentUserId && sessionId && onConversationCreated && (
+            <FindUserById
+              currentUserId={currentUserId}
+              sessionId={sessionId}
+              onConversationCreated={onConversationCreated}
+            />
+          )}
         </div>
         <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2">
           <Icon name="Search" size={14} className="text-white/30 shrink-0" />
