@@ -46,6 +46,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "notifications", label: "Уведомления",   icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount },
     { id: "company",       label: "Компания",      icon: "Building2",    page: "dashboard", dashTab: "company" },
     { id: "crm",           label: "CRM",           icon: "Kanban",       page: "crm" },
+    { id: "ai_help",       label: "Помощь",        icon: "Sparkles",     page: "dashboard", dashTab: "ai_help" },
   ];
 
   const dashVenueItems: NavItem[] = [
@@ -57,6 +58,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "venue_crm",     label: "CRM",            icon: "Kanban",       page: "dashboard", dashTab: "venue_crm" },
     { id: "notifications", label: "Уведомления",    icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount },
     { id: "company",       label: "Компания",       icon: "Users",        page: "dashboard", dashTab: "company" },
+    { id: "ai_help",       label: "Помощь",         icon: "Sparkles",     page: "dashboard", dashTab: "ai_help" },
   ];
 
   const dashItems = isVenue ? dashVenueItems : dashOrgItems;
