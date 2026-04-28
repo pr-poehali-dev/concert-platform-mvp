@@ -460,12 +460,12 @@ export default function PresentationPage() {
 
       {/* ══════════════ SLIDE 6 — PDF и скачивание ══════════════ */}
       <section id="slide-6" className="min-h-screen flex flex-col justify-center relative overflow-hidden">
-        {/* Новый тематический фон — документы и офис */}
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/d258e57a-ae32-42f8-a5de-d2ff908e214d.jpg)` }} />
-        {/* Многослойное затемнение для максимальной читаемости */}
-        <div className="absolute inset-0 bg-black/88" />
-        <div className="absolute inset-0 bg-gradient-to-br from-[#060810]/95 via-[#060810]/80 to-[#060810]/70" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#060810]/90 via-transparent to-[#060810]/60" />
+        {/* Тёмный тематический фон — ноутбук с PDF документом */}
+        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: `url(https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/17f9f786-13c1-4b2e-8db8-171ca2557570.jpg)` }} />
+        {/* Максимальное затемнение — фон почти чёрный, текст чётко виден */}
+        <div className="absolute inset-0 bg-black/92" />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, rgba(4,6,14,0.98) 0%, rgba(4,6,14,0.93) 60%, rgba(4,6,14,0.85) 100%)" }} />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#04060e]/95 via-transparent to-[#04060e]/70" />
 
         <div className="relative z-10 max-w-6xl mx-auto px-8 py-24 w-full">
           <div className="grid lg:grid-cols-2 gap-12 items-center">
