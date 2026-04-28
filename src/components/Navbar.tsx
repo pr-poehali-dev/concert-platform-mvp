@@ -39,7 +39,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
   useEffect(() => {
     if (!user) { setChatUnread(0); return; }
     fetchChatUnread();
-    const t = setInterval(fetchChatUnread, 15000);
+    const t = setInterval(fetchChatUnread, 5000);
     return () => clearInterval(t);
   }, [user, fetchChatUnread]);
 

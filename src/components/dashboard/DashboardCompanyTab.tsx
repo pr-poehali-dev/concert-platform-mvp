@@ -94,7 +94,7 @@ export default function DashboardCompanyTab() {
     isAtBottomRef.current = true;
     loadMessages();
     if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(() => loadMessages(true), 5000);
+    pollingRef.current = setInterval(() => loadMessages(true), 3000);
     return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
   }, [companyId, chatMode, loadMessages]);
 

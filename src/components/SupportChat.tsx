@@ -32,13 +32,18 @@ export default function SupportChat() {
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const userId = user?.id ?? "";
 
-  const loadMessages = useCallback(async () => {
+  const loadMessages = useCallback(async (silent = false) => {
     if (!userId) return;
     try {
       const res = await fetch(`${ADMIN_URL}?action=support_history&user_id=${userId}`);
       const data = await res.json();
-      setMessages(data.messages || []);
-      setUnread(0);
+      const next: SupportMessage[] = data.messages || [];
+      // Diff — обновляем только при реальных изменениях
+      setMessages(prev => {
+        if (next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id) return prev;
+        return next;
+      });
+      if (!silent) setUnread(0);
     } catch { /* silent */ }
   }, [userId]);
 
@@ -47,7 +52,7 @@ export default function SupportChat() {
     try {
       const res = await fetch(`${ADMIN_URL}?action=support_unread_count&user_id=${userId}`);
       const data = await res.json();
-      setUnread(data.count || 0);
+      setUnread(prev => prev === (data.count || 0) ? prev : (data.count || 0));
     } catch { /* silent */ }
   }, [userId]);
 
@@ -55,17 +60,18 @@ export default function SupportChat() {
     if (open) {
       setLoading(true);
       loadMessages().finally(() => setLoading(false));
-      pollingRef.current = setInterval(loadMessages, 5000);
-    } else {
       if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRef.current = setInterval(() => loadMessages(true), 3000);
+    } else {
+      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
     }
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
   }, [open, loadMessages]);
 
   useEffect(() => {
     if (open) return;
     loadUnread();
-    const t = setInterval(loadUnread, 15000);
+    const t = setInterval(loadUnread, 5000);
     return () => clearInterval(t);
   }, [open, loadUnread]);
 

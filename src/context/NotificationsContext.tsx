@@ -32,25 +32,30 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (silent = false) => {
     if (!user) { setNotifications([]); return; }
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const res = await fetch(`${NOTIF_URL}?action=list&user_id=${user.id}`);
       const data = await res.json();
-      setNotifications(data.notifications || []);
+      const next: Notification[] = data.notifications || [];
+      // Diff — перерисовываем только если изменился список или статус прочтения
+      setNotifications(prev => {
+        const sig = (arr: Notification[]) => arr.map(n => `${n.id}:${n.isRead}`).join(",");
+        return sig(prev) === sig(next) ? prev : next;
+      });
     } catch {
       // silent
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [user]);
 
-  // Polling каждые 30 секунд
+  // Polling каждые 3 секунды — diff защищает от лишних перерисовок
   useEffect(() => {
     if (!user) return;
     refresh();
-    const interval = setInterval(refresh, 30_000);
+    const interval = setInterval(() => refresh(true), 3000);
     return () => clearInterval(interval);
   }, [user, refresh]);
 

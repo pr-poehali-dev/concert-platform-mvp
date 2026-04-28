@@ -49,37 +49,48 @@ export default function AdminSupportTab({ token }: { token: string }) {
 
   const headers = { "X-Admin-Token": token, "Content-Type": "application/json" };
 
-  const loadDialogs = useCallback(async () => {
+  const loadDialogs = useCallback(async (silent = false) => {
     try {
       const res = await fetch(`${ADMIN_URL}?action=support_dialogs`, { headers });
       const data = await res.json();
-      setDialogs(data.dialogs || []);
-    } catch { /* silent */ } finally { setLoadingDialogs(false); }
+      const next = data.dialogs || [];
+      // Diff — обновляем список диалогов только при изменениях
+      setDialogs(prev => {
+        const sig = (arr: typeof next) => arr.map((d: { userId: string; unread: number; lastMessage?: string }) => `${d.userId}:${d.unread}:${d.lastMessage || ""}`).join("|");
+        return sig(prev) === sig(next) ? prev : next;
+      });
+    } catch { /* silent */ } finally { if (!silent) setLoadingDialogs(false); }
   }, [token]);
 
-  const loadMessages = useCallback(async (uid: string) => {
+  const loadMessages = useCallback(async (uid: string, silent = false) => {
     if (!uid) return;
-    setLoadingMsgs(true);
+    if (!silent) setLoadingMsgs(true);
     try {
       const res = await fetch(`${ADMIN_URL}?action=support_dialog&user_id=${uid}`, { headers });
       const data = await res.json();
-      setMessages(data.messages || []);
-      // Обновляем счётчик в диалогах
+      const next = data.messages || [];
+      // Diff — не перерисовываем если нет новых сообщений
+      setMessages(prev => {
+        if (next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id) return prev;
+        return next;
+      });
       setDialogs(prev => prev.map(d => d.userId === uid ? { ...d, unread: 0 } : d));
-    } catch { /* silent */ } finally { setLoadingMsgs(false); }
+    } catch { /* silent */ } finally { if (!silent) setLoadingMsgs(false); }
   }, [token]);
 
   useEffect(() => {
     loadDialogs();
-    const t = setInterval(loadDialogs, 10000);
+    const t = setInterval(() => loadDialogs(true), 3000);
     return () => clearInterval(t);
   }, [loadDialogs]);
 
   useEffect(() => {
+    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
     if (!activeUserId) return;
     loadMessages(activeUserId);
-    pollingRef.current = setInterval(() => loadMessages(activeUserId), 5000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    const uid = activeUserId;
+    pollingRef.current = setInterval(() => loadMessages(uid, true), 3000);
+    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
   }, [activeUserId, loadMessages]);
 
   useEffect(() => {

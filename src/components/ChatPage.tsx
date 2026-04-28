@@ -31,14 +31,20 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
 
   const activeConv = conversations.find(c => c.id === activeConvId) || null;
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (silent = false) => {
     if (!user) return;
     try {
       const res = await fetch(`${CHAT_URL}?action=conversations&user_id=${user.id}`);
       const data = await res.json();
-      setConversations(data.conversations || []);
+      const next: Conversation[] = data.conversations || [];
+      // Diff — обновляем только если что-то реально изменилось
+      setConversations(prev => {
+        const prevStr = JSON.stringify(prev.map(c => ({ id: c.id, last: c.lastMessage, unread: c.unread })));
+        const nextStr = JSON.stringify(next.map(c => ({ id: c.id, last: c.lastMessage, unread: c.unread })));
+        return prevStr === nextStr ? prev : next;
+      });
     } catch { /* silent */ }
-    finally { setLoadingConvs(false); }
+    finally { if (!silent) setLoadingConvs(false); }
   }, [user]);
 
   const loadMessages = useCallback(async (convId: string, silent = false) => {
@@ -46,7 +52,12 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     try {
       const res = await fetch(`${CHAT_URL}?action=messages&conversation_id=${convId}`);
       const data = await res.json();
-      setMessages(data.messages || []);
+      const next: Message[] = data.messages || [];
+      // Diff — добавляем только новые сообщения, не перерисовываем весь список
+      setMessages(prev => {
+        if (next.length === prev.length && next[next.length - 1]?.id === prev[prev.length - 1]?.id) return prev;
+        return next;
+      });
     } catch { /* silent */ }
     finally { if (!silent) setLoadingMsgs(false); }
   }, []);
@@ -68,7 +79,13 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     });
     setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unread: 0 } : c));
     const convId = activeConvId;
-    pollingRef.current = setInterval(() => loadMessages(convId, true), 5000);
+    // Обновляем сообщения каждые 3 сек + разговоры каждые 6 сек (через раз)
+    let tick = 0;
+    pollingRef.current = setInterval(() => {
+      loadMessages(convId, true);
+      tick++;
+      if (tick % 2 === 0) loadConversations(true);
+    }, 3000);
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
