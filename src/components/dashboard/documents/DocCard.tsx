@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import Icon from "@/components/ui/icon";
 import { type Doc, type Category, mimeIcon, formatDate } from "./docTypes";
 import SignatureModal from "./SignatureModal";
@@ -37,7 +38,21 @@ export default function DocCard({
   const [showSign, setShowSign] = useState(false);
   const [showFolderMenu, setShowFolderMenu] = useState(false);
   const [customFolder, setCustomFolder] = useState("");
+  const [menuPos, setMenuPos] = useState({ top: 0, right: 0 });
+  const folderBtnRef = useRef<HTMLButtonElement>(null);
   const cat = catMeta(doc.category);
+
+  useEffect(() => {
+    if (!showFolderMenu) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (folderBtnRef.current && !folderBtnRef.current.contains(target)) {
+        setShowFolderMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [showFolderMenu]);
 
   return (
     <>
@@ -159,49 +174,19 @@ export default function DocCard({
           {/* Папка */}
           <div className="relative">
             <button
-              onClick={() => setShowFolderMenu(v => !v)}
+              ref={folderBtnRef}
+              onClick={() => {
+                if (!showFolderMenu && folderBtnRef.current) {
+                  const r = folderBtnRef.current.getBoundingClientRect();
+                  setMenuPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+                }
+                setShowFolderMenu(v => !v);
+              }}
               className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
               title="Переместить в папку"
             >
               <Icon name="FolderInput" size={16} />
             </button>
-            {showFolderMenu && (
-              <div className="absolute right-0 top-full mt-1 z-50 w-48 glass-strong rounded-xl border border-white/10 p-1.5 shadow-xl animate-scale-in">
-                <p className="text-white/30 text-[10px] px-2 py-1 uppercase tracking-wider">Переместить в папку</p>
-                {folders.map(f => (
-                  <button key={f} onClick={() => { onMoveToFolder(doc.id, f); setShowFolderMenu(false); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all">
-                    <Icon name="Folder" size={11} />{f}
-                  </button>
-                ))}
-                <div className="h-px bg-white/10 my-1" />
-                <div className="flex items-center gap-1 px-1">
-                  <input
-                    value={customFolder}
-                    onChange={e => setCustomFolder(e.target.value)}
-                    placeholder="Новая папка..."
-                    className="flex-1 bg-white/5 rounded-lg px-2 py-1 text-white text-xs outline-none border border-white/10"
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && customFolder.trim()) {
-                        onMoveToFolder(doc.id, customFolder.trim());
-                        setShowFolderMenu(false);
-                        setCustomFolder("");
-                      }
-                    }}
-                  />
-                  <button onClick={() => { if (customFolder.trim()) { onMoveToFolder(doc.id, customFolder.trim()); setShowFolderMenu(false); setCustomFolder(""); } }}
-                    className="text-neon-cyan text-xs px-2 py-1 bg-neon-cyan/10 rounded-lg">
-                    +
-                  </button>
-                </div>
-                {doc.folder && (
-                  <button onClick={() => { onMoveToFolder(doc.id, ""); setShowFolderMenu(false); }}
-                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/30 hover:text-neon-pink hover:bg-neon-pink/5 rounded-lg mt-1 transition-all">
-                    <Icon name="FolderX" size={11} />Убрать из папки
-                  </button>
-                )}
-              </div>
-            )}
           </div>
 
           {doc.isSigned ? (
@@ -226,6 +211,51 @@ export default function DocCard({
     </div>
 
     {showSign && <SignatureModal doc={doc} onClose={() => setShowSign(false)} />}
+
+    {showFolderMenu && createPortal(
+      <div
+        className="fixed z-[9999] w-56 glass-strong rounded-xl border border-white/10 p-1.5 shadow-2xl animate-scale-in"
+        style={{ top: menuPos.top, right: menuPos.right }}
+        onMouseDown={e => e.stopPropagation()}
+      >
+        <p className="text-white/30 text-[10px] px-2 py-1 uppercase tracking-wider">Переместить в папку</p>
+        {folders.map(f => (
+          <button key={f} onClick={() => { onMoveToFolder(doc.id, f); setShowFolderMenu(false); }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all">
+            <Icon name="Folder" size={11} />{f}
+          </button>
+        ))}
+        <div className="h-px bg-white/10 my-1" />
+        <div className="flex items-center gap-1 px-1">
+          <input
+            value={customFolder}
+            onChange={e => setCustomFolder(e.target.value)}
+            placeholder="Новая папка..."
+            className="flex-1 bg-white/5 rounded-lg px-2 py-1 text-white text-xs outline-none border border-white/10"
+            onKeyDown={e => {
+              if (e.key === "Enter" && customFolder.trim()) {
+                onMoveToFolder(doc.id, customFolder.trim());
+                setShowFolderMenu(false);
+                setCustomFolder("");
+              }
+            }}
+          />
+          <button
+            onClick={() => { if (customFolder.trim()) { onMoveToFolder(doc.id, customFolder.trim()); setShowFolderMenu(false); setCustomFolder(""); } }}
+            className="text-neon-cyan text-xs px-2 py-1 bg-neon-cyan/10 rounded-lg hover:bg-neon-cyan/20"
+          >
+            +
+          </button>
+        </div>
+        {doc.folder && (
+          <button onClick={() => { onMoveToFolder(doc.id, ""); setShowFolderMenu(false); }}
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/30 hover:text-neon-pink hover:bg-neon-pink/5 rounded-lg mt-1 transition-all">
+            <Icon name="FolderX" size={11} />Убрать из папки
+          </button>
+        )}
+      </div>,
+      document.body
+    )}
     </>
   );
 }

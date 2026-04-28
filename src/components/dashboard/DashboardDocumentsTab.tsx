@@ -21,6 +21,7 @@ export default function DashboardDocumentsTab() {
   const [filterFolder, setFilterFolder] = useState("all");
   const [newFolder, setNewFolder] = useState("");
   const [showNewFolder, setShowNewFolder] = useState(false);
+  const [extraFolders, setExtraFolders] = useState<string[]>([]);
 
   // Upload state
   const [uploading, setUploading] = useState(false);
@@ -160,7 +161,10 @@ export default function DashboardDocumentsTab() {
   const catMeta = (cat: string): Category =>
     categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/40", label: "Прочее", value: "other" };
 
-  const allFolders = Array.from(new Set(docs.map(d => d.folder || "").filter(Boolean))).sort();
+  const allFolders = Array.from(new Set([
+    ...extraFolders,
+    ...docs.map(d => d.folder || "").filter(Boolean),
+  ])).sort();
 
   const filtered = docs.filter(d => {
     if (filterCat !== "all" && d.category !== filterCat) return false;
@@ -266,7 +270,9 @@ export default function DashboardDocumentsTab() {
               className="glass border border-neon-cyan/30 rounded-lg px-3 py-1.5 text-white text-xs outline-none w-36"
               onKeyDown={e => {
                 if (e.key === "Enter" && newFolder.trim()) {
-                  setFilterFolder(newFolder.trim());
+                  const name = newFolder.trim();
+                  setExtraFolders(prev => prev.includes(name) ? prev : [...prev, name]);
+                  setFilterFolder(name);
                   setShowNewFolder(false);
                   setNewFolder("");
                 }
@@ -275,7 +281,15 @@ export default function DashboardDocumentsTab() {
               autoFocus
             />
             <button
-              onClick={() => { if (newFolder.trim()) { setFilterFolder(newFolder.trim()); } setShowNewFolder(false); setNewFolder(""); }}
+              onClick={() => {
+                if (newFolder.trim()) {
+                  const name = newFolder.trim();
+                  setExtraFolders(prev => prev.includes(name) ? prev : [...prev, name]);
+                  setFilterFolder(name);
+                }
+                setShowNewFolder(false);
+                setNewFolder("");
+              }}
               className="text-neon-cyan text-xs px-2 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg hover:bg-neon-cyan/20"
             >
               ОК

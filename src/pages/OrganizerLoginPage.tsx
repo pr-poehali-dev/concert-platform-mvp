@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Icon from "@/components/ui/icon";
 import { useAuth, type RegisterData, type UserRole, type User, AUTH_URL } from "@/context/AuthContext";
 import { ROLE_META, Bg, BackBtn, Field, ErrorBox, type Screen } from "./login/loginShared";
@@ -13,10 +13,11 @@ interface Props {
 
 export default function OrganizerLoginPage({ initialRole = "organizer" }: Props) {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login, loginWithSession, register, isLoading } = useAuth();
 
   const [role, setRole]       = useState<UserRole>(initialRole);
-  const [screen, setScreen]   = useState<Screen>("login");
+  const [screen, setScreen]   = useState<Screen>(searchParams.get("tab") === "register" ? "register" : "login");
   const [regStep, setRegStep] = useState<1 | 2>(1);
   const [error, setError]     = useState("");
 

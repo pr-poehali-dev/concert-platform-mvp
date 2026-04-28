@@ -94,43 +94,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
 
             <div className="hidden md:flex items-center gap-3">
               {user && <NotificationBell onNavigate={onNavigate} />}
-              {user ? (
-                <div className="relative">
-                  <button
-                    onClick={() => setUserMenuOpen(!userMenuOpen)}
-                    className="flex items-center gap-2.5 px-3 py-1.5 glass rounded-xl border border-white/10 hover:border-neon-purple/40 transition-colors"
-                  >
-                    <div className={`w-7 h-7 rounded-lg bg-gradient-to-br ${user.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-xs`}>
-                      {user.avatar}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-white text-xs font-medium leading-none">{user.name}</p>
-                      <p className={`text-xs leading-none mt-0.5 ${roleColor}`}>{roleLabel}</p>
-                    </div>
-                    <Icon name="ChevronDown" size={14} className="text-white/40" />
-                  </button>
-
-                  {userMenuOpen && (
-                    <div className="absolute right-0 top-full mt-2 w-48 glass-strong rounded-xl border border-white/10 overflow-hidden animate-scale-in">
-                      <button
-                        onClick={() => { onNavigate("dashboard"); setUserMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-white/70 hover:text-white hover:bg-white/5 transition-colors"
-                      >
-                        <Icon name="LayoutDashboard" size={15} />
-                        Личный кабинет
-                      </button>
-                      <div className="h-px bg-white/10 mx-3" />
-                      <button
-                        onClick={() => { logout(); setUserMenuOpen(false); }}
-                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-neon-pink hover:bg-neon-pink/10 transition-colors"
-                      >
-                        <Icon name="LogOut" size={15} />
-                        Выйти
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
+              {!user && (
                 <>
                   <button
                     onClick={() => navigate("/login")}
@@ -139,7 +103,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
                     Войти
                   </button>
                   <button
-                    onClick={() => navigate("/login/organizer")}
+                    onClick={() => navigate("/login/organizer?tab=register")}
                     className="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-neon-purple to-neon-cyan rounded-lg hover:opacity-90 transition-opacity"
                   >
                     Регистрация
@@ -213,7 +177,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
                     Войти
                   </button>
                   <button
-                    onClick={() => { navigate("/login/organizer"); setMobileOpen(false); }}
+                    onClick={() => { navigate("/login/organizer?tab=register"); setMobileOpen(false); }}
                     className="flex-1 py-2 text-sm font-medium text-white bg-gradient-to-r from-neon-purple to-neon-cyan rounded-lg"
                   >
                     Регистрация
