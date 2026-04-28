@@ -22,6 +22,8 @@ const SUGGESTIONS = [
   "Как пройти верификацию?",
 ];
 
+const MAINTENANCE = true; // убрать когда ИИ заработает
+
 export default function DashboardAITab() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
@@ -115,6 +117,15 @@ export default function DashboardAITab() {
 
   return (
     <div className="flex flex-col h-full min-h-0" style={{ height: "calc(100vh - 80px)" }}>
+      {MAINTENANCE && (
+        <div className="mx-4 mt-4 flex items-start gap-3 bg-neon-purple/10 border border-neon-purple/30 rounded-2xl px-4 py-3">
+          <Icon name="Clock" size={18} className="text-neon-purple shrink-0 mt-0.5" />
+          <div>
+            <p className="text-white text-sm font-semibold">ИИ-ассистент скоро заработает</p>
+            <p className="text-white/50 text-xs mt-0.5">Мы подключаем интеллектуального помощника, который знает всю платформу. Он уже готов — осталось дождаться сброса лимитов. Попробуйте завтра.</p>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-white/8 shrink-0">
         <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-neon-purple to-neon-cyan flex items-center justify-center shrink-0">
