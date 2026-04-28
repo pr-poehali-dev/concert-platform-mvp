@@ -1,6 +1,5 @@
 import Icon from "@/components/ui/icon";
 import type { Notification } from "@/context/NotificationsContext";
-import BookingRequestsWidget from "./BookingRequestsWidget";
 
 interface DashboardNotificationsTabProps {
   notifications: Notification[];
@@ -28,7 +27,6 @@ export default function DashboardNotificationsTab({
 }: DashboardNotificationsTabProps) {
   return (
     <div className="animate-fade-in max-w-2xl">
-      <BookingRequestsWidget onNavigate={onNavigate} />
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <h2 className="font-oswald font-bold text-2xl text-white">Уведомления</h2>

@@ -55,7 +55,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   negotiating: { label: "Переговоры", color: "text-neon-cyan" },
 };
 
-export default function ToursPage() {
+export default function ToursPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const [activeTour, setActiveTour] = useState(1);
   const selectedTour = tours.find((t) => t.id === activeTour) || tours[0];
 

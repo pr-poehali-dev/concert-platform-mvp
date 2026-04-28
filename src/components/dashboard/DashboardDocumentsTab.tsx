@@ -18,6 +18,9 @@ export default function DashboardDocumentsTab() {
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterCat, setFilterCat] = useState("all");
+  const [filterFolder, setFilterFolder] = useState("all");
+  const [newFolder, setNewFolder] = useState("");
+  const [showNewFolder, setShowNewFolder] = useState(false);
 
   // Upload state
   const [uploading, setUploading] = useState(false);
@@ -143,11 +146,30 @@ export default function DashboardDocumentsTab() {
     finally { setSavingNote(false); }
   };
 
+  // ── Move to folder ─────────────────────────────────────────────────────
+  const moveToFolder = async (docId: string, folder: string) => {
+    await fetch(`${DOCS_URL}?action=update_folder`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+      body: JSON.stringify({ id: docId, folder }),
+    });
+    setDocs(prev => prev.map(d => d.id === docId ? { ...d, folder } : d));
+  };
+
   // ── Helpers ────────────────────────────────────────────────────────────
   const catMeta = (cat: string): Category =>
     categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/40", label: "Прочее", value: "other" };
 
-  const filtered = filterCat === "all" ? docs : docs.filter(d => d.category === filterCat);
+  const allFolders = Array.from(new Set(docs.map(d => d.folder || "").filter(Boolean))).sort();
+
+  const filtered = docs.filter(d => {
+    if (filterCat !== "all" && d.category !== filterCat) return false;
+    if (filterFolder !== "all") {
+      if (filterFolder === "__none__") return !d.folder;
+      return d.folder === filterFolder;
+    }
+    return true;
+  });
 
   // suppress unused warning — uploading used implicitly via uploadProgress
   void uploading;
@@ -209,6 +231,66 @@ export default function DashboardDocumentsTab() {
         })}
       </div>
 
+      {/* Папки */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Icon name="Folder" size={14} className="text-white/30" />
+        <button
+          onClick={() => setFilterFolder("all")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "all" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
+        >
+          Все папки
+        </button>
+        <button
+          onClick={() => setFilterFolder("__none__")}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "__none__" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
+        >
+          Без папки
+        </button>
+        {allFolders.map(f => (
+          <button
+            key={f}
+            onClick={() => setFilterFolder(f)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === f ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
+          >
+            <Icon name="FolderOpen" size={11} />
+            {f}
+            <span className="text-[10px] opacity-60">({docs.filter(d => d.folder === f).length})</span>
+          </button>
+        ))}
+        {showNewFolder ? (
+          <div className="flex items-center gap-1.5">
+            <input
+              value={newFolder}
+              onChange={e => setNewFolder(e.target.value)}
+              placeholder="Название папки"
+              className="glass border border-neon-cyan/30 rounded-lg px-3 py-1.5 text-white text-xs outline-none w-36"
+              onKeyDown={e => {
+                if (e.key === "Enter" && newFolder.trim()) {
+                  setFilterFolder(newFolder.trim());
+                  setShowNewFolder(false);
+                  setNewFolder("");
+                }
+                if (e.key === "Escape") { setShowNewFolder(false); setNewFolder(""); }
+              }}
+              autoFocus
+            />
+            <button
+              onClick={() => { if (newFolder.trim()) { setFilterFolder(newFolder.trim()); } setShowNewFolder(false); setNewFolder(""); }}
+              className="text-neon-cyan text-xs px-2 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg hover:bg-neon-cyan/20"
+            >
+              ОК
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowNewFolder(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-white/25 border border-dashed border-white/10 hover:text-white/50 hover:border-white/20 transition-all"
+          >
+            <Icon name="Plus" size={11} />Новая папка
+          </button>
+        )}
+      </div>
+
       {/* Content */}
       {loading ? (
         <div className="flex items-center justify-center py-16">
@@ -236,12 +318,14 @@ export default function DashboardDocumentsTab() {
               editNoteId={editNoteId}
               editNoteText={editNoteText}
               savingNote={savingNote}
+              folders={allFolders}
               onEditNote={(id, text) => { setEditNoteId(id); setEditNoteText(text); }}
               onCancelNote={() => setEditNoteId(null)}
               onNoteTextChange={setEditNoteText}
               onSaveNote={saveNote}
               onSendToChat={setSendChatFile}
               onDelete={setDeleteId}
+              onMoveToFolder={moveToFolder}
             />
           ))}
         </div>

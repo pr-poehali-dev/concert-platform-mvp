@@ -38,6 +38,8 @@ export interface Doc {
   mimeType: string;
   note: string;
   createdAt: string;
+  folder: string;
+  isSigned: boolean;
 }
 
 export type Category = { value: string; label: string; icon: string; color: string };

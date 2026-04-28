@@ -7,19 +7,20 @@ import ToursPage from "@/components/ToursPage";
 import ChatPage from "@/components/ChatPage";
 import DashboardPage from "@/components/DashboardPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
+import CrmPage from "@/components/crm/CrmPage";
 import SupportChat from "@/components/SupportChat";
+import GlobalSidebar from "@/components/layout/GlobalSidebar";
 import { useAuth } from "@/context/AuthContext";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
-type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects";
-const PROTECTED: Page[] = ["chat", "dashboard", "projects"];
+
+type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects" | "crm";
+const PROTECTED: Page[] = ["chat", "dashboard", "projects", "crm"];
 const PAGE_KEY = "gl_active_page";
 const CONV_KEY = "gl_chat_conv";
 
 export default function Index() {
-  // Публичная ссылка на проект: /?share=linkId
   const shareId = new URLSearchParams(window.location.search).get("share");
   if (shareId) return <SharedProjectPage linkId={shareId} />;
-
   return <IndexInner />;
 }
 
@@ -29,7 +30,6 @@ function IndexInner() {
   const [openChatConvId, setOpenChatConvId] = useState<string | null>(null);
   const [dashboardTab, setDashboardTab] = useState<string | null>(null);
 
-  // Восстанавливаем страницу из localStorage после загрузки
   useEffect(() => {
     const saved = localStorage.getItem(PAGE_KEY) as Page | null;
     const savedConv = localStorage.getItem(CONV_KEY);
@@ -51,7 +51,6 @@ function IndexInner() {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    // Навигация в конкретный таб дашборда: "dashboard:signing", "dashboard:documents" и т.д.
     if (page.startsWith("dashboard:")) {
       const tabName = page.slice(10);
       if (!user) { setActivePage("home"); return; }
@@ -61,7 +60,6 @@ function IndexInner() {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
-    // Прямой переход "signing" → дашборд на таб подписания
     if (page === "signing") {
       if (!user) { setActivePage("home"); return; }
       setDashboardTab("signing");
@@ -83,17 +81,32 @@ function IndexInner() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // Страницы, где показывается глобальный сайдбар
+  const showSidebar = user && activePage !== "home";
+
   return (
     <div className="min-h-screen bg-background">
       <Navbar activePage={activePage} onNavigate={handleNavigate} />
       <EmailVerifyBanner />
-      <main>
-        {activePage === "home" && <HomePage onNavigate={handleNavigate} />}
-        {activePage === "search" && <SearchPage onNavigate={handleNavigate} />}
-        {activePage === "tours" && <ToursPage />}
-        {activePage === "chat" && <ChatPage initialConversationId={openChatConvId} />}
-        {activePage === "dashboard" && <DashboardPage onNavigate={handleNavigate} initialTab={dashboardTab || undefined} />}
-        {activePage === "projects" && <ProjectsPage onNavigate={handleNavigate} />}
+      <main className={showSidebar ? "flex max-w-[1400px] mx-auto px-4 sm:px-6 pt-20 gap-6" : ""}>
+        {showSidebar && (
+          <GlobalSidebar
+            activePage={activePage}
+            dashboardTab={dashboardTab || undefined}
+            onNavigate={handleNavigate}
+          />
+        )}
+        <div className={showSidebar ? "flex-1 min-w-0" : "w-full"}>
+          {activePage === "home" && <HomePage onNavigate={handleNavigate} />}
+          {activePage === "search" && <SearchPage onNavigate={handleNavigate} />}
+          {activePage === "tours" && <ToursPage onNavigate={handleNavigate} />}
+          {activePage === "chat" && <ChatPage initialConversationId={openChatConvId} />}
+          {activePage === "dashboard" && (
+            <DashboardPage onNavigate={handleNavigate} initialTab={dashboardTab || undefined} />
+          )}
+          {activePage === "projects" && <ProjectsPage onNavigate={handleNavigate} />}
+          {activePage === "crm" && <CrmPage onNavigate={handleNavigate} />}
+        </div>
       </main>
       <SupportChat />
     </div>

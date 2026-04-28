@@ -1272,6 +1272,8 @@ def handler(event: dict, context) -> dict:
         fmap = {
             "title": "title", "description": "description", "status": "status",
             "priority": "priority", "dueDate": "due_date", "assignedTo": "assigned_to",
+            "estimatedHours": "estimated_hours", "actualHours": "actual_hours",
+            "goalId": "goal_id",
         }
         fields = {}
         for fk, col in fmap.items():
@@ -1576,5 +1578,170 @@ def handler(event: dict, context) -> dict:
         )
         conn.commit(); conn.close()
         return ok({"removed": True})
+
+    # ── Подзадачи ──────────────────────────────────────────────────────────
+
+    # GET subtasks_list
+    if method == "GET" and action == "subtasks_list":
+        task_id = params.get("task_id", "")
+        if not task_id: return err("task_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT s.id, s.task_id, s.title, s.is_done, s.done_by, s.done_at,
+                       s.comment, s.sort_order,
+                       COALESCE(e.name, u.name, '') as done_by_name
+                FROM {SCHEMA}.project_task_subtasks s
+                LEFT JOIN {SCHEMA}.employees e ON e.id = s.done_by
+                LEFT JOIN {SCHEMA}.users u ON u.id = s.done_by
+                WHERE s.task_id = %s ORDER BY s.sort_order""",
+            (task_id,))
+        rows = cur.fetchall(); conn.close()
+        subtasks = [{"id": str(r[0]), "taskId": str(r[1]), "title": r[2],
+                     "isDone": r[3], "doneBy": str(r[4]) if r[4] else None,
+                     "doneAt": str(r[5]) if r[5] else None, "comment": r[6],
+                     "sortOrder": r[7], "doneByName": r[8]} for r in rows]
+        return ok({"subtasks": subtasks})
+
+    # POST subtask_create
+    if method == "POST" and action == "subtask_create":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", ""); title = (b.get("title") or "").strip()
+        sort_order = b.get("sortOrder", 0)
+        if not task_id or not title: return err("taskId and title required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.project_task_subtasks (task_id, title, sort_order)
+                VALUES (%s, %s, %s) RETURNING id, task_id, title, is_done, done_by, done_at, comment, sort_order""",
+            (task_id, title, sort_order))
+        r = cur.fetchone(); conn.commit(); conn.close()
+        return ok({"id": str(r[0]), "taskId": str(r[1]), "title": r[2],
+                   "isDone": r[3], "doneBy": None, "doneAt": None, "comment": r[6],
+                   "sortOrder": r[7], "doneByName": ""}, 201)
+
+    # POST subtask_toggle
+    if method == "POST" and action == "subtask_toggle":
+        b = json.loads(event.get("body") or "{}")
+        subtask_id = b.get("subtaskId", ""); is_done = bool(b.get("isDone", False))
+        done_by    = b.get("doneBy") or None; comment = b.get("comment", "")
+        if not subtask_id: return err("subtaskId required")
+        conn = get_conn(); cur = conn.cursor()
+        if is_done:
+            cur.execute(
+                f"""UPDATE {SCHEMA}.project_task_subtasks
+                    SET is_done=%s, done_by=%s, done_at=NOW(), comment=%s
+                    WHERE id=%s RETURNING id, task_id, title, is_done, done_by, done_at, comment, sort_order""",
+                (True, done_by, comment, subtask_id))
+        else:
+            cur.execute(
+                f"""UPDATE {SCHEMA}.project_task_subtasks
+                    SET is_done=false, done_by=NULL, done_at=NULL, comment=''
+                    WHERE id=%s RETURNING id, task_id, title, is_done, done_by, done_at, comment, sort_order""",
+                (subtask_id,))
+        r = cur.fetchone()
+        # Подтягиваем имя
+        done_by_name = ""
+        if r and r[4]:
+            cur.execute(
+                f"SELECT COALESCE(e.name, u.name, '') FROM {SCHEMA}.employees e FULL JOIN {SCHEMA}.users u ON false WHERE e.id=%s OR u.id=%s LIMIT 1",
+                (r[4], r[4]))
+            nr = cur.fetchone(); done_by_name = nr[0] if nr else ""
+        conn.commit(); conn.close()
+        if not r: return err("Подзадача не найдена", 404)
+        return ok({"id": str(r[0]), "taskId": str(r[1]), "title": r[2],
+                   "isDone": r[3], "doneBy": str(r[4]) if r[4] else None,
+                   "doneAt": str(r[5]) if r[5] else None, "comment": r[6],
+                   "sortOrder": r[7], "doneByName": done_by_name})
+
+    # ── Комментарии к задачам ───────────────────────────────────────────────
+
+    # GET task_comments_list
+    if method == "GET" and action == "task_comments_list":
+        task_id = params.get("task_id", "")
+        if not task_id: return err("task_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, task_id, author_id, author_name, text, created_at
+                FROM {SCHEMA}.project_task_comments
+                WHERE task_id=%s ORDER BY created_at""",
+            (task_id,))
+        rows = cur.fetchall(); conn.close()
+        comments = [{"id": str(r[0]), "taskId": str(r[1]), "authorId": str(r[2]),
+                     "authorName": r[3], "text": r[4], "createdAt": str(r[5])} for r in rows]
+        return ok({"comments": comments})
+
+    # POST task_comment_create
+    if method == "POST" and action == "task_comment_create":
+        b = json.loads(event.get("body") or "{}")
+        task_id = b.get("taskId", ""); author_id = b.get("authorId", "")
+        author_name = b.get("authorName", ""); text = (b.get("text") or "").strip()
+        if not task_id or not author_id or not text: return err("taskId, authorId, text required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.project_task_comments (task_id, author_id, author_name, text)
+                VALUES (%s, %s, %s, %s) RETURNING id, task_id, author_id, author_name, text, created_at""",
+            (task_id, author_id, author_name, text))
+        r = cur.fetchone(); conn.commit(); conn.close()
+        return ok({"id": str(r[0]), "taskId": str(r[1]), "authorId": str(r[2]),
+                   "authorName": r[3], "text": r[4], "createdAt": str(r[5])}, 201)
+
+    # ── Цели проекта ───────────────────────────────────────────────────────
+
+    # GET project_goals_list
+    if method == "GET" and action == "project_goals_list":
+        project_id = params.get("project_id", "")
+        if not project_id: return err("project_id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""SELECT id, title, description, target_value, current_value, unit, status, deadline, color
+                FROM {SCHEMA}.crm_goals
+                WHERE user_id = (SELECT user_id FROM {SCHEMA}.projects WHERE id=%s LIMIT 1)
+                ORDER BY created_at""",
+            (project_id,))
+        rows = cur.fetchall(); conn.close()
+        goals = [{"id": str(r[0]), "title": r[1], "description": r[2],
+                  "targetValue": float(r[3]) if r[3] else None,
+                  "currentValue": float(r[4]), "unit": r[5], "status": r[6],
+                  "deadline": str(r[7]) if r[7] else None, "color": r[8]} for r in rows]
+        return ok({"goals": goals})
+
+    # POST project_goal_create
+    if method == "POST" and action == "project_goal_create":
+        b = json.loads(event.get("body") or "{}")
+        project_id = b.get("projectId", ""); user_id = b.get("userId", "")
+        title = (b.get("title") or "").strip()
+        if not project_id or not user_id or not title: return err("projectId, userId, title required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.crm_goals (user_id, title, description, target_value, unit, deadline)
+                VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+            (user_id, title, b.get("description",""),
+             b.get("targetValue") or None, b.get("unit",""), b.get("deadline") or None))
+        gid = str(cur.fetchone()[0]); conn.commit(); conn.close()
+        return ok({"goalId": gid}, 201)
+
+    # POST project_goal_update
+    if method == "POST" and action == "project_goal_update":
+        b = json.loads(event.get("body") or "{}")
+        goal_id = b.get("goalId", "")
+        if not goal_id: return err("goalId required")
+        conn = get_conn(); cur = conn.cursor()
+        if "currentValue" in b:
+            cur.execute(f"UPDATE {SCHEMA}.crm_goals SET current_value=%s WHERE id=%s",
+                        (b["currentValue"], goal_id))
+        if "status" in b:
+            cur.execute(f"UPDATE {SCHEMA}.crm_goals SET status=%s WHERE id=%s",
+                        (b["status"], goal_id))
+        conn.commit(); conn.close()
+        return ok({"success": True})
+
+    # Folder update for documents
+    if method == "POST" and action == "update_folder":
+        b = json.loads(event.get("body") or "{}")
+        doc_id = b.get("id", ""); folder = b.get("folder", "")
+        if not doc_id: return err("id required")
+        conn = get_conn(); cur = conn.cursor()
+        cur.execute(f"UPDATE {SCHEMA}.user_documents SET folder=%s WHERE id=%s", (folder, doc_id))
+        conn.commit(); conn.close()
+        return ok({"success": True})
 
     return err("Not found", 404)

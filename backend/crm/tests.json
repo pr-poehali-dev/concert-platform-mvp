@@ -1,0 +1,8 @@
+{
+  "tests": [
+    {"name": "Boards list no user_id", "method": "GET", "path": "/?action=crm_boards_list", "expectedStatus": 400},
+    {"name": "Boards list empty", "method": "GET", "path": "/?action=crm_boards_list&user_id=00000000-0000-0000-0000-000000000000", "expectedStatus": 200, "expectedBody": {"boards": []}, "bodyMatcher": "partial"},
+    {"name": "Goals list empty", "method": "GET", "path": "/?action=crm_goals_list&user_id=00000000-0000-0000-0000-000000000000", "expectedStatus": 200, "expectedBody": {"goals": []}, "bodyMatcher": "partial"},
+    {"name": "Pipelines list empty", "method": "GET", "path": "/?action=crm_pipelines_list&user_id=00000000-0000-0000-0000-000000000000", "expectedStatus": 200, "expectedBody": {"pipelines": []}, "bodyMatcher": "partial"}
+  ]
+}

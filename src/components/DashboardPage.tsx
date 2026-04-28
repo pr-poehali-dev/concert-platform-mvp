@@ -94,7 +94,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
       ];
 
   return (
-    <div className="min-h-screen pt-20">
+    <div className="min-h-screen">
       {/* Pending / Rejected banner */}
       {user.status === "pending" && (
         <div className="bg-gradient-to-r from-neon-purple/20 to-neon-cyan/10 border-b border-neon-purple/20">

@@ -9,9 +9,9 @@ import StepExpenses from "./create/StepExpenses";
 import StepIncome from "./create/StepIncome";
 import StepTax from "./create/StepTax";
 
-interface Props { open: boolean; onClose: () => void; onCreated: (id: string) => void; }
+interface Props { open?: boolean; onClose: () => void; onCreated: (id: string) => void; defaultType?: string; }
 
-export default function CreateProjectModal({ open, onClose, onCreated }: Props) {
+export default function CreateProjectModal({ open = true, onClose, onCreated, defaultType }: Props) {
   const { user } = useAuth();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -19,7 +19,7 @@ export default function CreateProjectModal({ open, onClose, onCreated }: Props) 
   const [titleTouched, setTitleTouched] = useState(false);
 
   const [form, setForm] = useState<ProjectForm>({
-    title: "", artist: "", projectType: "single",
+    title: "", artist: "", projectType: (defaultType || "single") as "single" | "tour" | "corporate",
     status: "planning", dateStart: "", dateEnd: "", city: "Москва",
     venueName: "", description: "", taxSystem: "none",
     ticketingFeePercent: 0,

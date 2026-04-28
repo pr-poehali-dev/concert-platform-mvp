@@ -9,12 +9,14 @@ interface Props {
   editNoteId: string | null;
   editNoteText: string;
   savingNote: boolean;
+  folders: string[];
   onEditNote: (id: string, text: string) => void;
   onCancelNote: () => void;
   onNoteTextChange: (text: string) => void;
   onSaveNote: () => void;
   onSendToChat: (file: { url: string; name: string; size: number; mime: string }) => void;
   onDelete: (id: string) => void;
+  onMoveToFolder: (id: string, folder: string) => void;
 }
 
 export default function DocCard({
@@ -23,14 +25,18 @@ export default function DocCard({
   editNoteId,
   editNoteText,
   savingNote,
+  folders,
   onEditNote,
   onCancelNote,
   onNoteTextChange,
   onSaveNote,
   onSendToChat,
   onDelete,
+  onMoveToFolder,
 }: Props) {
   const [showSign, setShowSign] = useState(false);
+  const [showFolderMenu, setShowFolderMenu] = useState(false);
+  const [customFolder, setCustomFolder] = useState("");
   const cat = catMeta(doc.category);
 
   return (
@@ -52,10 +58,18 @@ export default function DocCard({
               {doc.categoryLabel}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-white/30 text-xs">
+          <div className="flex items-center gap-3 mt-1 text-white/30 text-xs flex-wrap">
             <span>{doc.fileSizeHuman}</span>
             <span>•</span>
             <span>{formatDate(doc.createdAt)}</span>
+            {doc.folder && (
+              <>
+                <span>•</span>
+                <span className="flex items-center gap-1 text-neon-cyan/60">
+                  <Icon name="Folder" size={10} />{doc.folder}
+                </span>
+              </>
+            )}
           </div>
 
           {/* Note */}
@@ -105,13 +119,19 @@ export default function DocCard({
 
         {/* Actions */}
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={() => setShowSign(true)}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
-            title="Подписать / ЭДО"
-          >
-            <Icon name="PenLine" size={16} />
-          </button>
+          {doc.isSigned ? (
+            <span className="flex items-center gap-1 text-neon-green text-xs px-2 py-1 bg-neon-green/10 border border-neon-green/20 rounded-lg shrink-0" title="Документ подписан">
+              <Icon name="ShieldCheck" size={13} />Подписан
+            </span>
+          ) : (
+            <button
+              onClick={() => setShowSign(true)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
+              title="Подписать / ЭДО"
+            >
+              <Icon name="PenLine" size={16} />
+            </button>
+          )}
           <button
             onClick={() => onSendToChat({ url: doc.fileUrl, name: doc.name, size: doc.fileSize, mime: doc.mimeType })}
             className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
@@ -136,13 +156,71 @@ export default function DocCard({
           >
             <Icon name="Download" size={16} />
           </a>
-          <button
-            onClick={() => onDelete(doc.id)}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/20 hover:text-neon-pink hover:bg-neon-pink/10 transition-all"
-            title="Удалить"
-          >
-            <Icon name="Trash2" size={16} />
-          </button>
+          {/* Папка */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFolderMenu(v => !v)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+              title="Переместить в папку"
+            >
+              <Icon name="FolderInput" size={16} />
+            </button>
+            {showFolderMenu && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-48 glass-strong rounded-xl border border-white/10 p-1.5 shadow-xl animate-scale-in">
+                <p className="text-white/30 text-[10px] px-2 py-1 uppercase tracking-wider">Переместить в папку</p>
+                {folders.map(f => (
+                  <button key={f} onClick={() => { onMoveToFolder(doc.id, f); setShowFolderMenu(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all">
+                    <Icon name="Folder" size={11} />{f}
+                  </button>
+                ))}
+                <div className="h-px bg-white/10 my-1" />
+                <div className="flex items-center gap-1 px-1">
+                  <input
+                    value={customFolder}
+                    onChange={e => setCustomFolder(e.target.value)}
+                    placeholder="Новая папка..."
+                    className="flex-1 bg-white/5 rounded-lg px-2 py-1 text-white text-xs outline-none border border-white/10"
+                    onKeyDown={e => {
+                      if (e.key === "Enter" && customFolder.trim()) {
+                        onMoveToFolder(doc.id, customFolder.trim());
+                        setShowFolderMenu(false);
+                        setCustomFolder("");
+                      }
+                    }}
+                  />
+                  <button onClick={() => { if (customFolder.trim()) { onMoveToFolder(doc.id, customFolder.trim()); setShowFolderMenu(false); setCustomFolder(""); } }}
+                    className="text-neon-cyan text-xs px-2 py-1 bg-neon-cyan/10 rounded-lg">
+                    +
+                  </button>
+                </div>
+                {doc.folder && (
+                  <button onClick={() => { onMoveToFolder(doc.id, ""); setShowFolderMenu(false); }}
+                    className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/30 hover:text-neon-pink hover:bg-neon-pink/5 rounded-lg mt-1 transition-all">
+                    <Icon name="FolderX" size={11} />Убрать из папки
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
+          {doc.isSigned ? (
+            <button
+              disabled
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/10 cursor-not-allowed"
+              title="Нельзя удалить подписанный документ"
+            >
+              <Icon name="Lock" size={15} />
+            </button>
+          ) : (
+            <button
+              onClick={() => onDelete(doc.id)}
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/20 hover:text-neon-pink hover:bg-neon-pink/10 transition-all"
+              title="Удалить"
+            >
+              <Icon name="Trash2" size={16} />
+            </button>
+          )}
         </div>
       </div>
     </div>
