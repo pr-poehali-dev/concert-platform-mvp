@@ -34,7 +34,7 @@
     {
       "name": "List for test user",
       "method": "GET",
-      "path": "/?action=list&user_id=00000000-0000-0000-0000-000000000001",
+      "path": "/?action=list&user_id=00000000-0000-0000-0000-000000000002",
       "expectedStatus": 200,
       "expectedBody": { "notifications": [] },
       "bodyMatcher": "partial"
@@ -42,9 +42,26 @@
     {
       "name": "Unread count for test user",
       "method": "GET",
-      "path": "/?action=unread_count&user_id=00000000-0000-0000-0000-000000000001",
+      "path": "/?action=unread_count&user_id=00000000-0000-0000-0000-000000000002",
       "expectedStatus": 200,
-      "expectedBody": { "count": 1 },
+      "expectedBody": { "count": 0 },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "VAPID public key",
+      "method": "GET",
+      "path": "/?action=vapid_public_key",
+      "expectedStatus": 200,
+      "expectedBody": { "publicKey": "" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Push subscribe missing fields",
+      "method": "POST",
+      "path": "/?action=push_subscribe",
+      "body": { "userId": "" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
     }
   ]

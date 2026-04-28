@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useAuth } from "@/context/AuthContext";
+import { usePushNotifications } from "@/hooks/usePushNotifications";
 
 interface NotificationBellProps {
   onNavigate: (page: string) => void;
@@ -27,6 +28,7 @@ const TYPE_COLORS: Record<string, string> = {
 export default function NotificationBell({ onNavigate }: NotificationBellProps) {
   const { user } = useAuth();
   const { notifications, unreadCount, loading, markRead, markAllRead, refresh } = useNotifications();
+  const { state: pushState, subscribe: pushSubscribe, unsubscribe: pushUnsubscribe, isSupported: pushSupported } = usePushNotifications();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -139,16 +141,31 @@ export default function NotificationBell({ onNavigate }: NotificationBellProps) 
           </div>
 
           {/* Footer */}
-          {notifications.length > 0 && (
-            <div className="px-4 py-2.5 border-t border-white/10" style={{ background: "#1a1a2e" }}>
+          <div className="px-4 py-2.5 border-t border-white/10 flex items-center justify-between gap-2" style={{ background: "#1a1a2e" }}>
+            <button
+              onClick={() => { onNavigate("dashboard:notifications"); setOpen(false); }}
+              className="text-xs text-white/40 hover:text-neon-cyan transition-colors"
+            >
+              Все уведомления
+            </button>
+            {/* Push-статус */}
+            {pushSupported && (
               <button
-                onClick={() => { onNavigate("dashboard"); setOpen(false); }}
-                className="w-full text-center text-xs text-white/40 hover:text-neon-cyan transition-colors"
+                onClick={() => pushState === "granted" ? pushUnsubscribe() : pushSubscribe()}
+                title={pushState === "granted" ? "Push включён — нажмите чтобы отключить" : "Включить push-уведомления"}
+                className={`flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border transition-all ${
+                  pushState === "granted"
+                    ? "text-neon-green border-neon-green/30 bg-neon-green/10"
+                    : pushState === "denied"
+                    ? "text-white/20 border-white/5 cursor-not-allowed"
+                    : "text-white/30 border-white/10 hover:text-neon-purple hover:border-neon-purple/30 hover:bg-neon-purple/10"
+                }`}
               >
-                Открыть кабинет
+                <Icon name={pushState === "granted" ? "BellRing" : pushState === "denied" ? "BellOff" : "Bell"} size={10} />
+                {pushState === "granted" ? "Push вкл" : pushState === "denied" ? "Блок" : "Push"}
               </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       )}
     </div>

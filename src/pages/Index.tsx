@@ -10,6 +10,7 @@ import ProjectsPage from "@/components/projects/ProjectsPage";
 import CrmPage from "@/components/crm/CrmPage";
 import SupportChat from "@/components/SupportChat";
 import GlobalSidebar from "@/components/layout/GlobalSidebar";
+import PushPermissionBanner from "@/components/PushPermissionBanner";
 import { useAuth } from "@/context/AuthContext";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
 
@@ -38,6 +39,17 @@ function IndexInner() {
       setActivePage(saved);
       if (saved === "chat" && savedConv) setOpenChatConvId(savedConv);
     }
+  }, [user]);
+
+  // Слушаем навигацию от Service Worker (клик по push-уведомлению)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const page = (e as CustomEvent<string>).detail;
+      if (page) handleNavigate(page);
+    };
+    window.addEventListener("gl:navigate", handler);
+    return () => window.removeEventListener("gl:navigate", handler);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   const handleNavigate = (page: string) => {
@@ -88,6 +100,7 @@ function IndexInner() {
     <div className="min-h-screen bg-background">
       <Navbar activePage={activePage} onNavigate={handleNavigate} />
       <EmailVerifyBanner />
+      {user && <PushPermissionBanner />}
       <main className={showSidebar ? "flex max-w-[1400px] mx-auto px-4 sm:px-6 pt-20 gap-6" : ""}>
         {showSidebar && (
           <GlobalSidebar
