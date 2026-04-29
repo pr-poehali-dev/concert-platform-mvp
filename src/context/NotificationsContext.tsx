@@ -37,6 +37,7 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     if (!silent) setLoading(true);
     try {
       const res = await fetch(`${NOTIF_URL}?action=list&user_id=${user.id}`);
+      if (!res.ok) throw new Error("notifications fetch failed");
       const data = await res.json();
       const next: Notification[] = data.notifications || [];
       // Diff — перерисовываем только если изменился список или статус прочтения

@@ -19,6 +19,7 @@ export default function DashboardDocumentsTab() {
   const [loading, setLoading] = useState(true);
   const [filterCat, setFilterCat] = useState("all");
   const [filterFolder, setFilterFolder] = useState("all");
+  const [search, setSearch] = useState("");
   const [newFolder, setNewFolder] = useState("");
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [extraFolders, setExtraFolders] = useState<string[]>([]);
@@ -224,11 +225,22 @@ export default function DashboardDocumentsTab() {
     ...docs.map(d => d.folder || "").filter(Boolean),
   ])).sort();
 
+  const totalSize = docs.reduce((sum, d) => sum + (d.size || 0), 0);
+  const formatSize = (bytes: number) => {
+    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
+    if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
+    return `${bytes} Б`;
+  };
+
   const filtered = docs.filter(d => {
     if (filterCat !== "all" && d.category !== filterCat) return false;
     if (filterFolder !== "all") {
       if (filterFolder === "__none__") return !d.folder;
       return d.folder === filterFolder;
+    }
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      return d.name?.toLowerCase().includes(q) || d.note?.toLowerCase().includes(q);
     }
     return true;
   });
@@ -243,19 +255,37 @@ export default function DashboardDocumentsTab() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="font-oswald font-bold text-xl text-white">Мои документы</h2>
-          <p className="text-white/40 text-sm mt-0.5">
-            {isVenue
-              ? "Храните технические райдеры, договоры и другие файлы"
-              : "Храните райдеры, договоры с артистами и другие файлы"}
-          </p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-white/40 text-sm">
+              {isVenue
+                ? "Технические райдеры, договоры и другие файлы"
+                : "Райдеры, договоры с артистами и другие файлы"}
+            </p>
+            {docs.length > 0 && (
+              <span className="text-white/20 text-xs">
+                {docs.length} файл{docs.length === 1 ? "" : docs.length < 5 ? "а" : "ов"} · {formatSize(totalSize)}
+              </span>
+            )}
+          </div>
         </div>
-        <button
-          onClick={() => fileRef.current?.click()}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity whitespace-nowrap"
-        >
-          <Icon name="Upload" size={16} />
-          Загрузить документ
-        </button>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Поиск по названию..."
+              className="glass border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-white text-sm outline-none focus:border-neon-purple/50 transition-colors w-44 placeholder:text-white/25"
+            />
+          </div>
+          <button
+            onClick={() => fileRef.current?.click()}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity whitespace-nowrap"
+          >
+            <Icon name="Upload" size={16} />
+            Загрузить
+          </button>
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -415,14 +445,28 @@ export default function DashboardDocumentsTab() {
       ) : filtered.length === 0 ? (
         <div className="glass rounded-2xl border border-white/5 p-16 text-center">
           <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 flex items-center justify-center mx-auto mb-4">
-            <Icon name="FolderOpen" size={28} className="text-neon-purple/50" />
+            <Icon name={search ? "SearchX" : "FolderOpen"} size={28} className="text-neon-purple/50" />
           </div>
           <p className="text-white/50 font-medium mb-1">
-            {filterCat === "all" ? "Документов пока нет" : "Нет документов этой категории"}
+            {search
+              ? `Ничего не найдено по запросу «${search}»`
+              : filterCat === "all" && filterFolder === "all"
+                ? "Документов пока нет"
+                : "Нет документов по выбранному фильтру"}
           </p>
           <p className="text-white/25 text-sm">
-            Нажми «Загрузить документ» чтобы добавить первый файл
+            {search
+              ? "Попробуй другой запрос или сброс фильтров"
+              : "Нажми «Загрузить» чтобы добавить первый файл"}
           </p>
+          {(search || filterCat !== "all" || filterFolder !== "all") && (
+            <button
+              onClick={() => { setSearch(""); setFilterCat("all"); setFilterFolder("all"); }}
+              className="mt-4 px-4 py-2 rounded-xl glass border border-white/10 text-white/40 text-sm hover:text-white transition-all"
+            >
+              Сбросить фильтры
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid gap-3">

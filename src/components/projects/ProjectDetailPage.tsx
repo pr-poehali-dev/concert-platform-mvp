@@ -27,9 +27,16 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await fetch(`${PROJECTS_URL}?action=detail&project_id=${projectId}`).then(r=>r.json());
-    setProject(data.project || null);
-    setLoading(false);
+    try {
+      const res = await fetch(`${PROJECTS_URL}?action=detail&project_id=${projectId}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setProject(data.project || null);
+    } catch {
+      setProject(null);
+    } finally {
+      setLoading(false);
+    }
   }, [projectId]);
 
   useEffect(()=>{load();},[load]);

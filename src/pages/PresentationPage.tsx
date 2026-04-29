@@ -67,6 +67,22 @@ const WORKFLOW = [
   { step: "05", title: "Проводишь концерт",  desc: "Вся команда, документы, CRM — в одном окне" },
 ];
 
+// ── Color maps (статичны — вне компонента, не пересоздаются) ──────────────
+const COLOR_TEXT: Record<string, string> = {
+  "neon-purple": "text-neon-purple",
+  "neon-cyan":   "text-neon-cyan",
+  "neon-pink":   "text-neon-pink",
+  "neon-green":  "text-neon-green",
+};
+const COLOR_BG: Record<string, string> = {
+  "neon-purple": "bg-neon-purple/10 border-neon-purple/20",
+  "neon-cyan":   "bg-neon-cyan/10 border-neon-cyan/20",
+  "neon-pink":   "bg-neon-pink/10 border-neon-pink/20",
+  "neon-green":  "bg-neon-green/10 border-neon-green/20",
+};
+
+const SLIDE_LABELS = ["Главная","Проблема","Решение","Инструменты","CRM","ЭДО","PDF","Билеты","Площадки","Логистика","Финансы","Команда","Как работает","Цифры","Старт"];
+
 // ── Animated counter ──────────────────────────────────────────────────────
 function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
   const [val, setVal] = useState(0);
@@ -125,28 +141,23 @@ export default function PresentationPage() {
     document.getElementById(`slide-${current}`)?.scrollIntoView({ behavior: "smooth" });
   }, [current]);
 
-  const cm: Record<string, string> = {
-    "neon-purple": "text-neon-purple",
-    "neon-cyan":   "text-neon-cyan",
-    "neon-pink":   "text-neon-pink",
-    "neon-green":  "text-neon-green",
-  };
-  const bm: Record<string, string> = {
-    "neon-purple": "bg-neon-purple/10 border-neon-purple/20",
-    "neon-cyan":   "bg-neon-cyan/10 border-neon-cyan/20",
-    "neon-pink":   "bg-neon-pink/10 border-neon-pink/20",
-    "neon-green":  "bg-neon-green/10 border-neon-green/20",
-  };
-
   return (
     <>
     <SEOHead {...SEO_PAGES.presentation} />
     <div className="bg-background text-white font-golos">
 
+      {/* Прогресс-бар */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-white/5">
+        <div
+          className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all duration-500"
+          style={{ width: `${((current + 1) / total) * 100}%` }}
+        />
+      </div>
+
       {/* Nav dots */}
       <nav className="fixed right-5 top-1/2 -translate-y-1/2 z-50 flex flex-col gap-1.5">
         {SLIDES.map((_, i) => (
-          <button key={i} onClick={() => goTo(i)}
+          <button key={i} onClick={() => goTo(i)} title={SLIDE_LABELS[i]}
             className={`rounded-full border transition-all duration-300 ${
               i === current
                 ? "bg-neon-purple border-neon-purple w-2 h-5"
@@ -157,15 +168,18 @@ export default function PresentationPage() {
       </nav>
 
       {/* Arrow controls */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 bg-black/60 backdrop-blur-md border border-white/10 rounded-2xl px-4 py-2">
         <button onClick={() => goTo(Math.max(current - 1, 0))} disabled={current === 0}
-          className="w-10 h-10 rounded-full glass border border-white/10 flex items-center justify-center text-white/40 hover:text-white disabled:opacity-20 transition-all">
-          <Icon name="ChevronLeft" size={18} />
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 disabled:opacity-20 transition-all">
+          <Icon name="ChevronLeft" size={16} />
         </button>
-        <span className="text-white/30 text-xs font-oswald tracking-widest">{current + 1} / {total}</span>
+        <div className="text-center min-w-[120px]">
+          <p className="text-white/70 text-xs font-oswald font-bold">{SLIDE_LABELS[current]}</p>
+          <p className="text-white/25 text-[10px] tracking-widest">{current + 1} / {total}</p>
+        </div>
         <button onClick={() => goTo(Math.min(current + 1, total - 1))} disabled={current === total - 1}
-          className="w-10 h-10 rounded-full glass border border-white/10 flex items-center justify-center text-white/40 hover:text-white disabled:opacity-20 transition-all">
-          <Icon name="ChevronRight" size={18} />
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-white/40 hover:text-white hover:bg-white/5 disabled:opacity-20 transition-all">
+          <Icon name="ChevronRight" size={16} />
         </button>
       </div>
 
@@ -198,7 +212,7 @@ export default function PresentationPage() {
               { label: "Всё в одном",   value: "месте", color: "neon-green"  },
             ].map((s, i) => (
               <div key={i} className="glass rounded-2xl px-6 py-4 border border-white/5">
-                <p className={`font-oswald font-bold text-3xl ${cm[s.color]}`}>{s.value}</p>
+                <p className={`font-oswald font-bold text-3xl ${COLOR_TEXT[s.color]}`}>{s.value}</p>
                 <p className="text-white/40 text-sm mt-0.5">{s.label}</p>
               </div>
             ))}
@@ -291,12 +305,12 @@ export default function PresentationPage() {
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {FEATURES.map((f, i) => (
-              <div key={i} className={`glass rounded-2xl p-4 border ${bm[f.color]} hover:scale-[1.02] transition-transform animate-fade-in`}
+              <div key={i} className={`glass rounded-2xl p-4 border ${COLOR_BG[f.color]} hover:scale-[1.02] transition-transform animate-fade-in`}
                 style={{ animationDelay: `${i * 0.05}s` }}>
-                <div className={`w-9 h-9 rounded-xl ${bm[f.color]} border flex items-center justify-center mb-3`}>
-                  <Icon name={f.icon as never} size={16} className={cm[f.color]} />
+                <div className={`w-9 h-9 rounded-xl ${COLOR_BG[f.color]} border flex items-center justify-center mb-3`}>
+                  <Icon name={f.icon as never} size={16} className={COLOR_TEXT[f.color]} />
                 </div>
-                <h3 className={`font-oswald font-bold text-sm mb-1.5 ${cm[f.color]}`}>{f.title}</h3>
+                <h3 className={`font-oswald font-bold text-sm mb-1.5 ${COLOR_TEXT[f.color]}`}>{f.title}</h3>
                 <p className="text-white/65 text-xs leading-relaxed">{f.desc}</p>
               </div>
             ))}
@@ -358,7 +372,7 @@ export default function PresentationPage() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <span className="text-white/30 text-[10px]">{t.user}</span>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${bm[t.color]} ${cm[t.color]}`}>{t.status}</span>
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full border ${COLOR_BG[t.color]} ${COLOR_TEXT[t.color]}`}>{t.status}</span>
                     </div>
                   </div>
                 ))}
@@ -371,7 +385,7 @@ export default function PresentationPage() {
                   { label: "Просрочено",      value: "2",  color: "neon-pink" },
                 ].map((s, i) => (
                   <div key={i} className="glass rounded-xl p-4 text-center border border-white/5">
-                    <p className={`font-oswald font-bold text-2xl ${cm[s.color]}`}>{s.value}</p>
+                    <p className={`font-oswald font-bold text-2xl ${COLOR_TEXT[s.color]}`}>{s.value}</p>
                     <p className="text-white/35 text-xs mt-1">{s.label}</p>
                   </div>
                 ))}
@@ -401,12 +415,12 @@ export default function PresentationPage() {
                 ].map((d, i) => (
                   <div key={i} className="flex items-center justify-between py-3 border-b border-white/5 last:border-0">
                     <div className="flex items-center gap-3">
-                      <Icon name="FileText" size={14} className={cm[d.color]} />
+                      <Icon name="FileText" size={14} className={COLOR_TEXT[d.color]} />
                       <span className="text-white/70 text-sm">{d.doc}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-white/25 text-xs">{d.date}</span>
-                      <span className={`text-xs px-2.5 py-1 rounded-full border ${bm[d.color]} ${cm[d.color]}`}>{d.status}</span>
+                      <span className={`text-xs px-2.5 py-1 rounded-full border ${COLOR_BG[d.color]} ${COLOR_TEXT[d.color]}`}>{d.status}</span>
                     </div>
                   </div>
                 ))}
@@ -488,12 +502,12 @@ export default function PresentationPage() {
                   { icon: "Receipt",  color: "neon-green",  title: "Счёт на оплату PDF", sub: "Плательщик, получатель, банковские реквизиты, сумма" },
                   { icon: "Archive",  color: "neon-cyan",   title: "Архив документов",   sub: "Все PDF хранятся в облаке и доступны в любой момент" },
                 ].map((t, i) => (
-                  <div key={i} className={`flex items-center gap-4 bg-black/70 backdrop-blur-sm rounded-xl p-4 border ${bm[t.color]}`}>
-                    <div className={`w-10 h-10 rounded-xl ${bm[t.color]} border flex items-center justify-center shrink-0`}>
-                      <Icon name={t.icon as never} size={18} className={cm[t.color]} />
+                  <div key={i} className={`flex items-center gap-4 bg-black/70 backdrop-blur-sm rounded-xl p-4 border ${COLOR_BG[t.color]}`}>
+                    <div className={`w-10 h-10 rounded-xl ${COLOR_BG[t.color]} border flex items-center justify-center shrink-0`}>
+                      <Icon name={t.icon as never} size={18} className={COLOR_TEXT[t.color]} />
                     </div>
                     <div>
-                      <p className={`font-oswald font-semibold text-sm ${cm[t.color]}`}>{t.title}</p>
+                      <p className={`font-oswald font-semibold text-sm ${COLOR_TEXT[t.color]}`}>{t.title}</p>
                       <p className="text-white/80 text-xs mt-0.5">{t.sub}</p>
                     </div>
                   </div>
@@ -513,14 +527,14 @@ export default function PresentationPage() {
                 ].map((f, i) => (
                   <div key={i} className="flex items-center justify-between py-3 border-b border-white/8 last:border-0 gap-3">
                     <div className="flex items-center gap-3 min-w-0">
-                      <Icon name="FileText" size={14} className={cm[f.color]} />
+                      <Icon name="FileText" size={14} className={COLOR_TEXT[f.color]} />
                       <div className="min-w-0">
                         <p className="text-white text-sm truncate font-medium">{f.name}</p>
                         <p className="text-white/50 text-xs">{f.size} · {f.date}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`text-xs px-2 py-0.5 rounded-full border ${bm[f.color]} ${cm[f.color]}`}>{f.status}</span>
+                      <span className={`text-xs px-2 py-0.5 rounded-full border ${COLOR_BG[f.color]} ${COLOR_TEXT[f.color]}`}>{f.status}</span>
                       <div className="w-7 h-7 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center">
                         <Icon name="Download" size={12} className="text-white/60" />
                       </div>
@@ -582,15 +596,15 @@ export default function PresentationPage() {
                   { name: "СберТикет",          icon: "Ticket",       color: "neon-green",  desc: "Экспорт отчётов" },
                   { name: "Другие системы",     icon: "Plug",         color: "neon-cyan",   desc: "CSV / Excel импорт" },
                 ].map((a, i) => (
-                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-3.5 border ${bm[a.color]}`}>
-                    <div className={`w-9 h-9 rounded-xl ${bm[a.color]} border flex items-center justify-center shrink-0`}>
-                      <Icon name={a.icon as never} size={15} className={cm[a.color]} />
+                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-3.5 border ${COLOR_BG[a.color]}`}>
+                    <div className={`w-9 h-9 rounded-xl ${COLOR_BG[a.color]} border flex items-center justify-center shrink-0`}>
+                      <Icon name={a.icon as never} size={15} className={COLOR_TEXT[a.color]} />
                     </div>
                     <div className="flex-1">
-                      <p className={`font-oswald font-semibold text-sm ${cm[a.color]}`}>{a.name}</p>
+                      <p className={`font-oswald font-semibold text-sm ${COLOR_TEXT[a.color]}`}>{a.name}</p>
                       <p className="text-white/35 text-xs">{a.desc}</p>
                     </div>
-                    <Icon name="Check" size={14} className={cm[a.color]} />
+                    <Icon name="Check" size={14} className={COLOR_TEXT[a.color]} />
                   </div>
                 ))}
               </div>
@@ -627,7 +641,7 @@ export default function PresentationPage() {
                     { label: "% заполнения",     value: "80%",       color: "neon-purple" },
                   ].map((s, i) => (
                     <div key={i} className="text-center">
-                      <p className={`font-oswald font-bold text-xl ${cm[s.color]}`}>{s.value}</p>
+                      <p className={`font-oswald font-bold text-xl ${COLOR_TEXT[s.color]}`}>{s.value}</p>
                       <p className="text-white/30 text-xs mt-0.5">{s.label}</p>
                     </div>
                   ))}
@@ -705,17 +719,17 @@ export default function PresentationPage() {
                 ],
               },
             ].map((col, i) => (
-              <div key={i} className={`glass rounded-2xl p-6 border ${bm[col.color]}`}>
+              <div key={i} className={`glass rounded-2xl p-6 border ${COLOR_BG[col.color]}`}>
                 <div className="flex items-center gap-3 mb-5">
-                  <div className={`w-10 h-10 rounded-xl ${bm[col.color]} border flex items-center justify-center`}>
-                    <Icon name={col.icon as never} size={18} className={cm[col.color]} />
+                  <div className={`w-10 h-10 rounded-xl ${COLOR_BG[col.color]} border flex items-center justify-center`}>
+                    <Icon name={col.icon as never} size={18} className={COLOR_TEXT[col.color]} />
                   </div>
-                  <h3 className={`font-oswald font-bold text-base ${cm[col.color]}`}>{col.title}</h3>
+                  <h3 className={`font-oswald font-bold text-base ${COLOR_TEXT[col.color]}`}>{col.title}</h3>
                 </div>
                 <ul className="space-y-2.5">
                   {col.items.map((item, j) => (
                     <li key={j} className="flex items-start gap-2.5 text-sm text-white/60">
-                      <Icon name="Check" size={13} className={`${cm[col.color]} shrink-0 mt-0.5`} />
+                      <Icon name="Check" size={13} className={`${COLOR_TEXT[col.color]} shrink-0 mt-0.5`} />
                       {item}
                     </li>
                   ))}
@@ -764,12 +778,12 @@ export default function PresentationPage() {
                   { icon: "Train",  color: "neon-green",  title: "ЖД билеты",  sub: "Прямой переход на РЖД с датой и направлением" },
                   { icon: "Hotel",  color: "neon-purple", title: "Отели",      sub: "Бронирование через Ostrovok по городу и датам" },
                 ].map((t, i) => (
-                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-4 border ${bm[t.color]}`}>
-                    <div className={`w-10 h-10 rounded-xl ${bm[t.color]} border flex items-center justify-center shrink-0`}>
-                      <Icon name={t.icon as never} size={18} className={cm[t.color]} />
+                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-4 border ${COLOR_BG[t.color]}`}>
+                    <div className={`w-10 h-10 rounded-xl ${COLOR_BG[t.color]} border flex items-center justify-center shrink-0`}>
+                      <Icon name={t.icon as never} size={18} className={COLOR_TEXT[t.color]} />
                     </div>
                     <div>
-                      <p className={`font-oswald font-semibold text-sm ${cm[t.color]}`}>{t.title}</p>
+                      <p className={`font-oswald font-semibold text-sm ${COLOR_TEXT[t.color]}`}>{t.title}</p>
                       <p className="text-white/40 text-xs mt-0.5">{t.sub}</p>
                     </div>
                   </div>
@@ -791,7 +805,7 @@ export default function PresentationPage() {
                       <div className={`w-2 h-2 rounded-full bg-${s.color}`} />
                       <span className="text-white/70 text-sm">{s.status}</span>
                     </div>
-                    <span className={`font-oswald font-bold text-lg ${cm[s.color]}`}>{s.count}</span>
+                    <span className={`font-oswald font-bold text-lg ${COLOR_TEXT[s.color]}`}>{s.count}</span>
                   </div>
                 ))}
               </div>
@@ -842,20 +856,20 @@ export default function PresentationPage() {
                 badge: "Итоговый анализ",
               },
             ].map((col, i) => (
-              <div key={i} className={`glass rounded-2xl p-6 border ${bm[col.color]}`}>
+              <div key={i} className={`glass rounded-2xl p-6 border ${COLOR_BG[col.color]}`}>
                 <div className="flex items-center gap-3 mb-5">
-                  <div className={`w-10 h-10 rounded-xl ${bm[col.color]} border flex items-center justify-center`}>
-                    <Icon name={col.icon as never} size={18} className={cm[col.color]} />
+                  <div className={`w-10 h-10 rounded-xl ${COLOR_BG[col.color]} border flex items-center justify-center`}>
+                    <Icon name={col.icon as never} size={18} className={COLOR_TEXT[col.color]} />
                   </div>
                   <div>
-                    <p className={`font-oswald font-bold text-base ${cm[col.color]}`}>{col.title}</p>
+                    <p className={`font-oswald font-bold text-base ${COLOR_TEXT[col.color]}`}>{col.title}</p>
                     <p className="text-white/30 text-xs">{col.badge}</p>
                   </div>
                 </div>
                 <ul className="space-y-2.5">
                   {col.items.map((item, j) => (
                     <li key={j} className="flex items-center gap-2.5 text-sm text-white/65">
-                      <Icon name="Check" size={13} className={cm[col.color]} />
+                      <Icon name="Check" size={13} className={COLOR_TEXT[col.color]} />
                       {item}
                     </li>
                   ))}
@@ -888,12 +902,12 @@ export default function PresentationPage() {
                   { role: "Бухгалтер",  icon: "Calculator", perms: "Только финансы и P&L",           color: "neon-green"  },
                   { role: "Сотрудник",  icon: "User",       perms: "Настраиваемые права",            color: "neon-pink"   },
                 ].map((r, i) => (
-                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-4 border ${bm[r.color]}`}>
-                    <div className={`w-9 h-9 rounded-xl ${bm[r.color]} border flex items-center justify-center shrink-0`}>
-                      <Icon name={r.icon as never} size={15} className={cm[r.color]} />
+                  <div key={i} className={`flex items-center gap-4 glass rounded-xl p-4 border ${COLOR_BG[r.color]}`}>
+                    <div className={`w-9 h-9 rounded-xl ${COLOR_BG[r.color]} border flex items-center justify-center shrink-0`}>
+                      <Icon name={r.icon as never} size={15} className={COLOR_TEXT[r.color]} />
                     </div>
                     <div>
-                      <p className={`font-oswald font-semibold text-sm ${cm[r.color]}`}>{r.role}</p>
+                      <p className={`font-oswald font-semibold text-sm ${COLOR_TEXT[r.color]}`}>{r.role}</p>
                       <p className="text-white/45 text-xs mt-0.5">{r.perms}</p>
                     </div>
                   </div>
@@ -993,7 +1007,7 @@ export default function PresentationPage() {
               { to: 10,  suffix: "+", label: "Часов экономии в неделю",color: "neon-green"  },
             ].map((s, i) => (
               <div key={i} className="glass rounded-2xl p-8 border border-white/5">
-                <p className={`font-oswald font-bold text-6xl mb-2 ${cm[s.color]}`}>
+                <p className={`font-oswald font-bold text-6xl mb-2 ${COLOR_TEXT[s.color]}`}>
                   <Counter to={s.to} suffix={s.suffix} />
                 </p>
                 <p className="text-white/70 text-sm">{s.label}</p>

@@ -17,9 +17,16 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
   const load = async () => {
     if(!user) return;
     setLoading(true);
-    const data = await fetch(`${PROJECTS_URL}?action=list&user_id=${user.id}`).then(r=>r.json());
-    setProjects(data.projects||[]);
-    setLoading(false);
+    try {
+      const res = await fetch(`${PROJECTS_URL}?action=list&user_id=${user.id}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setProjects(data.projects||[]);
+    } catch {
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(()=>{load();},[user]);

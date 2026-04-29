@@ -19,14 +19,20 @@ export default function BoardDetail({ board, userId: _userId, onBack }: Props) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [colRes, cardRes] = await Promise.all([
-      fetch(`${CRM_URL}?action=crm_columns_list&board_id=${board.id}`),
-      fetch(`${CRM_URL}?action=crm_cards_list&board_id=${board.id}`),
-    ]);
-    const [colData, cardData] = await Promise.all([colRes.json(), cardRes.json()]);
-    setColumns(colData.columns || []);
-    setCards(cardData.cards || []);
-    setLoading(false);
+    try {
+      const [colRes, cardRes] = await Promise.all([
+        fetch(`${CRM_URL}?action=crm_columns_list&board_id=${board.id}`),
+        fetch(`${CRM_URL}?action=crm_cards_list&board_id=${board.id}`),
+      ]);
+      const [colData, cardData] = await Promise.all([colRes.json(), cardRes.json()]);
+      setColumns(colData.columns || []);
+      setCards(cardData.cards || []);
+    } catch {
+      setColumns([]);
+      setCards([]);
+    } finally {
+      setLoading(false);
+    }
   }, [board.id]);
 
   useEffect(() => { load(); }, [load]);

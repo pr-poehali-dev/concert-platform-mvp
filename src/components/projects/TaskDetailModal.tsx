@@ -42,6 +42,9 @@ export default function TaskDetailModal({
     ]).then(([sd, cd]) => {
       setSubtasks(sd.subtasks || []);
       setComments(cd.comments || []);
+    }).catch(() => {
+      setSubtasks([]);
+      setComments([]);
     }).finally(() => {
       setLoadingSubtasks(false);
       setLoadingComments(false);

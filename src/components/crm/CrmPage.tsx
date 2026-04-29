@@ -22,14 +22,20 @@ export default function CrmPage({ onNavigate: _onNavigate }: { onNavigate?: (pag
   const load = useCallback(async () => {
     if (!user) return;
     setLoading(true);
-    const [boardsRes, goalsRes] = await Promise.all([
-      fetch(`${CRM_URL}?action=crm_boards_list&user_id=${user.id}`),
-      fetch(`${CRM_URL}?action=crm_goals_list&user_id=${user.id}`),
-    ]);
-    const [boardsData, goalsData] = await Promise.all([boardsRes.json(), goalsRes.json()]);
-    setBoards(boardsData.boards || []);
-    setGoals(goalsData.goals || []);
-    setLoading(false);
+    try {
+      const [boardsRes, goalsRes] = await Promise.all([
+        fetch(`${CRM_URL}?action=crm_boards_list&user_id=${user.id}`),
+        fetch(`${CRM_URL}?action=crm_goals_list&user_id=${user.id}`),
+      ]);
+      const [boardsData, goalsData] = await Promise.all([boardsRes.json(), goalsRes.json()]);
+      setBoards(boardsData.boards || []);
+      setGoals(goalsData.goals || []);
+    } catch {
+      setBoards([]);
+      setGoals([]);
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => { load(); }, [load]);
