@@ -1,0 +1,23 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS preflight",
+      "method": "OPTIONS",
+      "path": "/",
+      "expectedStatus": 200
+    },
+    {
+      "name": "Ask without session → 401",
+      "method": "POST",
+      "path": "/?action=ask",
+      "body": {"question": "тест"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "Templates list without session → 401",
+      "method": "GET",
+      "path": "/?action=templates",
+      "expectedStatus": 401
+    }
+  ]
+}

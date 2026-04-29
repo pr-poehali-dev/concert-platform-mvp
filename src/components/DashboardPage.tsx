@@ -13,6 +13,7 @@ import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab";
 import DashboardSigningTab from "@/components/dashboard/DashboardSigningTab";
 import DashboardAITab from "@/components/dashboard/DashboardAITab";
+import DashboardAILawyerTab from "@/components/dashboard/DashboardAILawyerTab";
 import CrmPage from "@/pages/CrmPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
 
@@ -96,6 +97,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         { id: "notifications", icon: "Bell" },
         { id: "profile",       icon: "User" },
         { id: "ai_help",       icon: "Sparkles" },
+        { id: "ai_lawyer",     icon: "Scale" },
       ]
     : [
         { id: "tours",         icon: "Route" },
@@ -105,6 +107,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         { id: "notifications", icon: "Bell" },
         { id: "profile",       icon: "User" },
         { id: "ai_help",       icon: "Sparkles" },
+        { id: "ai_lawyer",     icon: "Scale" },
       ];
 
   return (
@@ -272,6 +275,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
             )}
 
             {tab === "ai_help" && <DashboardAITab />}
+            {tab === "ai_lawyer" && <DashboardAILawyerTab />}
           </div>
         </div>
       </div>

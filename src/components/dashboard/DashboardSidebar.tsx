@@ -32,8 +32,9 @@ const VENUE_TABS: NavItem[] = [
 ];
 
 const BOTTOM_TABS: NavItem[] = [
-  { id: "profile", label: "Профиль", icon: "User" },
-  { id: "ai_help",  label: "Помощь",  icon: "Sparkles" },
+  { id: "profile",    label: "Профиль",  icon: "User" },
+  { id: "ai_help",    label: "Помощь",   icon: "Sparkles" },
+  { id: "ai_lawyer",  label: "ИИ-юрист", icon: "Scale" },
 ];
 
 interface Props {
