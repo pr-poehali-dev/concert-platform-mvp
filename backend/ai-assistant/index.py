@@ -128,31 +128,39 @@ def get_session_user(session_id: str) -> dict | None:
     return row[0] if isinstance(row[0], dict) else json.loads(row[0])
 
 
-def call_gemini(api_key: str, model: str, prompt: str) -> str | None:
-    """Вызывает одну модель Gemini. Возвращает текст или None при ошибке."""
+def call_aitunnel(api_key: str, model: str, system: str, question: str) -> str | None:
+    """Вызывает AiTunnel (OpenAI-совместимый API). Возвращает текст или None при ошибке."""
     payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1000}
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": question},
+        ],
+        "temperature": 0.4,
+        "max_tokens": 1000,
     }).encode("utf-8")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    req = urllib.request.Request(url, data=payload,
-                                  headers={"Content-Type": "application/json"}, method="POST")
+    req = urllib.request.Request(
+        "https://api.aitunnel.ru/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
     try:
         with urllib.request.urlopen(req, timeout=25) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return data["choices"][0]["message"]["content"].strip()
     except urllib.error.HTTPError as e:
         body = e.read().decode("utf-8", errors="replace")
-        print(f"[ai] Gemini {model} error {e.code}: {body[:200]}")
+        print(f"[ai] AiTunnel {model} error {e.code}: {body[:300]}")
         return None
     except Exception as ex:
-        print(f"[ai] Gemini {model} exception: {ex}")
+        print(f"[ai] AiTunnel {model} exception: {ex}")
         return None
 
 
 def ask_ai(question: str, user_role: str) -> str:
-    """Отправляет вопрос в Google Gemini, перебирает модели при исчерпании лимита."""
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    """Отправляет вопрос в AiTunnel, перебирает модели при ошибке."""
+    api_key = os.environ.get("AITUNNEL_API_KEY", "")
     if not api_key:
         return "ИИ-ассистент временно недоступен — не задан API-ключ. Обратитесь к администратору."
 
@@ -162,22 +170,20 @@ def ask_ai(question: str, user_role: str) -> str:
     elif user_role == "venue":
         role_hint = "\n\nПользователь является владельцем ПЛОЩАДКИ."
 
-    full_prompt = SYSTEM_PROMPT + role_hint + "\n\nВопрос пользователя: " + question
+    system = SYSTEM_PROMPT + role_hint
 
-    # Перебираем модели по порядку — если одна исчерпана, пробуем следующую
     models = [
-        "gemini-2.0-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-1.5-flash-8b",
-        "gemini-1.5-flash",
+        "gpt-4o-mini",
+        "gpt-4o",
+        "gpt-3.5-turbo",
     ]
     for model in models:
-        result = call_gemini(api_key, model, full_prompt)
+        result = call_aitunnel(api_key, model, system, question)
         if result:
-            print(f"[ai] answered via {model}")
+            print(f"[ai] answered via AiTunnel/{model}")
             return result
 
-    return "Не удалось получить ответ — лимит запросов исчерпан. Попробуйте позже."
+    return "Не удалось получить ответ от ИИ. Попробуйте позже или напишите в поддержку."
 
 
 def check_admin_token(token: str) -> bool:
