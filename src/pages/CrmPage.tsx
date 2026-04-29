@@ -1,26 +1,18 @@
-import { useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
 const CRM_PAGES = ["index", "deals", "companies", "tasks", "goals", "dashboard", "reports"];
 
 const CrmPage = () => {
-  const { page } = useParams<{ page?: string }>();
-  const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState("index");
   const containerRef = useRef<HTMLDivElement>(null);
-  const resolvedPage = page && CRM_PAGES.includes(page) ? page : "index";
 
   useEffect(() => {
-    if (page && !CRM_PAGES.includes(page)) {
-      navigate("/crm");
-      return;
-    }
-
     const container = containerRef.current;
     if (!container) return;
 
     container.innerHTML = '<div style="display:flex;justify-content:center;padding:48px;"><div style="width:32px;height:32px;border:3px solid #21262d;border-top-color:#a855f7;border-radius:50%;animation:spin 0.8s linear infinite;"></div></div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
 
-    fetch(`/crm/${resolvedPage}.html`)
+    fetch(`/crm/${currentPage}.html`)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
         return r.text();
@@ -31,31 +23,32 @@ const CrmPage = () => {
 
         // Inject head styles/links
         doc.head.querySelectorAll("link[rel='stylesheet']").forEach((link) => {
-          if (!document.querySelector(`link[href="${(link as HTMLLinkElement).href}"]`)) {
+          const href = (link as HTMLLinkElement).href;
+          if (!document.querySelector(`link[href="${href}"]`)) {
             document.head.appendChild(link.cloneNode(true));
           }
         });
 
-        // Set body content (without script tags — we'll run them manually)
+        // Set body content without script tags
         const bodyClone = doc.body.cloneNode(true) as HTMLElement;
         bodyClone.querySelectorAll("script").forEach((s) => s.remove());
         container.innerHTML = bodyClone.innerHTML;
 
-        // Collect external scripts from head + body in order
+        // Collect all scripts in order (head first, then body)
         const allScripts = [
           ...Array.from(doc.head.querySelectorAll("script")),
           ...Array.from(doc.body.querySelectorAll("script")),
         ];
 
         const extSrcs = allScripts
-          .filter((s) => (s as HTMLScriptElement).src)
+          .filter((s) => !!(s as HTMLScriptElement).src)
           .map((s) => (s as HTMLScriptElement).src);
 
         const inlineCodes = allScripts
-          .filter((s) => !(s as HTMLScriptElement).src && s.textContent?.trim())
+          .filter((s) => !(s as HTMLScriptElement).src && !!s.textContent?.trim())
           .map((s) => s.textContent || "");
 
-        // Load external scripts sequentially (skip already loaded)
+        // Load external scripts sequentially, skip already loaded
         const loadNext = (idx: number): Promise<void> => {
           if (idx >= extSrcs.length) return Promise.resolve();
           const src = extSrcs[idx];
@@ -91,32 +84,27 @@ const CrmPage = () => {
         </div>`;
       });
 
-    // Intercept CRM internal links → React Router navigation
+    // Intercept internal CRM links — navigate without page reload
     const handleClick = (e: MouseEvent) => {
       const a = (e.target as HTMLElement).closest("a[href]") as HTMLAnchorElement | null;
       if (!a) return;
       const href = a.getAttribute("href") || "";
       const match = href.match(/\/crm\/(\w+)\.html/);
-      if (match) {
+      if (match && CRM_PAGES.includes(match[1])) {
         e.preventDefault();
-        navigate(`/crm/${match[1]}`);
+        setCurrentPage(match[1]);
+        window.scrollTo({ top: 0, behavior: "smooth" });
       }
     };
 
     container.addEventListener("click", handleClick);
-    return () => {
-      container.removeEventListener("click", handleClick);
-    };
-  }, [resolvedPage, navigate, page]);
+    return () => container.removeEventListener("click", handleClick);
+  }, [currentPage]);
 
   return (
     <div
       ref={containerRef}
-      style={{
-        minHeight: "100vh",
-        background: "#0d1117",
-        color: "#f0f6fc",
-      }}
+      style={{ minHeight: "100vh", background: "#0d1117", color: "#f0f6fc" }}
     />
   );
 };

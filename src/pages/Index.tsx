@@ -8,7 +8,7 @@ import ToursPage from "@/components/ToursPage";
 import ChatPage from "@/components/ChatPage";
 import DashboardPage from "@/components/DashboardPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
-import CrmPage from "@/components/crm/CrmPage";
+import NewCrmPage from "@/pages/CrmPage";
 import SupportChat from "@/components/SupportChat";
 import GlobalSidebar from "@/components/layout/GlobalSidebar";
 import PushPermissionBanner from "@/components/PushPermissionBanner";
@@ -124,7 +124,7 @@ function IndexInner() {
             <DashboardPage onNavigate={handleNavigate} initialTab={dashboardTab || undefined} />
           )}
           {activePage === "projects" && <ProjectsPage onNavigate={handleNavigate} />}
-          {activePage === "crm" && <CrmPage onNavigate={handleNavigate} />}
+          {activePage === "crm" && <NewCrmPage />}
         </div>
       </main>
       <SupportChat />
