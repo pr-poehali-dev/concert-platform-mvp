@@ -5,7 +5,6 @@ GET  ?action=list  — список запросов для админа (тре
 POST ?action=rate  — оценить ответ (helpful: true/false)
 """
 import json, os, urllib.request, urllib.error, psycopg2
-from openai import OpenAI
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 ADMIN_URL = "https://functions.poehali.dev/19ba5519-e548-4443-845c-9cb446cfc909"
@@ -129,8 +128,34 @@ def get_session_user(session_id: str) -> dict | None:
     return row[0] if isinstance(row[0], dict) else json.loads(row[0])
 
 
+def call_aitunnel(api_key: str, model: str, messages: list, max_tokens: int = 800) -> str | None:
+    """Прямой HTTP-запрос к AiTunnel без SDK — быстрый холодный старт."""
+    payload = json.dumps({
+        "model": model,
+        "messages": messages,
+        "temperature": 0.4,
+        "max_tokens": max_tokens,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        "https://api.aitunnel.ru/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data["choices"][0]["message"]["content"].strip()
+    except urllib.error.HTTPError as e:
+        print(f"[ai] AiTunnel/{model} HTTP {e.code}: {e.read().decode()[:200]}")
+        return None
+    except Exception as ex:
+        print(f"[ai] AiTunnel/{model} error: {ex}")
+        return None
+
+
 def ask_ai(question: str, user_role: str) -> str:
-    """Отправляет вопрос через AiTunnel (OpenAI-совместимый)."""
+    """Отправляет вопрос через AiTunnel (прямой HTTP, без SDK)."""
     api_key = os.environ.get("AITUNNEL_API_KEY", "")
     if not api_key:
         return "ИИ-ассистент временно недоступен — не задан API-ключ. Обратитесь к администратору."
@@ -141,28 +166,16 @@ def ask_ai(question: str, user_role: str) -> str:
     elif user_role == "venue":
         role_hint = "\n\nПользователь является владельцем ПЛОЩАДКИ."
 
-    system = SYSTEM_PROMPT + role_hint
-
-    client = OpenAI(api_key=api_key, base_url="https://api.aitunnel.ru/v1/")
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT + role_hint},
+        {"role": "user", "content": question},
+    ]
 
     for model in ["gpt-5-nano", "gpt-4o-mini", "gpt-4o"]:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": question},
-                ],
-                temperature=0.4,
-                max_tokens=800,
-                timeout=25,
-            )
-            result = response.choices[0].message.content.strip()
+        result = call_aitunnel(api_key, model, messages)
+        if result:
             print(f"[ai] answered via AiTunnel/{model}")
             return result
-        except Exception as ex:
-            print(f"[ai] AiTunnel/{model} error: {ex}")
-            continue
 
     return "Не удалось получить ответ от ИИ. Попробуйте позже или напишите в поддержку."
 

@@ -4,8 +4,7 @@ POST ?action=ask        — задать вопрос или загрузить 
 POST ?action=generate   — сгенерировать договор по шаблону
 POST ?action=analyze    — анализ загруженного документа (base64 текст)
 """
-import json, os, base64, psycopg2
-from openai import OpenAI
+import json, os, base64, psycopg2, urllib.request, urllib.error
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 
@@ -142,24 +141,34 @@ def get_session_user(session_id: str) -> dict | None:
 
 
 def call_ai(messages: list, max_tokens: int = 2000) -> str:
+    """Прямой HTTP-запрос к AiTunnel без SDK — быстрый холодный старт."""
     api_key = os.environ.get("AITUNNEL_API_KEY", "")
     if not api_key:
         raise ValueError("AITUNNEL_API_KEY не задан")
-    client = OpenAI(api_key=api_key, base_url="https://api.aitunnel.ru/v1/")
+    payload = json.dumps({
+        "messages": messages,
+        "temperature": 0.3,
+        "max_tokens": max_tokens,
+    }).encode("utf-8")
     for model in ["gpt-5-nano", "gpt-4o-mini", "gpt-4o"]:
         try:
-            resp = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=max_tokens,
-                timeout=25,
+            body = json.loads(payload)
+            body["model"] = model
+            req = urllib.request.Request(
+                "https://api.aitunnel.ru/v1/chat/completions",
+                data=json.dumps(body).encode("utf-8"),
+                headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
+                method="POST",
             )
-            print(f"[lawyer] answered via {model}")
-            return resp.choices[0].message.content.strip()
+            with urllib.request.urlopen(req, timeout=25) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+                result = data["choices"][0]["message"]["content"].strip()
+                print(f"[lawyer] answered via {model}")
+                return result
+        except urllib.error.HTTPError as e:
+            print(f"[lawyer] {model} HTTP {e.code}: {e.read().decode()[:200]}")
         except Exception as ex:
             print(f"[lawyer] {model} error: {ex}")
-            continue
     raise RuntimeError("Все модели недоступны")
 
 
