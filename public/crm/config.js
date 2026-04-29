@@ -1,0 +1,43 @@
+const CRM_CONFIG = {
+  version: '1.0.0',
+  useMock: true,
+  apiBase: '/api',
+  endpoints: {
+    companies: '/api/companies',
+    deals: '/api/deals',
+    tasks: '/api/tasks',
+    goals: '/api/goals',
+    reports: '/api/reports',
+    users: '/api/users',
+  },
+  stages: [
+    { id: 'lead',        label: 'Лид',         color: '#6366f1' },
+    { id: 'negotiation', label: 'Переговоры',   color: '#a855f7' },
+    { id: 'proposal',   label: 'Предложение',  color: '#22d3ee' },
+    { id: 'won',         label: 'Выиграно',    color: '#4ade80' },
+    { id: 'lost',        label: 'Проиграно',   color: '#f43f5e' },
+  ],
+  priorities: [
+    { id: 'low',    label: 'Низкий',   color: '#6b7280' },
+    { id: 'medium', label: 'Средний',  color: '#f59e0b' },
+    { id: 'high',   label: 'Высокий',  color: '#f43f5e' },
+  ],
+  taskStatuses: [
+    { id: 'todo',       label: 'К выполнению', color: '#6366f1' },
+    { id: 'in_progress',label: 'В работе',     color: '#a855f7' },
+    { id: 'review',     label: 'На проверке',  color: '#22d3ee' },
+    { id: 'done',       label: 'Готово',       color: '#4ade80' },
+  ],
+  colors: {
+    primary:     '#a855f7',
+    accent:      '#22d3ee',
+    success:     '#4ade80',
+    danger:      '#f43f5e',
+    warning:     '#f59e0b',
+    bg:          '#0d1117',
+    card:        '#161b22',
+    border:      '#21262d',
+    text:        '#f0f6fc',
+    muted:       '#8b949e',
+  },
+};

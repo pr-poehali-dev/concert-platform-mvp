@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>CRM — Цели</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="/crm/config.js"></script>
+  <script src="/crm/utils.js"></script>
+  <script src="/crm/components/modal.js"></script>
+  <script src="/crm/components/form.js"></script>
+  <script src="/crm/components/chart.js"></script>
+</head>
+<body>
+<div id="crm-app" class="pb-nav"></div>
+
+<script>
+const app = document.getElementById('crm-app');
+let goals = [];
+
+const categoryColors = {
+  revenue: '#a855f7', clients: '#22d3ee', deals: '#4ade80',
+  quality: '#f59e0b', tasks: '#6366f1', conversion: '#ec4899',
+  hr: '#f97316', efficiency: '#14b8a6',
+};
+const categoryLabels = {
+  revenue: 'Выручка', clients: 'Клиенты', deals: 'Сделки',
+  quality: 'Качество', tasks: 'Задачи', conversion: 'Конверсия',
+  hr: 'HR', efficiency: 'Эффективность',
+};
+
+async function init() {
+  goals = await api.get('goals');
+  render();
+}
+
+function render() {
+  const active = goals.filter(g => g.status !== 'done');
+  const done = goals.filter(g => g.status === 'done');
+  const avgProgress = active.length ? Math.round(active.reduce((s,g) => s + g.current/g.target*100, 0) / active.length) : 0;
+
+  app.innerHTML = `
+    <nav class="crm-nav">
+      <button class="crm-nav-back" onclick="location.href='/crm/index.html'">←</button>
+      <span class="crm-nav-title">Цели и OKR</span>
+      <button class="btn btn-primary btn-sm" onclick="openForm()">+ Цель</button>
+    </nav>
+
+    <div class="crm-page">
+      <div class="grid-3" style="margin-bottom:16px;">
+        <div class="kpi-card purple"><div class="kpi-label">Активных целей</div><div class="kpi-value">${active.length}</div></div>
+        <div class="kpi-card cyan"><div class="kpi-label">Средний прогресс</div><div class="kpi-value">${avgProgress}%</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Выполнено</div><div class="kpi-value">${done.length}</div></div>
+      </div>
+
+      <!-- Overall progress ring simulation -->
+      <div class="card" style="margin-bottom:16px;display:flex;align-items:center;gap:20px;">
+        <div style="position:relative;width:80px;height:80px;flex-shrink:0;">
+          <svg viewBox="0 0 80 80" style="transform:rotate(-90deg);width:80px;height:80px;">
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" stroke-width="8"/>
+            <circle cx="40" cy="40" r="32" fill="none" stroke="var(--primary)" stroke-width="8"
+              stroke-dasharray="${2*Math.PI*32}" stroke-dashoffset="${2*Math.PI*32*(1-avgProgress/100)}"
+              stroke-linecap="round" style="transition:stroke-dashoffset 1s ease;"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;">${avgProgress}%</div>
+        </div>
+        <div>
+          <div style="font-size:16px;font-weight:700;margin-bottom:4px;">Общий прогресс</div>
+          <div style="font-size:13px;color:var(--muted);">${active.length} активных целей · ${done.length} выполнено</div>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+            ${Object.entries(categoryLabels).slice(0,4).map(([k,v]) => {
+              const count = goals.filter(g=>g.category===k).length;
+              return count ? `<span class="badge" style="background:${categoryColors[k]}22;color:${categoryColors[k]};">${v}: ${count}</span>` : '';
+            }).join('')}
+          </div>
+        </div>
+      </div>
+
+      <!-- Active Goals -->
+      ${active.length ? `
+        <div class="section-title">Активные цели</div>
+        ${active.map(g => renderGoalCard(g)).join('')}
+      ` : ''}
+
+      ${done.length ? `
+        <div class="section-title" style="margin-top:20px;">Выполнено ✓</div>
+        ${done.map(g => renderGoalCard(g)).join('')}
+      ` : ''}
+    </div>
+
+    <nav class="crm-bottom-nav">
+      <a href="/crm/index.html"><span class="nav-icon">🏠</span>Главная</a>
+      <a href="/crm/deals.html"><span class="nav-icon">💼</span>Сделки</a>
+      <a href="/crm/companies.html"><span class="nav-icon">🏢</span>Компании</a>
+      <a href="/crm/tasks.html"><span class="nav-icon">✅</span>Задачи</a>
+      <a href="/crm/goals.html" class="active"><span class="nav-icon">🎯</span>Цели</a>
+    </nav>
+  `;
+}
+
+function renderGoalCard(g) {
+  const pct = Math.min(100, Math.round(g.current / g.target * 100));
+  const color = g.status === 'done' ? 'var(--success)' : pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--primary)' : 'var(--warning)';
+  const catColor = categoryColors[g.category] || 'var(--primary)';
+  const daysLeft = Math.round((new Date(g.deadline) - new Date()) / 86400000);
+  const isOverdue = daysLeft < 0 && g.status !== 'done';
+
+  return `
+    <div class="card" style="margin-bottom:12px;cursor:pointer;position:relative;overflow:hidden;" onclick="openDetail('${g.id}')"
+      onmouseenter="this.style.borderColor='${catColor}'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div style="position:absolute;top:0;left:0;bottom:0;width:4px;background:${catColor};"></div>
+      <div style="padding-left:12px;">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+              <span style="font-size:15px;font-weight:600;">${g.title}</span>
+              ${g.status === 'done' ? '<span style="color:var(--success);">✓</span>' : ''}
+            </div>
+            <span class="badge" style="background:${catColor}22;color:${catColor};">${categoryLabels[g.category]}</span>
+          </div>
+          <div style="text-align:right;flex-shrink:0;margin-left:12px;">
+            <div style="font-size:20px;font-weight:700;color:${color};">${pct}%</div>
+            <div style="font-size:11px;color:${isOverdue?'var(--danger)':'var(--muted)'};">${isOverdue?'⚠ Просрочено':daysLeft===0?'Сегодня':daysLeft>0?`${daysLeft} дн.`:'Выполнено'}</div>
+          </div>
+        </div>
+
+        <div class="progress-bar" style="height:8px;margin-bottom:8px;">
+          <div class="progress-fill" style="width:${pct}%;background:${color};"></div>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:12px;color:var(--muted);">
+            <span style="color:var(--text);font-weight:600;">${fmt.num(g.current)} ${g.unit}</span>
+            <span> из ${fmt.num(g.target)} ${g.unit}</span>
+          </div>
+          <div style="display:flex;gap:-4px;">
+            ${g.team?.slice(0,4).map(m => `
+              <div class="avatar" style="background:var(--primary)22;color:var(--primary);width:24px;height:24px;font-size:9px;margin-left:-4px;border:2px solid var(--card);">
+                ${fmt.initials(m)}
+              </div>
+            `).join('')}
+            ${g.team?.length > 4 ? `<div class="avatar" style="background:var(--card2);width:24px;height:24px;font-size:9px;margin-left:-4px;border:2px solid var(--card);color:var(--muted);">+${g.team.length-4}</div>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openDetail(id) {
+  const g = goals.find(x => x.id === id);
+  if (!g) return;
+  const pct = Math.min(100, Math.round(g.current / g.target * 100));
+  const color = pct >= 80 ? 'var(--success)' : pct >= 50 ? 'var(--primary)' : 'var(--warning)';
+  const catColor = categoryColors[g.category] || 'var(--primary)';
+  tg.HapticFeedback?.impactOccurred('light');
+
+  Modal.open({
+    title: g.title,
+    body: `
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="position:relative;width:100px;height:100px;margin:0 auto 12px;">
+          <svg viewBox="0 0 100 100" style="transform:rotate(-90deg);width:100px;height:100px;">
+            <circle cx="50" cy="50" r="42" fill="none" stroke="var(--border)" stroke-width="10"/>
+            <circle cx="50" cy="50" r="42" fill="none" stroke="${color}" stroke-width="10"
+              stroke-dasharray="${2*Math.PI*42}" stroke-dashoffset="${2*Math.PI*42*(1-pct/100)}"
+              stroke-linecap="round"/>
+          </svg>
+          <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:700;color:${color};">${pct}%</div>
+        </div>
+        <div style="font-size:22px;font-weight:700;">${fmt.num(g.current)} <span style="color:var(--muted);font-size:16px;">/ ${fmt.num(g.target)} ${g.unit}</span></div>
+      </div>
+      <div class="card" style="margin-bottom:12px;padding:12px;">
+        <div style="margin-bottom:8px;font-size:13px;color:var(--muted);">${g.description}</div>
+        <div class="grid-2">
+          <div><div class="text-muted text-sm">Категория</div><span class="badge" style="background:${catColor}22;color:${catColor};">${categoryLabels[g.category]}</span></div>
+          <div><div class="text-muted text-sm">Владелец</div><div style="font-size:13px;margin-top:2px;">${g.owner}</div></div>
+          <div><div class="text-muted text-sm">Дедлайн</div><div style="font-size:13px;margin-top:2px;">${fmt.date(g.deadline)}</div></div>
+          <div><div class="text-muted text-sm">Статус</div><div style="font-size:13px;margin-top:2px;">${g.status==='done'?'✅ Выполнено':'🔄 В процессе'}</div></div>
+        </div>
+      </div>
+      <div style="margin-bottom:8px;font-size:13px;font-weight:600;">Команда (${g.team?.length || 0}):</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+        ${g.team?.map(m => `<div style="display:flex;align-items:center;gap:6px;background:var(--card2);border-radius:20px;padding:4px 10px 4px 4px;"><div class="avatar" style="background:var(--primary)22;color:var(--primary);width:24px;height:24px;font-size:9px;">${fmt.initials(m)}</div><span style="font-size:12px;">${m}</span></div>`).join('')}
+      </div>
+      <div>
+        <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Обновить прогресс:</label>
+        <div style="display:flex;gap:8px;">
+          <input id="progress-input" class="input" type="number" value="${g.current}" placeholder="Текущее значение" style="flex:1;">
+          <button class="btn btn-primary" onclick="updateProgress('${g.id}')">Обновить</button>
+        </div>
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary btn-sm" onclick="openForm('${g.id}')">✏️ Редактировать</button>
+      ${g.status !== 'done' ? `<button class="btn btn-secondary btn-sm" onclick="markDone('${g.id}')">✅ Выполнено</button>` : ''}
+      <button class="btn btn-danger btn-sm" onclick="deleteGoal('${g.id}')">🗑</button>
+    `,
+  });
+}
+
+async function updateProgress(id) {
+  const val = parseFloat(document.getElementById('progress-input')?.value || 0);
+  const g = goals.find(x => x.id === id);
+  const newStatus = val >= g.target ? 'done' : 'in_progress';
+  await api.update('goals', id, { current: val, status: newStatus });
+  goals = await api.get('goals');
+  Modal.close();
+  render();
+  toast.success('Прогресс обновлён');
+  tg.HapticFeedback?.notificationOccurred('success');
+}
+
+async function markDone(id) {
+  const g = goals.find(x => x.id === id);
+  await api.update('goals', id, { status: 'done', current: g.target });
+  goals = await api.get('goals');
+  Modal.close();
+  render();
+  toast.success('Цель выполнена! 🎉');
+}
+
+async function deleteGoal(id) {
+  if (!confirm('Удалить цель?')) return;
+  await api.remove('goals', id);
+  goals = await api.get('goals');
+  Modal.close();
+  render();
+  toast.success('Цель удалена');
+}
+
+function openForm(editId = null) {
+  const g = editId ? goals.find(x => x.id === editId) : null;
+  const catOpts = Object.entries(categoryLabels).map(([v,l]) => ({ value: v, label: l }));
+
+  Modal.open({
+    title: g ? 'Редактировать цель' : 'Новая цель',
+    body: `<form id="goal-form">
+      ${Form.field('Название *', Form.text('title', g?.title, 'Выручка Q4...', true))}
+      ${Form.field('Описание', Form.textarea('description', g?.description, 'Описание цели...'))}
+      ${Form.field('Категория', Form.select('category', catOpts, g?.category || 'revenue'))}
+      ${Form.field('Целевое значение *', Form.number('target', g?.target, '1000000'))}
+      ${Form.field('Текущее значение', Form.number('current', g?.current ?? 0, '0'))}
+      ${Form.field('Единица измерения', Form.text('unit', g?.unit, '₽ / % / ед.'))}
+      ${Form.field('Владелец', Form.text('owner', g?.owner, 'Иван Иванов'))}
+      ${Form.field('Дедлайн', Form.date('deadline', fmt.dateInput(g?.deadline)))}
+    </form>`,
+    footer: `
+      <button class="btn btn-secondary" onclick="Modal.close()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveGoal('${editId || ''}')">Сохранить</button>
+    `,
+  });
+}
+
+async function saveGoal(editId) {
+  const form = document.getElementById('goal-form');
+  const data = Form.collect(form);
+  const err = Form.validate(data, { title: { required: true, label: 'Название' }, target: { required: true, label: 'Цель' } });
+  if (err) { toast.error(err); return; }
+
+  data.status = data.current >= data.target ? 'done' : 'in_progress';
+  data.team = editId ? goals.find(x=>x.id===editId)?.team || [] : [];
+
+  if (editId) {
+    await api.update('goals', editId, data);
+    toast.success('Цель обновлена');
+  } else {
+    await api.add('goals', data);
+    toast.success('Цель создана');
+  }
+  goals = await api.get('goals');
+  Modal.close();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>

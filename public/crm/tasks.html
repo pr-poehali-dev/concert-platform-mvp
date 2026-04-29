@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>CRM — Задачи</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/crm/config.js"></script>
+  <script src="/crm/utils.js"></script>
+  <script src="/crm/components/modal.js"></script>
+  <script src="/crm/components/form.js"></script>
+  <script src="/crm/components/kanban.js"></script>
+</head>
+<body>
+<div id="crm-app" class="pb-nav"></div>
+
+<script>
+const app = document.getElementById('crm-app');
+let tasks = [], view = 'list', filterStatus = '', filterPriority = '', search = '';
+
+async function init() {
+  tasks = await api.get('tasks');
+  render();
+}
+
+function getFiltered() {
+  let res = [...tasks];
+  if (search) res = res.filter(t => t.title.toLowerCase().includes(search.toLowerCase()) || t.assignee?.toLowerCase().includes(search.toLowerCase()));
+  if (filterStatus) res = res.filter(t => t.status === filterStatus);
+  if (filterPriority) res = res.filter(t => t.priority === filterPriority);
+  return res.sort((a,b) => new Date(a.deadline) - new Date(b.deadline));
+}
+
+function render() {
+  const filtered = getFiltered();
+  const overdue = tasks.filter(t => t.status !== 'done' && new Date(t.deadline) < new Date()).length;
+  const today = tasks.filter(t => { const d = new Date(t.deadline); const n = new Date(); return d.toDateString() === n.toDateString() && t.status !== 'done'; }).length;
+  const done = tasks.filter(t => t.status === 'done').length;
+
+  app.innerHTML = `
+    <nav class="crm-nav">
+      <button class="crm-nav-back" onclick="location.href='/crm/index.html'">←</button>
+      <span class="crm-nav-title">Задачи</span>
+      <button class="btn btn-primary btn-sm" onclick="openForm()">+ Задача</button>
+    </nav>
+
+    <div class="crm-page">
+      <div class="grid-3" style="margin-bottom:16px;">
+        <div class="kpi-card red"><div class="kpi-label">Просрочено</div><div class="kpi-value">${overdue}</div></div>
+        <div class="kpi-card cyan"><div class="kpi-label">Сегодня</div><div class="kpi-value">${today}</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Выполнено</div><div class="kpi-value">${done}</div></div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;position:relative;">
+          <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted);">🔍</span>
+          <input class="input" placeholder="Поиск задач..." value="${search}" oninput="search=this.value;renderList()" style="padding-left:34px;">
+        </div>
+        <select class="input" style="width:auto;" onchange="filterStatus=this.value;renderList()">
+          <option value="">Все статусы</option>
+          ${CRM_CONFIG.taskStatuses.map(s => `<option value="${s.id}" ${filterStatus===s.id?'selected':''}>${s.label}</option>`).join('')}
+        </select>
+        <select class="input" style="width:auto;" onchange="filterPriority=this.value;renderList()">
+          <option value="">Все приоритеты</option>
+          ${CRM_CONFIG.priorities.map(p => `<option value="${p.id}" ${filterPriority===p.id?'selected':''}>${p.label}</option>`).join('')}
+        </select>
+      </div>
+
+      <div class="tab-bar" style="margin-bottom:16px;">
+        <button class="tab-btn ${view==='list'?'active':''}" onclick="view='list';renderList()">Список</button>
+        <button class="tab-btn ${view==='kanban'?'active':''}" onclick="view='kanban';renderList()">Канбан</button>
+      </div>
+
+      <div id="tasks-view"></div>
+    </div>
+
+    <nav class="crm-bottom-nav">
+      <a href="/crm/index.html"><span class="nav-icon">🏠</span>Главная</a>
+      <a href="/crm/deals.html"><span class="nav-icon">💼</span>Сделки</a>
+      <a href="/crm/companies.html"><span class="nav-icon">🏢</span>Компании</a>
+      <a href="/crm/tasks.html" class="active"><span class="nav-icon">✅</span>Задачи</a>
+      <a href="/crm/goals.html"><span class="nav-icon">🎯</span>Цели</a>
+    </nav>
+  `;
+  renderList();
+}
+
+function renderList() {
+  const container = document.getElementById('tasks-view');
+  if (!container) return;
+  const filtered = getFiltered();
+
+  if (view === 'kanban') {
+    Kanban.render(container, {
+      stages: CRM_CONFIG.taskStatuses,
+      items: filtered,
+      getStage: (t) => t.status,
+      onDrop: async (id, status) => {
+        await api.update('tasks', id, { status });
+        tasks = await api.get('tasks');
+        renderList();
+        toast.success('Статус обновлён');
+      },
+      renderCard: (t) => {
+        const prio = CRM_CONFIG.priorities.find(p => p.id === t.priority);
+        const isOverdue = t.status !== 'done' && new Date(t.deadline) < new Date();
+        return `
+          <div onclick="openDetail('${t.id}')">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;">
+              <span class="badge" style="background:${prio?.color}22;color:${prio?.color};">${prio?.label}</span>
+            </div>
+            <div style="font-size:13px;font-weight:500;margin-bottom:4px;">${t.title}</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${t.assignee || '—'}</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;color:${isOverdue?'var(--danger)':'var(--muted)'};">${isOverdue?'⚠ ':''} ${fmt.relDate(t.deadline)}</span>
+              ${t.subtasks?.length ? `<span style="font-size:11px;color:var(--muted);">${t.subtasks.filter(s=>s.done).length}/${t.subtasks.length}</span>` : ''}
+            </div>
+          </div>
+        `;
+      },
+    });
+    return;
+  }
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">✅</div><div>Задачи не найдены</div></div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(t => {
+    const status = CRM_CONFIG.taskStatuses.find(s => s.id === t.status);
+    const prio = CRM_CONFIG.priorities.find(p => p.id === t.priority);
+    const isOverdue = t.status !== 'done' && new Date(t.deadline) < new Date();
+    const subtasksDone = t.subtasks?.filter(s => s.done).length || 0;
+    const subtasksTotal = t.subtasks?.length || 0;
+
+    return `
+      <div class="card" style="margin-bottom:10px;cursor:pointer;${t.status==='done'?'opacity:0.6':''}" onclick="openDetail('${t.id}')"
+        onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          <div onclick="event.stopPropagation();toggleDone('${t.id}')" style="margin-top:2px;flex-shrink:0;width:20px;height:20px;border-radius:50%;border:2px solid ${status?.color};background:${t.status==='done'?status?.color:'transparent'};display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s;">
+            ${t.status==='done'?'<span style="font-size:11px;color:#fff;">✓</span>':''}
+          </div>
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:14px;font-weight:500;${t.status==='done'?'text-decoration:line-through;color:var(--muted)':''}">${t.title}</div>
+            <div style="display:flex;align-items:center;gap:8px;margin-top:4px;flex-wrap:wrap;">
+              <span class="badge" style="background:${prio?.color}22;color:${prio?.color};">${prio?.label}</span>
+              <span class="badge" style="background:${status?.color}22;color:${status?.color};">${status?.label}</span>
+              <span style="font-size:11px;color:${isOverdue?'var(--danger)':'var(--muted)'};">${isOverdue?'⚠ ':''} ${fmt.relDate(t.deadline)}</span>
+            </div>
+            ${subtasksTotal ? `
+              <div style="margin-top:6px;">
+                <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(subtasksDone/subtasksTotal*100)}%;background:var(--accent);"></div></div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px;">${subtasksDone}/${subtasksTotal} подзадач</div>
+              </div>
+            ` : ''}
+          </div>
+          <div class="avatar" style="background:var(--card2);font-size:11px;flex-shrink:0;">${fmt.initials(t.assignee)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function toggleDone(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  const newStatus = t.status === 'done' ? 'todo' : 'done';
+  await api.update('tasks', id, { status: newStatus });
+  tasks = await api.get('tasks');
+  renderList();
+  if (newStatus === 'done') { toast.success('Задача выполнена!'); tg.HapticFeedback?.notificationOccurred('success'); }
+}
+
+function openDetail(id) {
+  const t = tasks.find(x => x.id === id);
+  if (!t) return;
+  const status = CRM_CONFIG.taskStatuses.find(s => s.id === t.status);
+  const prio = CRM_CONFIG.priorities.find(p => p.id === t.priority);
+  tg.HapticFeedback?.impactOccurred('light');
+
+  const subtasksHtml = t.subtasks?.length ? `
+    <div class="divider"></div>
+    <div style="font-size:13px;font-weight:600;margin-bottom:8px;">Подзадачи</div>
+    ${t.subtasks.map((s, i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;" onclick="toggleSubtask('${t.id}',${i})">
+        <div style="width:18px;height:18px;border-radius:4px;border:2px solid ${s.done?'var(--success)':'var(--border)'};background:${s.done?'var(--success)':'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          ${s.done?'<span style="color:#fff;font-size:10px;">✓</span>':''}
+        </div>
+        <span style="font-size:13px;${s.done?'text-decoration:line-through;color:var(--muted)':''}">${s.title}</span>
+      </div>
+    `).join('')}
+  ` : '';
+
+  Modal.open({
+    title: t.title,
+    body: `
+      <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+        <span class="badge" style="background:${prio?.color}22;color:${prio?.color};">${prio?.label} приоритет</span>
+        <span class="badge" style="background:${status?.color}22;color:${status?.color};">${status?.label}</span>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px;">
+        <div><div class="text-muted text-sm">Исполнитель</div><div style="font-size:14px;margin-top:2px;">${t.assignee || '—'}</div></div>
+        <div><div class="text-muted text-sm">Дедлайн</div><div style="font-size:14px;margin-top:2px;color:${new Date(t.deadline)<new Date()&&t.status!=='done'?'var(--danger)':'inherit'};">${fmt.date(t.deadline)}</div></div>
+      </div>
+      ${t.description ? `<div style="font-size:13px;color:var(--muted);margin-bottom:16px;padding:10px;background:var(--card2);border-radius:var(--radius-sm);">${t.description}</div>` : ''}
+      ${subtasksHtml}
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Изменить статус:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${CRM_CONFIG.taskStatuses.map(s => `
+          <button class="btn btn-sm" style="background:${s.color}22;color:${s.color};" onclick="changeStatus('${t.id}','${s.id}')">${s.label}</button>
+        `).join('')}
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary btn-sm" onclick="openForm('${t.id}')">✏️ Редактировать</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteTask('${t.id}')">🗑 Удалить</button>
+    `,
+  });
+}
+
+async function toggleSubtask(taskId, idx) {
+  const t = tasks.find(x => x.id === taskId);
+  if (!t) return;
+  t.subtasks[idx].done = !t.subtasks[idx].done;
+  await api.update('tasks', taskId, { subtasks: t.subtasks });
+  tasks = await api.get('tasks');
+  renderList();
+  openDetail(taskId);
+}
+
+async function changeStatus(id, status) {
+  await api.update('tasks', id, { status });
+  tasks = await api.get('tasks');
+  Modal.close();
+  renderList();
+  toast.success('Статус изменён');
+}
+
+async function deleteTask(id) {
+  if (!confirm('Удалить задачу?')) return;
+  await api.remove('tasks', id);
+  tasks = await api.get('tasks');
+  Modal.close();
+  render();
+  toast.success('Задача удалена');
+}
+
+function openForm(editId = null) {
+  const t = editId ? tasks.find(x => x.id === editId) : null;
+  const statusOpts = CRM_CONFIG.taskStatuses.map(s => ({ value: s.id, label: s.label }));
+  const prioOpts = CRM_CONFIG.priorities.map(p => ({ value: p.id, label: p.label }));
+
+  Modal.open({
+    title: t ? 'Редактировать задачу' : 'Новая задача',
+    body: `<form id="task-form">
+      ${Form.field('Название *', Form.text('title', t?.title, 'Позвонить клиенту...', true))}
+      ${Form.field('Описание', Form.textarea('description', t?.description, 'Детали задачи...'))}
+      ${Form.field('Статус', Form.select('status', statusOpts, t?.status || 'todo'))}
+      ${Form.field('Приоритет', Form.select('priority', prioOpts, t?.priority || 'medium'))}
+      ${Form.field('Исполнитель', Form.text('assignee', t?.assignee, 'Иван Иванов'))}
+      ${Form.field('Дедлайн', Form.date('deadline', fmt.dateInput(t?.deadline)))}
+    </form>`,
+    footer: `
+      <button class="btn btn-secondary" onclick="Modal.close()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveTask('${editId || ''}')">Сохранить</button>
+    `,
+  });
+}
+
+async function saveTask(editId) {
+  const form = document.getElementById('task-form');
+  const data = Form.collect(form);
+  const err = Form.validate(data, { title: { required: true, label: 'Название' } });
+  if (err) { toast.error(err); return; }
+
+  if (editId) {
+    await api.update('tasks', editId, data);
+    toast.success('Задача обновлена');
+  } else {
+    await api.add('tasks', { ...data, subtasks: [] });
+    toast.success('Задача создана');
+  }
+  tasks = await api.get('tasks');
+  Modal.close();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>CRM — Воронка</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/crm/config.js"></script>
+  <script src="/crm/utils.js"></script>
+  <script src="/crm/components/modal.js"></script>
+  <script src="/crm/components/form.js"></script>
+  <script src="/crm/components/kanban.js"></script>
+  <script src="/crm/components/table.js"></script>
+</head>
+<body>
+<div id="crm-app" class="pb-nav"></div>
+
+<script>
+const app = document.getElementById('crm-app');
+let deals = [], companies = [], view = 'kanban';
+
+async function init() {
+  [deals, companies] = await Promise.all([api.get('deals'), api.get('companies')]);
+  const params = new URLSearchParams(location.search);
+  if (params.get('new')) setTimeout(openForm, 300);
+  render();
+}
+
+function render() {
+  const totalPipeline = deals.filter(d => !['won','lost'].includes(d.stage)).reduce((s,d) => s + d.amount * d.probability / 100, 0);
+  const wonRevenue = deals.filter(d => d.stage === 'won').reduce((s,d) => s + d.amount, 0);
+
+  app.innerHTML = `
+    <nav class="crm-nav">
+      <button class="crm-nav-back" onclick="location.href='/crm/index.html'">←</button>
+      <span class="crm-nav-title">Воронка продаж</span>
+      <button class="btn btn-primary btn-sm" onclick="openForm()">+ Сделка</button>
+    </nav>
+
+    <div class="crm-page">
+      <div class="grid-3" style="margin-bottom:16px;">
+        <div class="kpi-card purple"><div class="kpi-label">Pipeline</div><div class="kpi-value" style="font-size:18px;">${fmt.money(totalPipeline)}</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Выиграно</div><div class="kpi-value" style="font-size:18px;">${fmt.money(wonRevenue)}</div></div>
+        <div class="kpi-card cyan"><div class="kpi-label">Всего сделок</div><div class="kpi-value" style="font-size:18px;">${deals.length}</div></div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <div class="tab-bar" style="flex:1;">
+          <button class="tab-btn ${view==='kanban'?'active':''}" onclick="setView('kanban')">Канбан</button>
+          <button class="tab-btn ${view==='list'?'active':''}" onclick="setView('list')">Список</button>
+        </div>
+      </div>
+
+      <div id="deals-view"></div>
+    </div>
+
+    <nav class="crm-bottom-nav">
+      <a href="/crm/index.html"><span class="nav-icon">🏠</span>Главная</a>
+      <a href="/crm/deals.html" class="active"><span class="nav-icon">💼</span>Сделки</a>
+      <a href="/crm/companies.html"><span class="nav-icon">🏢</span>Компании</a>
+      <a href="/crm/tasks.html"><span class="nav-icon">✅</span>Задачи</a>
+      <a href="/crm/goals.html"><span class="nav-icon">🎯</span>Цели</a>
+    </nav>
+  `;
+  renderView();
+}
+
+function setView(v) { view = v; render(); }
+
+function renderView() {
+  const container = document.getElementById('deals-view');
+  if (view === 'kanban') {
+    Kanban.render(container, {
+      stages: CRM_CONFIG.stages,
+      items: deals,
+      getStage: (d) => d.stage,
+      onDrop: async (id, stage) => {
+        await api.update('deals', id, { stage });
+        deals = await api.get('deals');
+        render();
+        toast.success('Сделка перемещена');
+      },
+      renderCard: (d) => `
+        <div onclick="openDetail('${d.id}')" style="cursor:pointer;">
+          <div style="font-size:13px;font-weight:600;margin-bottom:4px;">${d.title}</div>
+          <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">${d.companyName}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:13px;font-weight:700;color:var(--primary);">${fmt.money(d.amount)}</span>
+            <span style="font-size:11px;color:var(--muted);">${d.probability}%</span>
+          </div>
+          <div style="margin-top:6px;">
+            <div class="progress-bar"><div class="progress-fill" style="width:${d.probability}%;background:var(--primary);"></div></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+            <div class="avatar" style="background:var(--card2);font-size:10px;width:24px;height:24px;">${fmt.initials(d.assignee)}</div>
+            <span style="font-size:11px;color:var(--muted);">${fmt.dateShort(d.deadline)}</span>
+          </div>
+        </div>
+      `,
+    });
+  } else {
+    Table.render(container, {
+      columns: [
+        { label: 'Сделка', render: d => `<div style="font-weight:500;">${d.title}</div><div style="font-size:11px;color:var(--muted);">${d.companyName}</div>` },
+        { label: 'Сумма', render: d => `<span style="color:var(--primary);font-weight:600;">${fmt.money(d.amount)}</span>` },
+        { label: 'Этап', render: d => { const s = CRM_CONFIG.stages.find(x=>x.id===d.stage); return `<span class="badge" style="background:${s?.color}22;color:${s?.color};">${s?.label}</span>`; } },
+        { label: 'Вер-ть', render: d => `${d.probability}%` },
+        { label: 'Дедлайн', render: d => `<span style="color:${new Date(d.deadline)<new Date()?'var(--danger)':'var(--muted)'};">${fmt.date(d.deadline)}</span>` },
+        { label: 'Менеджер', render: d => `<div style="display:flex;align-items:center;gap:6px;"><div class="avatar" style="background:var(--card2);font-size:10px;width:24px;height:24px;">${fmt.initials(d.assignee)}</div>${d.assignee}</div>` },
+        { label: '', render: d => `<button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();openDetail('${d.id}')">...</button>` },
+      ],
+      rows: deals,
+      onRow: (d) => openDetail(d.id),
+    });
+  }
+}
+
+function openDetail(id) {
+  const d = deals.find(x => x.id === id);
+  if (!d) return;
+  const stage = CRM_CONFIG.stages.find(s => s.id === d.stage);
+  tg.HapticFeedback?.impactOccurred('light');
+
+  Modal.open({
+    title: d.title,
+    body: `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;">
+        <span class="badge" style="background:${stage?.color}22;color:${stage?.color};">${stage?.label}</span>
+        <span style="font-size:14px;font-weight:700;color:var(--primary);">${fmt.money(d.amount)}</span>
+      </div>
+      <div class="grid-2" style="margin-bottom:12px;">
+        <div><div class="text-muted text-sm">Компания</div><div style="font-size:14px;margin-top:2px;">${d.companyName}</div></div>
+        <div><div class="text-muted text-sm">Менеджер</div><div style="font-size:14px;margin-top:2px;">${d.assignee}</div></div>
+        <div><div class="text-muted text-sm">Вероятность</div><div style="font-size:14px;margin-top:2px;">${d.probability}%</div></div>
+        <div><div class="text-muted text-sm">Дедлайн</div><div style="font-size:14px;margin-top:2px;">${fmt.date(d.deadline)}</div></div>
+      </div>
+      <div class="progress-bar" style="margin-bottom:16px;height:8px;"><div class="progress-fill" style="width:${d.probability}%;background:var(--primary);"></div></div>
+      ${d.description ? `<div style="font-size:13px;color:var(--muted);margin-bottom:16px;">${d.description}</div>` : ''}
+      ${d.tags?.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;">${d.tags.map(t => `<span class="tag" style="background:var(--card2);color:var(--muted);">${t}</span>`).join('')}</div>` : ''}
+      <div class="divider"></div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Переместить в этап:</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        ${CRM_CONFIG.stages.map(s => `
+          <button class="btn btn-sm" style="background:${s.color}22;color:${s.color};border:1px solid ${s.color}44;" 
+            onclick="moveStage('${d.id}','${s.id}')">${s.label}</button>
+        `).join('')}
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary btn-sm" onclick="openForm('${d.id}')">✏️ Редактировать</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteDeal('${d.id}')">🗑 Удалить</button>
+    `,
+  });
+}
+
+async function moveStage(id, stage) {
+  await api.update('deals', id, { stage });
+  deals = await api.get('deals');
+  Modal.close();
+  render();
+  toast.success('Этап изменён');
+}
+
+async function deleteDeal(id) {
+  if (!confirm('Удалить сделку?')) return;
+  await api.remove('deals', id);
+  deals = await api.get('deals');
+  Modal.close();
+  render();
+  toast.success('Сделка удалена');
+}
+
+function openForm(editId = null) {
+  const d = editId ? deals.find(x => x.id === editId) : null;
+  const coOpts = [{ value: '', label: '— Выберите компанию —' }, ...companies.map(c => ({ value: c.id, label: c.name }))];
+  const stageOpts = CRM_CONFIG.stages.map(s => ({ value: s.id, label: s.label }));
+
+  Modal.open({
+    title: d ? 'Редактировать сделку' : 'Новая сделка',
+    body: `<form id="deal-form">
+      ${Form.field('Название сделки *', Form.text('title', d?.title, 'Внедрение CRM...', true))}
+      ${Form.field('Компания', Form.select('companyId', coOpts, d?.companyId))}
+      ${Form.field('Сумма (₽)', Form.number('amount', d?.amount, '1000000'))}
+      ${Form.field('Этап', Form.select('stage', stageOpts, d?.stage || 'lead'))}
+      ${Form.field('Вероятность (%)', Form.number('probability', d?.probability ?? 50, '50'))}
+      ${Form.field('Менеджер', Form.text('assignee', d?.assignee, 'Иван Иванов'))}
+      ${Form.field('Дедлайн', Form.date('deadline', fmt.dateInput(d?.deadline)))}
+      ${Form.field('Описание', Form.textarea('description', d?.description, 'Детали сделки...'))}
+    </form>`,
+    footer: `
+      <button class="btn btn-secondary" onclick="Modal.close()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveDeal('${editId || ''}')">Сохранить</button>
+    `,
+  });
+  setTimeout(() => Modal.close._editId = editId, 0);
+}
+
+async function saveDeal(editId) {
+  const form = document.getElementById('deal-form');
+  const data = Form.collect(form);
+  const err = Form.validate(data, { title: { required: true, label: 'Название' } });
+  if (err) { toast.error(err); return; }
+
+  const companyObj = companies.find(c => c.id === data.companyId);
+  data.companyName = companyObj?.name || data.companyName || '';
+
+  if (editId) {
+    await api.update('deals', editId, data);
+    toast.success('Сделка обновлена');
+  } else {
+    await api.add('deals', data);
+    toast.success('Сделка создана');
+  }
+  deals = await api.get('deals');
+  Modal.close();
+  render();
+  tg.HapticFeedback?.notificationOccurred('success');
+}
+
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>CRM — Компании</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/crm/config.js"></script>
+  <script src="/crm/utils.js"></script>
+  <script src="/crm/components/modal.js"></script>
+  <script src="/crm/components/form.js"></script>
+  <script src="/crm/components/table.js"></script>
+</head>
+<body>
+<div id="crm-app" class="pb-nav"></div>
+
+<script>
+const app = document.getElementById('crm-app');
+let companies = [], search = '', filterStatus = '', sortKey = 'name', sortDir = 'asc';
+
+const statusColors = { active: 'var(--success)', inactive: 'var(--muted)', lead: 'var(--warning)' };
+const statusLabels = { active: 'Активный', inactive: 'Неактивный', lead: 'Лид' };
+const industries = ['IT','Строительство','Логистика','Финансы','Медицина','Ритейл','Консалтинг','Энергетика','Телекоммуникации','Медиа','Фармацевтика','Транспорт','Недвижимость','Автомобили','Сельское хозяйство'];
+
+async function init() {
+  companies = await api.get('companies');
+  render();
+}
+
+function getFiltered() {
+  let res = [...companies];
+  if (search) res = Table.filter(res, search, ['name','contact','city','industry']);
+  if (filterStatus) res = res.filter(c => c.status === filterStatus);
+  return Table.sort(res, sortKey, sortDir);
+}
+
+function render() {
+  const filtered = getFiltered();
+  const totalRevenue = companies.filter(c => c.status === 'active').reduce((s,c) => s + c.revenue, 0);
+
+  app.innerHTML = `
+    <nav class="crm-nav">
+      <button class="crm-nav-back" onclick="location.href='/crm/index.html'">←</button>
+      <span class="crm-nav-title">Компании</span>
+      <button class="btn btn-primary btn-sm" onclick="openForm()">+ Добавить</button>
+    </nav>
+
+    <div class="crm-page">
+      <div class="grid-3" style="margin-bottom:16px;">
+        <div class="kpi-card purple"><div class="kpi-label">Активных</div><div class="kpi-value">${companies.filter(c=>c.status==='active').length}</div></div>
+        <div class="kpi-card cyan"><div class="kpi-label">Лидов</div><div class="kpi-value">${companies.filter(c=>c.status==='lead').length}</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Выручка</div><div class="kpi-value" style="font-size:16px;">${fmt.money(totalRevenue)}</div></div>
+      </div>
+
+      <!-- Filters -->
+      <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+        <div class="search-wrap" style="flex:1;min-width:200px;">
+          <span class="search-icon">🔍</span>
+          <input class="input search-wrap" placeholder="Поиск компании..." value="${search}"
+            oninput="search=this.value;renderList()" style="padding-left:34px;">
+        </div>
+        <select class="input" style="width:auto;" onchange="filterStatus=this.value;renderList()">
+          <option value="">Все статусы</option>
+          <option value="active" ${filterStatus==='active'?'selected':''}>Активные</option>
+          <option value="lead" ${filterStatus==='lead'?'selected':''}>Лиды</option>
+          <option value="inactive" ${filterStatus==='inactive'?'selected':''}>Неактивные</option>
+        </select>
+      </div>
+
+      <div style="display:flex;gap:6px;margin-bottom:12px;overflow-x:auto;padding-bottom:4px;">
+        ${[['name','Название'],['revenue','Выручка'],['deals','Сделки']].map(([k,l]) => `
+          <button class="btn btn-sm ${sortKey===k?'btn-primary':'btn-secondary'}" onclick="sortBy('${k}')">
+            ${l} ${sortKey===k?(sortDir==='asc'?'↑':'↓'):''}
+          </button>
+        `).join('')}
+      </div>
+
+      <div id="companies-list"></div>
+    </div>
+
+    <nav class="crm-bottom-nav">
+      <a href="/crm/index.html"><span class="nav-icon">🏠</span>Главная</a>
+      <a href="/crm/deals.html"><span class="nav-icon">💼</span>Сделки</a>
+      <a href="/crm/companies.html" class="active"><span class="nav-icon">🏢</span>Компании</a>
+      <a href="/crm/tasks.html"><span class="nav-icon">✅</span>Задачи</a>
+      <a href="/crm/goals.html"><span class="nav-icon">🎯</span>Цели</a>
+    </nav>
+  `;
+  renderList();
+}
+
+function renderList() {
+  const container = document.getElementById('companies-list');
+  const filtered = getFiltered();
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-state"><div class="icon">🏢</div><div>Компании не найдены</div></div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(c => `
+    <div class="card" style="margin-bottom:10px;cursor:pointer;" onclick="openDetail('${c.id}')"
+      onmouseenter="this.style.borderColor='var(--primary)'" onmouseleave="this.style.borderColor='var(--border)'">
+      <div style="display:flex;align-items:flex-start;gap:12px;">
+        <div class="avatar" style="background:var(--primary)22;color:var(--primary);width:42px;height:42px;font-size:15px;font-weight:700;">
+          ${fmt.initials(c.name)}
+        </div>
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:2px;">
+            <span style="font-size:15px;font-weight:600;">${c.name}</span>
+            <span class="badge" style="background:${statusColors[c.status]}22;color:${statusColors[c.status]};">${statusLabels[c.status]}</span>
+          </div>
+          <div style="font-size:12px;color:var(--muted);">${c.industry} · ${c.city}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:2px;">📞 ${c.contact}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-size:14px;font-weight:700;color:var(--primary);">${fmt.money(c.revenue)}</div>
+          <div style="font-size:11px;color:var(--muted);">${c.deals} сделок</div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function sortBy(key) {
+  if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  else { sortKey = key; sortDir = 'asc'; }
+  render();
+}
+
+function openDetail(id) {
+  const c = companies.find(x => x.id === id);
+  if (!c) return;
+  tg.HapticFeedback?.impactOccurred('light');
+
+  Modal.open({
+    title: c.name,
+    body: `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+        <div class="avatar" style="background:var(--primary)22;color:var(--primary);width:52px;height:52px;font-size:18px;font-weight:700;">${fmt.initials(c.name)}</div>
+        <div>
+          <span class="badge" style="background:${statusColors[c.status]}22;color:${statusColors[c.status]};">${statusLabels[c.status]}</span>
+          <div style="font-size:12px;color:var(--muted);margin-top:4px;">${c.industry}</div>
+        </div>
+      </div>
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="card" style="padding:12px;">
+          <div class="text-muted text-sm">Выручка</div>
+          <div style="font-size:18px;font-weight:700;color:var(--primary);">${fmt.money(c.revenue)}</div>
+        </div>
+        <div class="card" style="padding:12px;">
+          <div class="text-muted text-sm">Сделки / Задачи</div>
+          <div style="font-size:18px;font-weight:700;">${c.deals} / ${c.tasks}</div>
+        </div>
+      </div>
+      <div class="card" style="padding:12px;margin-bottom:12px;">
+        <div style="margin-bottom:8px;"><span class="text-muted text-sm">Контакт:</span> <strong>${c.contact}</strong></div>
+        <div style="margin-bottom:4px;"><span class="text-muted text-sm">Телефон:</span> <a href="tel:${c.phone}" style="color:var(--accent);">${c.phone}</a></div>
+        <div><span class="text-muted text-sm">Email:</span> <a href="mailto:${c.email}" style="color:var(--accent);">${c.email}</a></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:4px;">
+        <div style="flex:1;" class="card" style="padding:10px;text-align:center;">
+          <div class="text-muted text-sm">Город</div>
+          <div style="font-weight:600;">${c.city}</div>
+        </div>
+        <div style="flex:1;" class="card" style="padding:10px;text-align:center;">
+          <div class="text-muted text-sm">Добавлен</div>
+          <div style="font-weight:600;">${fmt.date(c.createdAt)}</div>
+        </div>
+      </div>
+    `,
+    footer: `
+      <button class="btn btn-secondary btn-sm" onclick="openForm('${c.id}')">✏️ Редактировать</button>
+      <button class="btn btn-secondary btn-sm" onclick="Modal.close();location.href='/crm/deals.html'">💼 Сделки</button>
+      <button class="btn btn-danger btn-sm" onclick="deleteCompany('${c.id}')">🗑</button>
+    `,
+  });
+}
+
+async function deleteCompany(id) {
+  if (!confirm('Удалить компанию?')) return;
+  await api.remove('companies', id);
+  companies = await api.get('companies');
+  Modal.close();
+  render();
+  toast.success('Компания удалена');
+}
+
+function openForm(editId = null) {
+  const c = editId ? companies.find(x => x.id === editId) : null;
+  const industryOpts = industries.map(i => ({ value: i, label: i }));
+  const statusOpts = [{ value: 'lead', label: 'Лид' }, { value: 'active', label: 'Активный' }, { value: 'inactive', label: 'Неактивный' }];
+
+  Modal.open({
+    title: c ? 'Редактировать компанию' : 'Новая компания',
+    body: `<form id="company-form">
+      ${Form.field('Название *', Form.text('name', c?.name, 'ООО Пример', true))}
+      ${Form.field('Отрасль', Form.select('industry', industryOpts, c?.industry || 'IT'))}
+      ${Form.field('Статус', Form.select('status', statusOpts, c?.status || 'lead'))}
+      ${Form.field('Выручка (₽)', Form.number('revenue', c?.revenue, '0'))}
+      ${Form.field('Контактное лицо', Form.text('contact', c?.contact, 'Иван Иванов'))}
+      ${Form.field('Телефон', Form.text('phone', c?.phone, '+7 495 000-00-00'))}
+      ${Form.field('Email', Form.text('email', c?.email, 'info@company.ru'))}
+      ${Form.field('Город', Form.text('city', c?.city, 'Москва'))}
+    </form>`,
+    footer: `
+      <button class="btn btn-secondary" onclick="Modal.close()">Отмена</button>
+      <button class="btn btn-primary" onclick="saveCompany('${editId || ''}')">Сохранить</button>
+    `,
+  });
+}
+
+async function saveCompany(editId) {
+  const form = document.getElementById('company-form');
+  const data = Form.collect(form);
+  const err = Form.validate(data, { name: { required: true, label: 'Название' } });
+  if (err) { toast.error(err); return; }
+
+  if (editId) {
+    await api.update('companies', editId, data);
+    toast.success('Компания обновлена');
+  } else {
+    await api.add('companies', { ...data, deals: 0, tasks: 0 });
+    toast.success('Компания добавлена');
+  }
+  companies = await api.get('companies');
+  Modal.close();
+  render();
+}
+
+init();
+</script>
+</body>
+</html>
