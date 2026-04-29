@@ -52,15 +52,15 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // DEV_MODE: поллинг отключён — обновление только при загрузке страницы
-  const DEV_POLLING = false;
-
   useEffect(() => {
     if (!user) return;
     refresh();
-    if (!DEV_POLLING) return;
-    const interval = setInterval(() => refresh(true), 10000);
-    return () => clearInterval(interval);
+    // Поллинг управляется через Админ → Настройки
+    const gl = window as never as Record<string, unknown>;
+    if (!gl.__GL_POLLING_ENABLED__) return;
+    const interval = gl.__GL_POLLING_INTERVAL__ as number || 10000;
+    const id = setInterval(() => refresh(true), interval);
+    return () => clearInterval(id);
   }, [user, refresh]);
 
   const markRead = async (id: string) => {

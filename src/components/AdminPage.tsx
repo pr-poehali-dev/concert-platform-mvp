@@ -8,6 +8,7 @@ import AdminVenuesTab from "./admin/AdminVenuesTab";
 import AdminSupportTab from "./admin/AdminSupportTab";
 import AdminImportTab from "./admin/AdminImportTab";
 import AdminAITab from "./admin/AdminAITab";
+import AdminSettingsTab, { loadSettings } from "./admin/AdminSettingsTab";
 
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
@@ -88,7 +89,15 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
   const PRESENTATION_URL = "https://functions.poehali.dev/3a1c12fb-cacd-4731-961b-2f37badc2c08";
 
   const [token, setToken] = useState(() => externalToken || localStorage.getItem("gl_admin_token") || "");
-  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import" | "ai">("overview");
+  const [tab, setTab] = useState<"overview" | "pending" | "users" | "venues" | "support" | "import" | "ai" | "settings">("overview");
+
+  // Инициализируем глобальные флаги из настроек при старте
+  useEffect(() => {
+    const s = loadSettings();
+    (window as never as Record<string, unknown>).__GL_POLLING_ENABLED__ = s.pollingEnabled;
+    (window as never as Record<string, unknown>).__GL_POLLING_INTERVAL__ = s.pollingInterval * 1000;
+    (window as never as Record<string, unknown>).__GL_DEV_MODE__ = s.devMode;
+  }, []);
   const [presMenuOpen, setPresMenuOpen] = useState(false);
   const [presLoading, setPresLoading]   = useState<string | null>(null);
   const presRef = useRef<HTMLDivElement>(null);
@@ -243,7 +252,8 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
     { id: "venues", label: "Площадки", icon: "Building2", badge: 0 },
     { id: "support", label: "Поддержка", icon: "Headphones", badge: supportUnread },
     { id: "import", label: "Импорт", icon: "Download", badge: 0 },
-    { id: "ai",     label: "ИИ-запросы", icon: "Sparkles", badge: 0 },
+    { id: "ai",       label: "ИИ-запросы", icon: "Sparkles", badge: 0 },
+    { id: "settings", label: "Настройки",  icon: "Settings2", badge: 0 },
   ] as const;
 
   return (
@@ -400,6 +410,10 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
 
         {tab === "ai" && (
           <AdminAITab token={token} />
+        )}
+
+        {tab === "settings" && (
+          <AdminSettingsTab />
         )}
       </div>
     </div>

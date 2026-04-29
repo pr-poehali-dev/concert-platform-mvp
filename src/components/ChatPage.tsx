@@ -79,15 +79,16 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     });
     setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unread: 0 } : c));
     const convId = activeConvId;
-    // DEV_MODE: поллинг отключён — только при загрузке страницы
-    const DEV_POLLING = false;
-    if (!DEV_POLLING) return;
+    // Поллинг управляется через Админ → Настройки
+    const gl = window as never as Record<string, unknown>;
+    if (!gl.__GL_POLLING_ENABLED__) return;
+    const interval = gl.__GL_POLLING_INTERVAL__ as number || 5000;
     let tick = 0;
     pollingRef.current = setInterval(() => {
       loadMessages(convId, true);
       tick++;
       if (tick % 3 === 0) loadConversations(true);
-    }, 5000);
+    }, interval);
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
