@@ -48,6 +48,7 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
     { id: "search", label: "Площадки", icon: "Search" },
     ...(user?.role !== "venue" ? [{ id: "tours", label: "Туры", icon: "Route" }] : []),
     ...(user?.role === "organizer" ? [{ id: "projects", label: "Проекты", icon: "FolderOpen" }] : []),
+    ...(user?.role === "organizer" ? [{ id: "crm", label: "CRM", icon: "BarChart2" }] : []),
     ...(user ? [{ id: "chat", label: "Сообщения", icon: "MessageCircle" }] : []),
   ];
 
