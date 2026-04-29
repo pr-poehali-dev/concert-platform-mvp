@@ -13,7 +13,7 @@ import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab";
 import DashboardSigningTab from "@/components/dashboard/DashboardSigningTab";
 import DashboardAITab from "@/components/dashboard/DashboardAITab";
-import CrmPage from "@/components/crm/CrmPage";
+import CrmPage from "@/pages/CrmPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";

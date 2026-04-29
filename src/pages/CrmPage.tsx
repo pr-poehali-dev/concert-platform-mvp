@@ -37,39 +37,11 @@ const fmt = {
   num: (n: number) => new Intl.NumberFormat("ru-RU").format(n),
 };
 
-// ─── Storage + mock data ──────────────────────────────────────────────────────
-const MOCK_COMPANIES: Company[] = [
-  { id: "c001", name: "ООО Альфа Технологии", industry: "IT", status: "active", revenue: 12500000, contact: "Иван Петров", phone: "+7 495 123-45-67", email: "info@alpha.ru", city: "Москва", deals: 3, tasks: 5, createdAt: "2024-01-15T10:00:00Z" },
-  { id: "c002", name: "ЗАО БетаСтрой", industry: "Строительство", status: "active", revenue: 34000000, contact: "Мария Сидорова", phone: "+7 812 234-56-78", email: "m@betastroy.ru", city: "СПб", deals: 7, tasks: 12, createdAt: "2024-01-20T11:00:00Z" },
-  { id: "c003", name: "АО ДельтаФинанс", industry: "Финансы", status: "active", revenue: 89000000, contact: "Светлана Новикова", phone: "+7 495 456-78-90", email: "s@deltafinance.ru", city: "Москва", deals: 11, tasks: 8, createdAt: "2024-02-10T14:00:00Z" },
-  { id: "c004", name: "ООО ЭпсилонМед", industry: "Медицина", status: "lead", revenue: 3200000, contact: "Дмитрий Волков", phone: "+7 383 567-89-01", email: "volkov@epsilon.ru", city: "Новосибирск", deals: 1, tasks: 2, createdAt: "2024-02-15T10:00:00Z" },
-  { id: "c005", name: "ЗАО ЗетаРетейл", industry: "Ритейл", status: "active", revenue: 56000000, contact: "Анна Морозова", phone: "+7 863 678-90-12", email: "morozova@zeta.ru", city: "Ростов", deals: 9, tasks: 15, createdAt: "2024-03-01T08:00:00Z" },
-  { id: "c006", name: "АО Иота Энерго", industry: "Энергетика", status: "active", revenue: 145000000, contact: "Николай Попов", phone: "+7 495 901-23-45", email: "popov@iota.ru", city: "Москва", deals: 14, tasks: 20, createdAt: "2024-03-20T11:00:00Z" },
-];
-const MOCK_DEALS: Deal[] = [
-  { id: "d001", title: "Внедрение ERP системы", companyId: "c001", companyName: "ООО Альфа Технологии", stage: "won", amount: 4500000, probability: 100, assignee: "Иван Смирнов", deadline: "2024-06-30T00:00:00Z", description: "", tags: ["ERP"], createdAt: "2024-01-20T10:00:00Z" },
-  { id: "d002", title: "Поставка материалов", companyId: "c002", companyName: "ЗАО БетаСтрой", stage: "negotiation", amount: 12000000, probability: 65, assignee: "Мария Волкова", deadline: "2024-07-15T00:00:00Z", description: "", tags: [], createdAt: "2024-02-01T09:00:00Z" },
-  { id: "d003", title: "Аудит отчётности", companyId: "c003", companyName: "АО ДельтаФинанс", stage: "proposal", amount: 800000, probability: 75, assignee: "Алексей Петров", deadline: "2024-07-01T00:00:00Z", description: "", tags: [], createdAt: "2024-02-15T10:00:00Z" },
-  { id: "d004", title: "Мобильное приложение", companyId: "c005", companyName: "ЗАО ЗетаРетейл", stage: "in_progress", amount: 3500000, probability: 80, assignee: "Дмитрий Новиков", deadline: "2024-08-01T00:00:00Z", description: "", tags: [], createdAt: "2024-03-01T10:00:00Z" },
-  { id: "d005", title: "Поставка медоборудования", companyId: "c004", companyName: "ООО ЭпсилонМед", stage: "lead", amount: 6700000, probability: 30, assignee: "Мария Волкова", deadline: "2024-09-01T00:00:00Z", description: "", tags: [], createdAt: "2024-03-15T11:00:00Z" },
-  { id: "d006", title: "Энергоаудит предприятий", companyId: "c006", companyName: "АО Иота Энерго", stage: "proposal", amount: 2300000, probability: 70, assignee: "Алексей Петров", deadline: "2024-07-20T00:00:00Z", description: "", tags: [], createdAt: "2024-03-20T10:00:00Z" },
-  { id: "d007", title: "Жилой комплекс Северный", companyId: "c002", companyName: "ЗАО БетаСтрой", stage: "negotiation", amount: 87000000, probability: 60, assignee: "Иван Смирнов", deadline: "2024-10-01T00:00:00Z", description: "", tags: [], createdAt: "2024-04-15T11:00:00Z" },
-  { id: "d008", title: "CRM внедрение", companyId: "c001", companyName: "ООО Альфа Технологии", stage: "lost", amount: 1800000, probability: 0, assignee: "Алексей Петров", deadline: "2024-05-30T00:00:00Z", description: "", tags: [], createdAt: "2024-05-10T09:00:00Z" },
-];
-const MOCK_TASKS: Task[] = [
-  { id: "t001", title: "Подготовить КП для Альфа", description: "", status: "done", priority: "high", assignee: "Иван Смирнов", deadline: "2024-06-10T00:00:00Z", subtasks: [{ id: "s1", title: "Собрать требования", done: true }], createdAt: "2024-06-01T10:00:00Z" },
-  { id: "t002", title: "Провести презентацию для БетаСтрой", description: "", status: "in_progress", priority: "high", assignee: "Мария Волкова", deadline: "2024-07-05T00:00:00Z", subtasks: [{ id: "s3", title: "Подготовить слайды", done: true }, { id: "s4", title: "Согласовать время", done: false }], createdAt: "2024-06-05T09:00:00Z" },
-  { id: "t003", title: "Запросить документы у ДельтаФинанс", description: "", status: "todo", priority: "medium", assignee: "Алексей Петров", deadline: "2024-06-25T00:00:00Z", subtasks: [], createdAt: "2024-06-08T11:00:00Z" },
-  { id: "t004", title: "Звонок с клиентом ЗетаРетейл", description: "", status: "in_progress", priority: "high", assignee: "Дмитрий Новиков", deadline: "2024-06-30T00:00:00Z", subtasks: [{ id: "s5", title: "Подготовить вопросы", done: true }, { id: "s6", title: "Провести звонок", done: false }], createdAt: "2024-06-10T10:00:00Z" },
-  { id: "t005", title: "Согласовать договор Иота Энерго", description: "", status: "todo", priority: "medium", assignee: "Алексей Петров", deadline: "2024-07-15T00:00:00Z", subtasks: [], createdAt: "2024-06-14T11:00:00Z" },
-  { id: "t006", title: "Подготовить отчёт Q2", description: "", status: "in_progress", priority: "high", assignee: "Иван Смирнов", deadline: "2024-07-01T00:00:00Z", subtasks: [{ id: "s7", title: "Собрать данные", done: true }, { id: "s8", title: "Написать резюме", done: false }], createdAt: "2024-06-18T09:00:00Z" },
-];
-const MOCK_GOALS: Goal[] = [
-  { id: "g001", title: "Выручка Q3 2024", description: "Достичь 50 млн", category: "revenue", target: 50000000, current: 34500000, unit: "₽", deadline: "2024-09-30T00:00:00Z", owner: "Иван Смирнов", team: ["Иван Смирнов", "Мария Волкова"], status: "in_progress", createdAt: "2024-07-01T10:00:00Z" },
-  { id: "g002", title: "Новые клиенты Q3", description: "15 новых клиентов", category: "clients", target: 15, current: 9, unit: "компаний", deadline: "2024-09-30T00:00:00Z", owner: "Мария Волкова", team: ["Мария Волкова"], status: "in_progress", createdAt: "2024-07-01T09:00:00Z" },
-  { id: "g003", title: "Конверсия лидов 40%", description: "", category: "conversion", target: 40, current: 31, unit: "%", deadline: "2024-09-30T00:00:00Z", owner: "Иван Смирнов", team: [], status: "in_progress", createdAt: "2024-07-01T10:00:00Z" },
-  { id: "g004", title: "Выручка 2024 год", description: "200 млн рублей", category: "revenue", target: 200000000, current: 142000000, unit: "₽", deadline: "2024-12-31T00:00:00Z", owner: "Иван Смирнов", team: ["Иван Смирнов", "Мария Волкова", "Алексей Петров"], status: "in_progress", createdAt: "2024-01-01T10:00:00Z" },
-];
+// ─── Storage (no mock data — starts empty for each company) ──────────────────
+const MOCK_COMPANIES: Company[] = [];
+const MOCK_DEALS: Deal[] = [];
+const MOCK_TASKS: Task[] = [];
+const MOCK_GOALS: Goal[] = [];
 
 const store = {
   get: <T,>(key: string, def: T): T => { try { return JSON.parse(localStorage.getItem("crm_" + key) || "null") ?? def; } catch { return def; } },
