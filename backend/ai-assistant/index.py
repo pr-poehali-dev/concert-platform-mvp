@@ -158,12 +158,26 @@ def call_aitunnel(api_key: str, model: str, system: str, question: str) -> str |
         return None
 
 
-def ask_ai(question: str, user_role: str) -> str:
-    """Отправляет вопрос в AiTunnel, перебирает модели при ошибке."""
-    api_key = os.environ.get("AITUNNEL_API_KEY", "")
-    if not api_key:
-        return "ИИ-ассистент временно недоступен — не задан API-ключ. Обратитесь к администратору."
+def call_gemini(api_key: str, model: str, prompt: str) -> str | None:
+    """Фолбэк: вызывает Gemini если AiTunnel недоступен."""
+    payload = json.dumps({
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 1000}
+    }).encode("utf-8")
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+    req = urllib.request.Request(url, data=payload,
+                                 headers={"Content-Type": "application/json"}, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=25) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+    except Exception as ex:
+        print(f"[ai] Gemini {model} exception: {ex}")
+        return None
 
+
+def ask_ai(question: str, user_role: str) -> str:
+    """Отправляет вопрос в AiTunnel, при неудаче — фолбэк на Gemini."""
     role_hint = ""
     if user_role == "organizer":
         role_hint = "\n\nПользователь является ОРГАНИЗАТОРОМ концертов."
@@ -172,16 +186,28 @@ def ask_ai(question: str, user_role: str) -> str:
 
     system = SYSTEM_PROMPT + role_hint
 
-    models = [
-        "gpt-4o-mini",
-        "gpt-4o",
-        "gpt-3.5-turbo",
-    ]
-    for model in models:
-        result = call_aitunnel(api_key, model, system, question)
-        if result:
-            print(f"[ai] answered via AiTunnel/{model}")
-            return result
+    # Пробуем AiTunnel
+    aitunnel_key = os.environ.get("AITUNNEL_API_KEY", "")
+    if aitunnel_key:
+        models = ["gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
+        for model in models:
+            result = call_aitunnel(aitunnel_key, model, system, question)
+            if result:
+                print(f"[ai] answered via AiTunnel/{model}")
+                return result
+        print("[ai] AiTunnel: all models failed, trying Gemini fallback")
+    else:
+        print("[ai] AITUNNEL_API_KEY not set, trying Gemini fallback")
+
+    # Фолбэк на Gemini
+    gemini_key = os.environ.get("GEMINI_API_KEY", "")
+    if gemini_key:
+        full_prompt = system + "\n\nВопрос пользователя: " + question
+        for model in ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-8b"]:
+            result = call_gemini(gemini_key, model, full_prompt)
+            if result:
+                print(f"[ai] answered via Gemini/{model}")
+                return result
 
     return "Не удалось получить ответ от ИИ. Попробуйте позже или напишите в поддержку."
 
@@ -234,8 +260,8 @@ def handler(event: dict, context) -> dict:
         if len(question) > 2000:
             return err("Вопрос слишком длинный (максимум 2000 символов)")
 
-        api_key_present = bool(os.environ.get("GEMINI_API_KEY", ""))
-        print(f"[ai] ask: question_len={len(question)} gemini_key_present={api_key_present}")
+        aitunnel_key_present = bool(os.environ.get("AITUNNEL_API_KEY", ""))
+        print(f"[ai] ask: question_len={len(question)} aitunnel_key_present={aitunnel_key_present}")
         answer = ask_ai(question, user.get("role", ""))
         print(f"[ai] ask: answer_len={len(answer)}")
 
