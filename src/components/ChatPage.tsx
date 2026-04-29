@@ -79,7 +79,9 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     });
     setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unread: 0 } : c));
     const convId = activeConvId;
-    // Сообщения каждые 5 сек + разговоры каждые 15 сек (через раз)
+    // DEV_MODE: поллинг отключён — только при загрузке страницы
+    const DEV_POLLING = false;
+    if (!DEV_POLLING) return;
     let tick = 0;
     pollingRef.current = setInterval(() => {
       loadMessages(convId, true);

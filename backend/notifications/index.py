@@ -20,6 +20,31 @@ import urllib.request
 import psycopg2
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
+CACHE_TTL = 30  # секунд
+
+# In-memory кэш (живёт пока жив контейнер функции)
+_cache: dict = {}  # key -> (timestamp, data)
+
+
+def cache_get(key: str):
+    entry = _cache.get(key)
+    if not entry:
+        return None
+    ts, data = entry
+    if time.time() - ts > CACHE_TTL:
+        del _cache[key]
+        return None
+    return data
+
+
+def cache_set(key: str, data):
+    _cache[key] = (time.time(), data)
+
+
+def cache_invalidate(user_id: str):
+    key = f"notif:{user_id}"
+    _cache.pop(key, None)
+
 
 ICONS = {
     "message": "💬",
@@ -225,6 +250,10 @@ def handler(event: dict, context) -> dict:
         user_id = params.get("user_id", "")
         if not user_id: return err("user_id required")
         limit = min(int(params.get("limit", 30)), 100)
+        cache_key = f"notif:{user_id}"
+        cached = cache_get(cache_key)
+        if cached:
+            return ok(cached)
         conn = get_conn()
         try:
             cur = conn.cursor()
@@ -243,7 +272,9 @@ def handler(event: dict, context) -> dict:
         else:
             notifs = []
             unread_count = 0
-        return ok({"notifications": notifs, "unreadCount": unread_count})
+        result = {"notifications": notifs, "unreadCount": unread_count}
+        cache_set(cache_key, result)
+        return ok(result)
 
     # GET unread_count (оставляем для совместимости)
     if method == "GET" and action == "unread_count":
@@ -268,10 +299,15 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         try:
             cur = conn.cursor()
-            cur.execute(f"UPDATE {SCHEMA}.notifications SET is_read=TRUE WHERE id=%s", (notif_id,))
+            cur.execute(
+                f"UPDATE {SCHEMA}.notifications SET is_read=TRUE WHERE id=%s RETURNING user_id",
+                (notif_id,))
+            row = cur.fetchone()
             conn.commit()
         finally:
             conn.close()
+        if row:
+            cache_invalidate(str(row[0]))
         return ok({"success": True})
 
     # POST read_all
@@ -288,6 +324,7 @@ def handler(event: dict, context) -> dict:
             conn.commit()
         finally:
             conn.close()
+        cache_invalidate(user_id)
         return ok({"success": True})
 
     # POST create — создать уведомление + отправить push
@@ -313,6 +350,8 @@ def handler(event: dict, context) -> dict:
             conn.commit()
         finally:
             conn.close()
+
+        cache_invalidate(user_id)
 
         # Отправляем Web Push асинхронно (не блокируем ответ)
         if send_push:

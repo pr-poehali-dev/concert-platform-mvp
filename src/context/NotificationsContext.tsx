@@ -52,10 +52,13 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Polling каждые 10 секунд — уведомления не real-time критичны
+  // DEV_MODE: поллинг отключён — обновление только при загрузке страницы
+  const DEV_POLLING = false;
+
   useEffect(() => {
     if (!user) return;
     refresh();
+    if (!DEV_POLLING) return;
     const interval = setInterval(() => refresh(true), 10000);
     return () => clearInterval(interval);
   }, [user, refresh]);
