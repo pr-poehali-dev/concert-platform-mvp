@@ -23,7 +23,16 @@ const SUGGESTIONS = [
 ];
 
 function isAiEnabled(): boolean {
-  return true;
+  const gl = window as never as Record<string, unknown>;
+  if (typeof gl.__GL_AI_ENABLED__ === "boolean") return gl.__GL_AI_ENABLED__ as boolean;
+  try {
+    const raw = localStorage.getItem("gl_admin_settings");
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.aiEnabled === "boolean") return parsed.aiEnabled;
+    }
+  } catch { /* ignore */ }
+  return true; // по умолчанию включён
 }
 
 export default function DashboardAITab() {
@@ -128,11 +137,13 @@ export default function DashboardAITab() {
   return (
     <div className="flex flex-col h-full min-h-0" style={{ height: "calc(100vh - 80px)" }}>
       {!aiEnabled && (
-        <div className="mx-4 mt-4 flex items-start gap-3 bg-neon-purple/10 border border-neon-purple/30 rounded-2xl px-4 py-3">
-          <Icon name="Clock" size={18} className="text-neon-purple shrink-0 mt-0.5" />
+        <div className="flex-1 flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <Icon name="Sparkles" size={28} className="text-white/20" />
+          </div>
           <div>
-            <p className="text-white text-sm font-semibold">ИИ-ассистент скоро заработает</p>
-            <p className="text-white/50 text-xs mt-0.5">Мы подключаем интеллектуального помощника, который знает всю платформу. Он уже готов — осталось дождаться сброса лимитов. Попробуйте завтра.</p>
+            <p className="text-white/60 text-base font-semibold mb-1">ИИ-ассистент отключён</p>
+            <p className="text-white/30 text-sm">Администратор платформы временно отключил ИИ-ассистента. Обратитесь в поддержку напрямую.</p>
           </div>
         </div>
       )}
