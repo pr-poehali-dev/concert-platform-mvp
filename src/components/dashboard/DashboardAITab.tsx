@@ -23,14 +23,7 @@ const SUGGESTIONS = [
 ];
 
 function isAiEnabled(): boolean {
-  // Приоритет: window-флаг (выставляется AdminPage при загрузке) → localStorage → false
-  const gl = window as never as Record<string, unknown>;
-  if (typeof gl.__GL_AI_ENABLED__ === "boolean") return gl.__GL_AI_ENABLED__ as boolean;
-  try {
-    const raw = localStorage.getItem("gl_admin_settings");
-    if (raw) return JSON.parse(raw)?.aiEnabled === true;
-  } catch { /* ignore */ }
-  return false;
+  return true;
 }
 
 export default function DashboardAITab() {

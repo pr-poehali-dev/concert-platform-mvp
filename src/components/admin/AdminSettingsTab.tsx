@@ -14,7 +14,7 @@ const DEFAULTS: Settings = {
   pollingEnabled: false,
   pollingInterval: 10,
   devMode: true,
-  aiEnabled: false,
+  aiEnabled: true,
 };
 
 export function loadSettings(): Settings {
