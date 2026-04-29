@@ -39,6 +39,55 @@ function downloadText(text: string, filename: string) {
   URL.revokeObjectURL(url);
 }
 
+async function downloadPdf(text: string, title: string) {
+  const { jsPDF } = await import("jspdf");
+  const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const margin = 20;
+  const maxLineW = pageW - margin * 2;
+  const lineH = 6;
+  let y = margin;
+
+  // Заголовок
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(14);
+  pdf.text(title, margin, y);
+  y += 10;
+
+  // Горизонтальная линия
+  pdf.setDrawColor(200, 200, 200);
+  pdf.line(margin, y, pageW - margin, y);
+  y += 8;
+
+  // Текст договора
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+
+  const lines = pdf.splitTextToSize(text, maxLineW) as string[];
+  for (const line of lines) {
+    if (y + lineH > pageH - margin) {
+      pdf.addPage();
+      y = margin;
+    }
+    pdf.text(line, margin, y);
+    y += lineH;
+  }
+
+  // Нижний колонтитул
+  const totalPages = (pdf as unknown as { internal: { getNumberOfPages: () => number } }).internal.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    pdf.setPage(i);
+    pdf.setFontSize(8);
+    pdf.setTextColor(150);
+    pdf.text(`Страница ${i} из ${totalPages} · Сгенерировано ИИ-юристом GLOBAL LINK`, margin, pageH - 10);
+    pdf.setTextColor(0);
+  }
+
+  pdf.save(`${title}.pdf`);
+}
+
 export default function DashboardAILawyerTab() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([
@@ -55,6 +104,7 @@ export default function DashboardAILawyerTab() {
   const [templateDetails, setTemplateDetails] = useState("");
   const [uploadedDoc, setUploadedDoc] = useState<{ name: string; text: string } | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -295,15 +345,33 @@ export default function DashboardAILawyerTab() {
                 )}
               </div>
 
-              {/* Кнопка скачать договор */}
+              {/* Кнопки скачать договор */}
               {msg.isContract && !msg.loading && (
-                <button
-                  onClick={() => downloadText(msg.text, `${msg.contractName || "Договор"}.txt`)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-400 text-xs hover:bg-amber-500/25 transition-all"
-                >
-                  <Icon name="Download" size={13} />
-                  Скачать {msg.contractName}
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => downloadText(msg.text, `${msg.contractName || "Договор"}.txt`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 text-xs hover:text-white hover:bg-white/10 transition-all"
+                  >
+                    <Icon name="FileText" size={13} />
+                    TXT
+                  </button>
+                  <button
+                    disabled={pdfLoading === msg.id}
+                    onClick={async () => {
+                      setPdfLoading(msg.id);
+                      try { await downloadPdf(msg.text, msg.contractName || "Договор"); }
+                      finally { setPdfLoading(null); }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/25 text-amber-400 text-xs hover:bg-amber-500/25 disabled:opacity-50 transition-all"
+                  >
+                    {pdfLoading === msg.id ? (
+                      <div className="w-3 h-3 border border-amber-400/40 border-t-amber-400 rounded-full animate-spin" />
+                    ) : (
+                      <Icon name="Download" size={13} />
+                    )}
+                    {pdfLoading === msg.id ? "Генерирую..." : "PDF"}
+                  </button>
+                </div>
               )}
             </div>
           </div>
