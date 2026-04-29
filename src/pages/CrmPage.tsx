@@ -107,14 +107,76 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   return <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: "#8b949e", display: "block", marginBottom: 4 }}>{label}</label>{children}</div>;
 }
 
+function Empty({ icon, title, hint, action, onAction }: { icon: string; title: string; hint: string; action?: string; onAction?: () => void }) {
+  return (
+    <div style={{ textAlign: "center", padding: "48px 24px", borderRadius: 12, border: "2px dashed #21262d", background: "#161b22" }}>
+      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
+      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{title}</div>
+      <div style={{ fontSize: 13, color: "#8b949e", marginBottom: 20, maxWidth: 320, margin: "0 auto 20px" }}>{hint}</div>
+      {action && onAction && (
+        <button onClick={onAction} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", background: "#a855f7", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>
+          + {action}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
-function Dashboard({ deals, tasks, goals, companies }: { deals: Deal[]; tasks: Task[]; goals: Goal[]; companies: Company[] }) {
+function Dashboard({ deals, tasks, goals, companies, onTab }: { deals: Deal[]; tasks: Task[]; goals: Goal[]; companies: Company[]; onTab: (t: Tab) => void }) {
+  const isEmpty = deals.length === 0 && tasks.length === 0 && companies.length === 0 && goals.length === 0;
   const revenue = deals.filter(d => d.stage === "won").reduce((s, d) => s + d.amount, 0);
   const pipeline = deals.filter(d => !["won","lost"].includes(d.stage)).reduce((s, d) => s + d.amount * d.probability / 100, 0);
   const overdue = tasks.filter(t => t.status !== "done" && new Date(t.deadline) < new Date()).length;
   const wonRate = deals.length ? Math.round(deals.filter(d => d.stage === "won").length / deals.length * 100) : 0;
   const topDeals = [...deals].filter(d => !["won","lost"].includes(d.stage)).sort((a,b) => b.amount - a.amount).slice(0,5);
   const urgent = [...tasks].filter(t => t.status !== "done").sort((a,b) => new Date(a.deadline).getTime() - new Date(b.deadline).getTime()).slice(0,5);
+
+  if (isEmpty) {
+    return (
+      <div style={{ padding: 16, maxWidth: 700, margin: "0 auto" }}>
+        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Дашборд</div>
+        <div style={{ fontSize: 13, color: "#8b949e", marginBottom: 32 }}>Добро пожаловать в CRM — управляйте клиентами, сделками и задачами в одном месте</div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 32 }}>
+          {[
+            { icon: "🏢", tab: "companies" as Tab, title: "Компании", hint: "Добавьте первого клиента или партнёра" },
+            { icon: "💼", tab: "deals" as Tab, title: "Сделки", hint: "Ведите воронку продаж и переговоры" },
+            { icon: "✅", tab: "tasks" as Tab, title: "Задачи", hint: "Планируйте работу команды" },
+            { icon: "🎯", tab: "goals" as Tab, title: "Цели", hint: "Ставьте цели и отслеживайте прогресс" },
+          ].map(item => (
+            <div key={item.tab} onClick={() => onTab(item.tab)}
+              style={{ ...css.card, cursor: "pointer", textAlign: "center", padding: 24, transition: "border-color .2s", borderColor: "#21262d" }}
+              onMouseEnter={e => (e.currentTarget.style.borderColor = "#a855f7")}
+              onMouseLeave={e => (e.currentTarget.style.borderColor = "#21262d")}>
+              <div style={{ fontSize: 36, marginBottom: 10 }}>{item.icon}</div>
+              <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 6 }}>{item.title}</div>
+              <div style={{ fontSize: 12, color: "#8b949e" }}>{item.hint}</div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ ...css.card, padding: 24 }}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>🚀 С чего начать?</div>
+          {[
+            { n: 1, text: "Добавьте компанию — клиента или партнёра", tab: "companies" as Tab },
+            { n: 2, text: "Создайте первую сделку и укажите сумму", tab: "deals" as Tab },
+            { n: 3, text: "Добавьте задачи для команды", tab: "tasks" as Tab },
+            { n: 4, text: "Поставьте цели на квартал или год", tab: "goals" as Tab },
+          ].map(step => (
+            <div key={step.n} onClick={() => onTab(step.tab)}
+              style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid #21262d", cursor: "pointer" }}
+              onMouseEnter={e => (e.currentTarget.style.background = "#1c2333")}
+              onMouseLeave={e => (e.currentTarget.style.background = "")}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#a855f722", color: "#a855f7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, flexShrink: 0 }}>{step.n}</div>
+              <div style={{ fontSize: 13, flex: 1 }}>{step.text}</div>
+              <div style={{ color: "#8b949e", fontSize: 16 }}>→</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
@@ -138,34 +200,34 @@ function Dashboard({ deals, tasks, goals, companies }: { deals: Deal[]; tasks: T
         </div>
         <div style={css.card}>
           <div style={{ fontSize: 12, color: "#8b949e", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Топ сделки</div>
-          {topDeals.map(d => { const st = STAGES.find(s => s.id === d.stage); return (
+          {topDeals.length ? topDeals.map(d => { const st = STAGES.find(s => s.id === d.stage); return (
             <div key={d.id} style={{ display: "flex", gap: 10, alignItems: "center", paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid #21262d" }}>
               <div style={{ width: 4, height: 36, background: st?.color, borderRadius: 2, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.title}</div><div style={{ fontSize: 11, color: "#8b949e" }}>{d.companyName}</div></div>
               <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#a855f7" }}>{fmt.money(d.amount)}</div><div style={{ fontSize: 11, color: "#8b949e" }}>{d.probability}%</div></div>
             </div>
-          ); })}
+          ); }) : <div style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "16px 0" }}>Нет активных сделок</div>}
         </div>
       </div>
 
       <div style={{ ...css.g2, marginBottom: 16 }}>
         <div style={css.card}>
           <div style={{ fontSize: 12, color: "#8b949e", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Срочные задачи</div>
-          {urgent.map(t => { const p = PRIORITIES.find(x => x.id === t.priority); const od = new Date(t.deadline) < new Date(); return (
+          {urgent.length ? urgent.map(t => { const p = PRIORITIES.find(x => x.id === t.priority); const od = new Date(t.deadline) < new Date(); return (
             <div key={t.id} style={{ display: "flex", gap: 10, alignItems: "center", paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid #21262d" }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: p?.color, flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontSize: 13, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.title}</div><div style={{ fontSize: 11, color: od ? "#f43f5e" : "#8b949e" }}>{od ? "⚠ " : ""}{fmt.date(t.deadline)}</div></div>
             </div>
-          ); })}
+          ); }) : <div style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "16px 0" }}>Нет открытых задач</div>}
         </div>
         <div style={css.card}>
           <div style={{ fontSize: 12, color: "#8b949e", fontWeight: 600, textTransform: "uppercase", letterSpacing: .5, marginBottom: 12 }}>Цели</div>
-          {goals.slice(0,4).map(g => { const pct = Math.min(100, Math.round(g.current/g.target*100)); const color = pct>=80?"#4ade80":pct>=50?"#a855f7":"#f59e0b"; return (
+          {goals.length ? goals.slice(0,4).map(g => { const pct = Math.min(100, Math.round(g.current/g.target*100)); const color = pct>=80?"#4ade80":pct>=50?"#a855f7":"#f59e0b"; return (
             <div key={g.id} style={{ marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}><span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 200 }}>{g.title}</span><span style={{ color, fontWeight: 600 }}>{pct}%</span></div>
               <Bar pct={pct} color={color} />
             </div>
-          ); })}
+          ); }) : <div style={{ color: "#8b949e", fontSize: 13, textAlign: "center", padding: "16px 0" }}>Нет целей</div>}
         </div>
       </div>
 
@@ -220,7 +282,11 @@ function Deals({ deals, companies, saveDeals }: { deals: Deal[]; companies: Comp
         {(["kanban","list"] as const).map(v => <button key={v} onClick={()=>setView(v)} style={{ ...css.btn, background:view===v?"#a855f7":"none", color:view===v?"#fff":"#8b949e", padding:"6px 16px", fontSize:13 }}>{v==="kanban"?"Канбан":"Список"}</button>)}
       </div>
 
-      {view === "kanban" ? (
+      {deals.length === 0 && (
+        <Empty icon="💼" title="Нет сделок" hint="Добавьте первую сделку — укажите клиента, сумму и этап переговоров" action="Создать сделку" onAction={() => open("new")} />
+      )}
+
+      {deals.length > 0 && view === "kanban" ? (
         <div style={{ display:"flex", gap:12, overflowX:"auto", paddingBottom:16 }}>
           {STAGES.map(st => (
             <div key={st.id} style={{ minWidth:240, flexShrink:0, background:"#1c2333", borderRadius:10, border:"1px solid #21262d" }}
@@ -316,6 +382,9 @@ function Companies({ companies, saveCompanies }: { companies: Company[]; saveCom
         <span style={{ position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#8b949e" }}>🔍</span>
         <input style={{ ...css.input, paddingLeft:34 }} placeholder="Поиск..." value={search} onChange={e=>setSearch(e.target.value)} />
       </div>
+      {companies.length === 0 && (
+        <Empty icon="🏢" title="Нет компаний" hint="Добавьте клиентов и партнёров — укажите контакты, отрасль и выручку" action="Добавить компанию" onAction={() => open("new")} />
+      )}
       <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
         {filtered.map(c=>(
           <div key={c.id} style={{ ...css.card, cursor:"pointer", display:"flex", alignItems:"center", gap:12 }} onClick={()=>open(c)}>
@@ -387,6 +456,9 @@ function Tasks({ tasks, saveTasks }: { tasks: Task[]; saveTasks: (d: Task[]) => 
         <button onClick={()=>setFilter("")} style={{ ...css.btn,background:!filter?"#a855f7":"none",color:!filter?"#fff":"#8b949e",padding:"6px 12px",fontSize:13 }}>Все</button>
         {TASK_STATUSES.map(s=><button key={s.id} onClick={()=>setFilter(s.id)} style={{ ...css.btn,background:filter===s.id?s.color:"none",color:filter===s.id?"#fff":"#8b949e",padding:"6px 12px",fontSize:13 }}>{s.label}</button>)}
       </div>
+      {tasks.length === 0 && (
+        <Empty icon="✅" title="Нет задач" hint="Создайте первую задачу — назначьте исполнителя, приоритет и дедлайн" action="Создать задачу" onAction={() => open("new")} />
+      )}
       <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
         {filtered.map(t=>{ const st=TASK_STATUSES.find(s=>s.id===t.status); const p=PRIORITIES.find(x=>x.id===t.priority); const od=t.status!=="done"&&new Date(t.deadline)<new Date(); const sd=t.subtasks?.filter(s=>s.done).length||0; const st2=t.subtasks?.length||0; return (
           <div key={t.id} style={{ ...css.card, opacity:t.status==="done"?0.6:1 }}>
@@ -461,6 +533,9 @@ function Goals({ goals, saveGoals }: { goals: Goal[]; saveGoals: (d: Goal[]) => 
         <KPI label="Выполнено" value={String(done.length)} accent="#4ade80" />
         <KPI label="Всего" value={String(goals.length)} accent="#f59e0b" />
       </div>
+      {goals.length === 0 && (
+        <Empty icon="🎯" title="Нет целей" hint="Поставьте первую цель — укажите целевое значение, единицу и дедлайн" action="Создать цель" onAction={() => open("new")} />
+      )}
       {[...active,...done].map(g=>{ const pct=Math.min(100,Math.round(g.current/g.target*100)); const color=g.status==="done"?"#4ade80":pct>=80?"#4ade80":pct>=50?"#a855f7":"#f59e0b"; const cc=CAT_COLORS[g.category]||"#a855f7"; return (
         <div key={g.id} style={{ ...css.card, marginBottom:12, borderLeft:`4px solid ${cc}` }}>
           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
@@ -515,7 +590,7 @@ export default function CrmPage() {
 
   return (
     <div style={{ background:"#0d1117", minHeight:"100vh", color:"#f0f6fc", fontFamily:"inherit", paddingBottom:72 }}>
-      {tab==="dashboard" && <Dashboard deals={deals} tasks={tasks} goals={goals} companies={companies} />}
+      {tab==="dashboard" && <Dashboard deals={deals} tasks={tasks} goals={goals} companies={companies} onTab={go} />}
       {tab==="deals"     && <Deals deals={deals} companies={companies} saveDeals={saveDeals} />}
       {tab==="companies" && <Companies companies={companies} saveCompanies={saveCompanies} />}
       {tab==="tasks"     && <Tasks tasks={tasks} saveTasks={saveTasks} />}
