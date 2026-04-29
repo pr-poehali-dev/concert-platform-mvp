@@ -54,9 +54,16 @@ export default function DashboardProfileTab({
 
   const loadEmployees = async () => {
     setEmpLoading(true);
-    const data = await fetch(`${EMPLOYEES_URL}?action=list&company_user_id=${user.id}`).then(r => r.json());
-    setEmployees(data.employees || []);
-    setEmpLoading(false);
+    try {
+      const res = await fetch(`${EMPLOYEES_URL}?action=list&company_user_id=${user.id}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setEmployees(data.employees || []);
+    } catch {
+      setEmployees([]);
+    } finally {
+      setEmpLoading(false);
+    }
   };
 
   useEffect(() => {

@@ -52,11 +52,11 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
     }
   }, [user]);
 
-  // Polling каждые 3 секунды — diff защищает от лишних перерисовок
+  // Polling каждые 10 секунд — уведомления не real-time критичны
   useEffect(() => {
     if (!user) return;
     refresh();
-    const interval = setInterval(() => refresh(true), 3000);
+    const interval = setInterval(() => refresh(true), 10000);
     return () => clearInterval(interval);
   }, [user, refresh]);
 

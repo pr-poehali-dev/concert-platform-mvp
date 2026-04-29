@@ -79,13 +79,13 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     });
     setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unread: 0 } : c));
     const convId = activeConvId;
-    // Обновляем сообщения каждые 3 сек + разговоры каждые 6 сек (через раз)
+    // Сообщения каждые 5 сек + разговоры каждые 15 сек (через раз)
     let tick = 0;
     pollingRef.current = setInterval(() => {
       loadMessages(convId, true);
       tick++;
-      if (tick % 2 === 0) loadConversations(true);
-    }, 3000);
+      if (tick % 3 === 0) loadConversations(true);
+    }, 5000);
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);

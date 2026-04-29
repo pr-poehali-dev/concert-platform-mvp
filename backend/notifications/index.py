@@ -220,25 +220,32 @@ def handler(event: dict, context) -> dict:
         pub = os.environ.get("VAPID_PUBLIC_KEY", "")
         return ok({"publicKey": pub})
 
-    # GET list
+    # GET list — возвращает уведомления + unread_count в одном запросе
     if method == "GET" and action == "list":
         user_id = params.get("user_id", "")
         if not user_id: return err("user_id required")
-        limit = int(params.get("limit", 50))
+        limit = min(int(params.get("limit", 30)), 100)
         conn = get_conn()
         try:
             cur = conn.cursor()
             cur.execute(
-                f"""SELECT id, user_id, type, title, body, link_page, is_read, created_at
+                f"""SELECT id, user_id, type, title, body, link_page, is_read, created_at,
+                           COUNT(*) FILTER (WHERE is_read = FALSE) OVER () AS unread_count
                     FROM {SCHEMA}.notifications WHERE user_id=%s
                     ORDER BY created_at DESC LIMIT %s""",
                 (user_id, limit))
             rows = cur.fetchall()
         finally:
             conn.close()
-        return ok({"notifications": [row_to_notif(r) for r in rows]})
+        if rows:
+            notifs = [row_to_notif(r[:8]) for r in rows]
+            unread_count = rows[0][8]
+        else:
+            notifs = []
+            unread_count = 0
+        return ok({"notifications": notifs, "unreadCount": unread_count})
 
-    # GET unread_count
+    # GET unread_count (оставляем для совместимости)
     if method == "GET" and action == "unread_count":
         user_id = params.get("user_id", "")
         if not user_id: return err("user_id required")

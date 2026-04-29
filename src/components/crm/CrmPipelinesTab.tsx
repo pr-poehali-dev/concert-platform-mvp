@@ -21,8 +21,9 @@ export default function CrmPipelinesTab({ userId }: Props) {
 
   useEffect(() => {
     fetch(`${CRM_URL}?action=crm_pipelines_list&user_id=${userId}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok) throw new Error(); return r.json(); })
       .then(d => setPipelines(d.pipelines || []))
+      .catch(() => setPipelines([]))
       .finally(() => setLoading(false));
   }, [userId]);
 

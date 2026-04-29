@@ -117,44 +117,44 @@ def handler(event: dict, context) -> dict:
     # ── GET stats ─────────────────────────────────────────────────────────
     if method == "GET" and action == "stats":
         conn = get_conn()
-        cur = conn.cursor()
-
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users")
-        total_users = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE role = 'organizer'")
-        organizers = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE role = 'venue'")
-        venue_owners = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE verified = TRUE")
-        verified_users = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE status = 'pending'")
-        pending_count = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues")
-        total_venues = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues WHERE verified = TRUE")
-        verified_venues = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.conversations")
-        total_convs = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.messages")
-        total_messages = cur.fetchone()[0]
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users WHERE created_at >= NOW() - INTERVAL '7 days'")
-        new_users_week = cur.fetchone()[0]
-
-        cur.execute(
-            f"SELECT id, name, email, role, city, verified, status, created_at FROM {SCHEMA}.users ORDER BY created_at DESC LIMIT 5"
-        )
-        recent = [
-            {"id": str(r[0]), "name": r[1], "email": r[2], "role": r[3],
-             "city": r[4], "verified": r[5], "status": r[6], "createdAt": str(r[7])}
-            for r in cur.fetchall()
-        ]
-        conn.close()
+        try:
+            cur = conn.cursor()
+            # Один запрос вместо 10 — агрегируем всё через FILTER
+            cur.execute(f"""
+                SELECT
+                    COUNT(*)                                                       AS total_users,
+                    COUNT(*) FILTER (WHERE role = 'organizer')                    AS organizers,
+                    COUNT(*) FILTER (WHERE role = 'venue')                        AS venue_owners,
+                    COUNT(*) FILTER (WHERE verified = TRUE)                       AS verified_users,
+                    COUNT(*) FILTER (WHERE status = 'pending')                    AS pending_count,
+                    COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') AS new_users_week
+                FROM {SCHEMA}.users
+            """)
+            u = cur.fetchone()
+            cur.execute(f"""
+                SELECT COUNT(*), COUNT(*) FILTER (WHERE verified = TRUE) FROM {SCHEMA}.venues
+            """)
+            v = cur.fetchone()
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.conversations")
+            total_convs = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.messages")
+            total_messages = cur.fetchone()[0]
+            cur.execute(
+                f"SELECT id, name, email, role, city, verified, status, created_at FROM {SCHEMA}.users ORDER BY created_at DESC LIMIT 5"
+            )
+            recent = [
+                {"id": str(r[0]), "name": r[1], "email": r[2], "role": r[3],
+                 "city": r[4], "verified": r[5], "status": r[6], "createdAt": str(r[7])}
+                for r in cur.fetchall()
+            ]
+        finally:
+            conn.close()
         return ok({
-            "totalUsers": total_users, "organizers": organizers, "venueOwners": venue_owners,
-            "verifiedUsers": verified_users, "pendingCount": pending_count,
-            "totalVenues": total_venues, "verifiedVenues": verified_venues,
+            "totalUsers": u[0], "organizers": u[1], "venueOwners": u[2],
+            "verifiedUsers": u[3], "pendingCount": u[4], "newUsersWeek": u[5],
+            "totalVenues": v[0], "verifiedVenues": v[1],
             "totalConversations": total_convs, "totalMessages": total_messages,
-            "newUsersWeek": new_users_week, "recentUsers": recent,
+            "recentUsers": recent,
         })
 
     # ── GET pending ───────────────────────────────────────────────────────

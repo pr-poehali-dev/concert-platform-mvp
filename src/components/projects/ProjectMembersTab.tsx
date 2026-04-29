@@ -94,6 +94,7 @@ export default function ProjectMembersTab({ projectId, isOwner }: { projectId: s
       const r = await fetch(`${SIGN_URL}?action=search_users&q=${encodeURIComponent(q)}`, {
         headers: { "X-Session-Id": localStorage.getItem("gl_session") || "" },
       });
+      if (!r.ok) throw new Error();
       const d = await r.json();
       setSuggestions(d.users || []);
       setSearchOpen((d.users || []).length > 0);

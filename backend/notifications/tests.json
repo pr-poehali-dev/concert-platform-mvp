@@ -36,7 +36,7 @@
       "method": "GET",
       "path": "/?action=list&user_id=00000000-0000-0000-0000-000000000002",
       "expectedStatus": 200,
-      "expectedBody": { "notifications": [] },
+      "expectedBody": { "notifications": [], "unreadCount": 0 },
       "bodyMatcher": "partial"
     },
     {
@@ -52,7 +52,7 @@
       "method": "GET",
       "path": "/?action=vapid_public_key",
       "expectedStatus": 200,
-      "expectedBody": { "publicKey": "" },
+      "expectedBody": { "publicKey": "string" },
       "bodyMatcher": "partial"
     },
     {
