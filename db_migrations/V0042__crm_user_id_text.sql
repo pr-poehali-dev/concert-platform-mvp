@@ -1,0 +1,4 @@
+ALTER TABLE crm_companies ALTER COLUMN user_id TYPE TEXT;
+ALTER TABLE crm_deals ALTER COLUMN user_id TYPE TEXT;
+ALTER TABLE crm_tasks ALTER COLUMN user_id TYPE TEXT;
+ALTER TABLE crm_goals ALTER COLUMN user_id TYPE TEXT;

@@ -1,4 +1,7 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useAuth } from "@/context/AuthContext";
+
+const CRM_URL = "https://functions.poehali.dev/8641d4ef-87cd-4f51-bbe3-01b7a911724e";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Company { id: string; name: string; industry: string; status: string; revenue: number; contact: string; phone: string; email: string; city: string; deals: number; tasks: number; createdAt: string; }
@@ -43,21 +46,82 @@ const MOCK_DEALS: Deal[] = [];
 const MOCK_TASKS: Task[] = [];
 const MOCK_GOALS: Goal[] = [];
 
-const store = {
-  get: <T,>(key: string, def: T): T => { try { return JSON.parse(localStorage.getItem("crm_" + key) || "null") ?? def; } catch { return def; } },
-  set: <T,>(key: string, val: T) => localStorage.setItem("crm_" + key, JSON.stringify(val)),
+const api = {
+  get: async (action: string, userId: string) => {
+    const r = await fetch(`${CRM_URL}?action=${action}&user_id=${userId}`);
+    return r.json();
+  },
+  post: async (action: string, body: object) => {
+    const r = await fetch(`${CRM_URL}?action=${action}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    return r.json();
+  },
 };
 
-function useData() {
-  const [companies, setCompanies] = useState<Company[]>(() => store.get("companies", MOCK_COMPANIES));
-  const [deals, setDeals] = useState<Deal[]>(() => store.get("deals", MOCK_DEALS));
-  const [tasks, setTasks] = useState<Task[]>(() => store.get("tasks", MOCK_TASKS));
-  const [goals, setGoals] = useState<Goal[]>(() => store.get("goals", MOCK_GOALS));
-  const saveCompanies = (d: Company[]) => { setCompanies(d); store.set("companies", d); };
-  const saveDeals = (d: Deal[]) => { setDeals(d); store.set("deals", d); };
-  const saveTasks = (d: Task[]) => { setTasks(d); store.set("tasks", d); };
-  const saveGoals = (d: Goal[]) => { setGoals(d); store.set("goals", d); };
-  return { companies, deals, tasks, goals, saveCompanies, saveDeals, saveTasks, saveGoals };
+function useData(userId: string) {
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [deals, setDeals] = useState<Deal[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [goals, setGoals] = useState<Goal[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const reload = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      const [c, d, t, g] = await Promise.all([
+        api.get("companies_list", userId),
+        api.get("deals_list", userId),
+        api.get("tasks_list", userId),
+        api.get("goals_list", userId),
+      ]);
+      setCompanies(c.companies || []);
+      setDeals(d.deals || []);
+      setTasks(t.tasks || []);
+      setGoals(g.goals || []);
+    } catch { /* silent */ }
+    finally { setLoading(false); }
+  }, [userId]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const saveCompany = async (data: Partial<Company>) => {
+    await api.post("company_save", { ...data, user_id: userId });
+    await reload();
+  };
+  const deleteCompany = async (id: string) => {
+    await api.post("company_delete", { id, user_id: userId });
+    await reload();
+  };
+  const saveDeal = async (data: Partial<Deal>) => {
+    await api.post("deal_save", { ...data, user_id: userId });
+    await reload();
+  };
+  const deleteDeal = async (id: string) => {
+    await api.post("deal_delete", { id, user_id: userId });
+    await reload();
+  };
+  const saveTask = async (data: Partial<Task>) => {
+    await api.post("task_save", { ...data, user_id: userId });
+    await reload();
+  };
+  const deleteTask = async (id: string) => {
+    await api.post("task_delete", { id, user_id: userId });
+    await reload();
+  };
+  const saveGoal = async (data: Partial<Goal>) => {
+    await api.post("goal_save", { ...data, user_id: userId });
+    await reload();
+  };
+  const deleteGoal = async (id: string) => {
+    await api.post("goal_delete", { id, user_id: userId });
+    await reload();
+  };
+
+  return { companies, deals, tasks, goals, loading, saveCompany, deleteCompany, saveDeal, deleteDeal, saveTask, deleteTask, saveGoal, deleteGoal };
 }
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
@@ -245,7 +309,7 @@ function Dashboard({ deals, tasks, goals, companies, onTab }: { deals: Deal[]; t
 }
 
 // ─── Deals ────────────────────────────────────────────────────────────────────
-function Deals({ deals, companies, saveDeals }: { deals: Deal[]; companies: Company[]; saveDeals: (d: Deal[]) => void }) {
+function Deals({ deals, companies, saveDeal, deleteDeal }: { deals: Deal[]; companies: Company[]; saveDeal: (d: Partial<Deal>) => Promise<void>; deleteDeal: (id: string) => Promise<void> }) {
   const [view, setView] = useState<"kanban"|"list">("kanban");
   const [modal, setModal] = useState<Deal | null | "new">(null);
   const [form, setForm] = useState<Partial<Deal>>({});
@@ -253,14 +317,13 @@ function Deals({ deals, companies, saveDeals }: { deals: Deal[]; companies: Comp
 
   const open = (d: Deal | "new") => { setForm(d === "new" ? { stage:"lead", probability:30, amount:0 } : {...d}); setModal(d); };
   const close = () => setModal(null);
-  const save = () => {
+  const save = async () => {
     if (!form.title) return;
     const co = companies.find(c => c.id === form.companyId);
-    if (modal === "new") saveDeals([...deals, { ...form, id:genId(), companyName:co?.name||"", createdAt:new Date().toISOString(), tags:[] } as Deal]);
-    else saveDeals(deals.map(d => d.id===(modal as Deal).id ? {...d,...form, companyName:co?.name||d.companyName} : d));
+    await saveDeal({ ...form, companyName: co?.name || form.companyName || "" });
     close();
   };
-  const del = (id: string) => { saveDeals(deals.filter(d => d.id!==id)); close(); };
+  const del = async (id: string) => { await deleteDeal(id); close(); };
 
   const revenue = deals.filter(d=>d.stage==="won").reduce((s,d)=>s+d.amount,0);
   const pipeline = deals.filter(d=>!["won","lost"].includes(d.stage)).reduce((s,d)=>s+d.amount*d.probability/100,0);
@@ -291,7 +354,7 @@ function Deals({ deals, companies, saveDeals }: { deals: Deal[]; companies: Comp
           {STAGES.map(st => (
             <div key={st.id} style={{ minWidth:240, flexShrink:0, background:"#1c2333", borderRadius:10, border:"1px solid #21262d" }}
               onDragOver={e=>e.preventDefault()}
-              onDrop={()=>{ if(drag) saveDeals(deals.map(d=>d.id===drag?{...d,stage:st.id}:d)); setDrag(null); }}>
+              onDrop={()=>{ if(drag){ const d=deals.find(x=>x.id===drag); if(d) saveDeal({...d,stage:st.id}); } setDrag(null); }}>
               <div style={{ padding:"12px 14px", borderBottom:"1px solid #21262d", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:8,height:8,borderRadius:"50%",background:st.color }}/><span style={{ fontSize:13,fontWeight:600 }}>{st.label}</span></div>
                 <span style={{ fontSize:11,color:"#8b949e",background:"#21262d",padding:"2px 8px",borderRadius:20 }}>{deals.filter(d=>d.stage===st.id).length}</span>
@@ -349,7 +412,7 @@ function Deals({ deals, companies, saveDeals }: { deals: Deal[]; companies: Comp
 }
 
 // ─── Companies ────────────────────────────────────────────────────────────────
-function Companies({ companies, saveCompanies }: { companies: Company[]; saveCompanies: (d: Company[]) => void }) {
+function Companies({ companies, saveCompany, deleteCompany }: { companies: Company[]; saveCompany: (d: Partial<Company>) => Promise<void>; deleteCompany: (id: string) => Promise<void> }) {
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<Company|null|"new">(null);
   const [form, setForm] = useState<Partial<Company>>({});
@@ -358,13 +421,12 @@ function Companies({ companies, saveCompanies }: { companies: Company[]; saveCom
   const filtered = companies.filter(c=>!search||c.name.toLowerCase().includes(search.toLowerCase())||c.contact.toLowerCase().includes(search.toLowerCase()));
   const open = (c: Company|"new") => { setForm(c==="new"?{status:"lead"}:{...c}); setModal(c); };
   const close = () => setModal(null);
-  const save = () => {
+  const save = async () => {
     if (!form.name) return;
-    if (modal==="new") saveCompanies([...companies,{...form,id:genId(),deals:0,tasks:0,revenue:form.revenue||0,createdAt:new Date().toISOString()} as Company]);
-    else saveCompanies(companies.map(c=>c.id===(modal as Company).id?{...c,...form} as Company:c));
+    await saveCompany(form);
     close();
   };
-  const del = (id: string) => { saveCompanies(companies.filter(c=>c.id!==id)); close(); };
+  const del = async (id: string) => { await deleteCompany(id); close(); };
 
   return (
     <div style={{ padding:16, maxWidth:1100, margin:"0 auto" }}>
@@ -424,21 +486,23 @@ function Companies({ companies, saveCompanies }: { companies: Company[]; saveCom
 }
 
 // ─── Tasks ────────────────────────────────────────────────────────────────────
-function Tasks({ tasks, saveTasks }: { tasks: Task[]; saveTasks: (d: Task[]) => void }) {
+function Tasks({ tasks, saveTask, deleteTask }: { tasks: Task[]; saveTask: (d: Partial<Task>) => Promise<void>; deleteTask: (id: string) => Promise<void> }) {
   const [filter, setFilter] = useState("");
   const [modal, setModal] = useState<Task|null|"new">(null);
   const [form, setForm] = useState<Partial<Task>>({});
   const filtered = tasks.filter(t=>!filter||t.status===filter);
   const open = (t: Task|"new") => { setForm(t==="new"?{status:"todo",priority:"medium"}:{...t}); setModal(t); };
   const close = () => setModal(null);
-  const save = () => {
+  const save = async () => {
     if (!form.title) return;
-    if (modal==="new") saveTasks([...tasks,{...form,id:genId(),subtasks:[],createdAt:new Date().toISOString()} as Task]);
-    else saveTasks(tasks.map(t=>t.id===(modal as Task).id?{...t,...form} as Task:t));
+    await saveTask({ ...form, subtasks: form.subtasks || [] });
     close();
   };
-  const del = (id: string) => { saveTasks(tasks.filter(t=>t.id!==id)); close(); };
-  const toggle = (id: string) => saveTasks(tasks.map(t=>t.id===id?{...t,status:t.status==="done"?"todo":"done"}:t));
+  const del = async (id: string) => { await deleteTask(id); close(); };
+  const toggle = async (id: string) => {
+    const t = tasks.find(x => x.id === id);
+    if (t) await saveTask({ ...t, status: t.status === "done" ? "todo" : "done" });
+  };
 
   return (
     <div style={{ padding:16, maxWidth:1100, margin:"0 auto" }}>
@@ -498,7 +562,7 @@ function Tasks({ tasks, saveTasks }: { tasks: Task[]; saveTasks: (d: Task[]) => 
 }
 
 // ─── Goals ────────────────────────────────────────────────────────────────────
-function Goals({ goals, saveGoals }: { goals: Goal[]; saveGoals: (d: Goal[]) => void }) {
+function Goals({ goals, saveGoal, deleteGoal }: { goals: Goal[]; saveGoal: (d: Partial<Goal>) => Promise<void>; deleteGoal: (id: string) => Promise<void> }) {
   const [modal, setModal] = useState<Goal|null|"new">(null);
   const [form, setForm] = useState<Partial<Goal>>({});
   const [prog, setProg] = useState<Record<string,string>>({});
@@ -507,17 +571,15 @@ function Goals({ goals, saveGoals }: { goals: Goal[]; saveGoals: (d: Goal[]) => 
   const avg = active.length?Math.round(active.reduce((s,g)=>s+g.current/g.target*100,0)/active.length):0;
   const open = (g: Goal|"new") => { setForm(g==="new"?{category:"revenue",unit:"₽",current:0}:{...g}); setModal(g); };
   const close = () => setModal(null);
-  const save = () => {
+  const save = async () => {
     if (!form.title||!form.target) return;
-    const status=(form.current||0)>=(form.target||1)?"done":"in_progress";
-    if (modal==="new") saveGoals([...goals,{...form,id:genId(),status,team:[],createdAt:new Date().toISOString()} as Goal]);
-    else saveGoals(goals.map(g=>g.id===(modal as Goal).id?{...g,...form,status} as Goal:g));
+    await saveGoal({ ...form, team: form.team || [] });
     close();
   };
-  const del = (id: string) => { saveGoals(goals.filter(g=>g.id!==id)); close(); };
-  const upd = (id: string) => {
+  const del = async (id: string) => { await deleteGoal(id); close(); };
+  const upd = async (id: string) => {
     const val=parseFloat(prog[id]||"0"); const g=goals.find(x=>x.id===id); if(!g) return;
-    saveGoals(goals.map(x=>x.id===id?{...x,current:val,status:val>=x.target?"done":"in_progress"}:x));
+    await saveGoal({ ...g, current: val });
     setProg(p=>({...p,[id]:""}));
   };
 
@@ -584,17 +646,38 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
 ];
 
 export default function CrmPage() {
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("dashboard");
-  const { companies, deals, tasks, goals, saveCompanies, saveDeals, saveTasks, saveGoals } = useData();
+  const userId = user?.id || "";
+  const data = useData(userId);
   const go = useCallback((t: Tab) => { setTab(t); window.scrollTo({ top:0, behavior:"smooth" }); }, []);
+
+  if (!user) {
+    return (
+      <div style={{ padding: 32, textAlign: "center", color: "#8b949e" }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🔐</div>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>Войдите в аккаунт</div>
+        <div style={{ fontSize: 13 }}>CRM доступна только авторизованным пользователям</div>
+      </div>
+    );
+  }
+
+  if (data.loading) {
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "50vh" }}>
+        <div style={{ width: 36, height: 36, border: "3px solid #21262d", borderTopColor: "#a855f7", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{ background:"#0d1117", minHeight:"100vh", color:"#f0f6fc", fontFamily:"inherit", paddingBottom:72 }}>
-      {tab==="dashboard" && <Dashboard deals={deals} tasks={tasks} goals={goals} companies={companies} onTab={go} />}
-      {tab==="deals"     && <Deals deals={deals} companies={companies} saveDeals={saveDeals} />}
-      {tab==="companies" && <Companies companies={companies} saveCompanies={saveCompanies} />}
-      {tab==="tasks"     && <Tasks tasks={tasks} saveTasks={saveTasks} />}
-      {tab==="goals"     && <Goals goals={goals} saveGoals={saveGoals} />}
+      {tab==="dashboard" && <Dashboard deals={data.deals} tasks={data.tasks} goals={data.goals} companies={data.companies} onTab={go} />}
+      {tab==="deals"     && <Deals deals={data.deals} companies={data.companies} saveDeal={data.saveDeal} deleteDeal={data.deleteDeal} />}
+      {tab==="companies" && <Companies companies={data.companies} saveCompany={data.saveCompany} deleteCompany={data.deleteCompany} />}
+      {tab==="tasks"     && <Tasks tasks={data.tasks} saveTask={data.saveTask} deleteTask={data.deleteTask} />}
+      {tab==="goals"     && <Goals goals={data.goals} saveGoal={data.saveGoal} deleteGoal={data.deleteGoal} />}
 
       <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:"#161b22", borderTop:"1px solid #21262d", display:"flex", zIndex:100 }}>
         {TABS.map(t=>(
