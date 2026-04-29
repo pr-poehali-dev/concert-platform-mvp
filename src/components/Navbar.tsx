@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import AuthModal from "@/components/AuthModal";
 import NotificationBell from "@/components/NotificationBell";
+import { startPolling, stopPolling } from "@/lib/polling";
 
 const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
 
@@ -35,12 +36,11 @@ export default function Navbar({ activePage, onNavigate }: NavbarProps) {
     if (activePage === "chat") setChatUnread(0);
   }, [activePage]);
 
-  // Загружаем и обновляем каждые 15 сек
   useEffect(() => {
     if (!user) { setChatUnread(0); return; }
     fetchChatUnread();
-    const t = setInterval(fetchChatUnread, 5000);
-    return () => clearInterval(t);
+    const t = startPolling(fetchChatUnread, 5000);
+    return () => stopPolling(t);
   }, [user, fetchChatUnread]);
 
   const navItems = [

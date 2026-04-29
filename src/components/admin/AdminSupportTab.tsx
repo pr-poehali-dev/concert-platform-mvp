@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { ADMIN_URL } from "./types";
+import { startPolling, stopPolling } from "@/lib/polling";
 
 interface SupportDialog {
   userId: string;
@@ -80,17 +81,17 @@ export default function AdminSupportTab({ token }: { token: string }) {
 
   useEffect(() => {
     loadDialogs();
-    const t = setInterval(() => loadDialogs(true), 3000);
-    return () => clearInterval(t);
+    const t = startPolling(() => loadDialogs(true), 3000);
+    return () => stopPolling(t);
   }, [loadDialogs]);
 
   useEffect(() => {
-    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+    stopPolling(pollingRef.current); pollingRef.current = null;
     if (!activeUserId) return;
     loadMessages(activeUserId);
     const uid = activeUserId;
-    pollingRef.current = setInterval(() => loadMessages(uid, true), 3000);
-    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
+    pollingRef.current = startPolling(() => loadMessages(uid, true), 3000);
+    return () => { stopPolling(pollingRef.current); pollingRef.current = null; };
   }, [activeUserId, loadMessages]);
 
   useEffect(() => {

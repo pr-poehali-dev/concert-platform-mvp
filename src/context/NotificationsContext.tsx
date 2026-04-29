@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import { startPolling, stopPolling } from "@/lib/polling";
 import { useAuth } from "@/context/AuthContext";
 
 const NOTIF_URL = "https://functions.poehali.dev/68f4b989-d93d-4a45-af4c-d54ad6815826";
@@ -55,12 +56,8 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) return;
     refresh();
-    // Поллинг управляется через Админ → Настройки
-    const gl = window as never as Record<string, unknown>;
-    if (!gl.__GL_POLLING_ENABLED__) return;
-    const interval = gl.__GL_POLLING_INTERVAL__ as number || 10000;
-    const id = setInterval(() => refresh(true), interval);
-    return () => clearInterval(id);
+    const id = startPolling(() => refresh(true), 10000);
+    return () => stopPolling(id);
   }, [user, refresh]);
 
   const markRead = async (id: string) => {

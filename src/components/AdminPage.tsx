@@ -9,6 +9,7 @@ import AdminSupportTab from "./admin/AdminSupportTab";
 import AdminImportTab from "./admin/AdminImportTab";
 import AdminAITab from "./admin/AdminAITab";
 import AdminSettingsTab, { loadSettings } from "./admin/AdminSettingsTab";
+import { startPolling, stopPolling } from "@/lib/polling";
 
 // ─── Login screen ─────────────────────────────────────────────────────────────
 
@@ -200,8 +201,8 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
       } catch { /* silent */ }
     };
     loadSupportUnread();
-    const t = setInterval(loadSupportUnread, 15000);
-    return () => clearInterval(t);
+    const t = startPolling(loadSupportUnread, 15000);
+    return () => stopPolling(t);
   }, [token, apiFetch]);
 
   const approveUser = async (id: string) => {

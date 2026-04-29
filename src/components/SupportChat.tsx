@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
+import { startPolling, stopPolling } from "@/lib/polling";
 
 const ADMIN_URL = "https://functions.poehali.dev/19ba5519-e548-4443-845c-9cb446cfc909";
 
@@ -60,19 +61,19 @@ export default function SupportChat() {
     if (open) {
       setLoading(true);
       loadMessages().finally(() => setLoading(false));
-      if (pollingRef.current) clearInterval(pollingRef.current);
-      pollingRef.current = setInterval(() => loadMessages(true), 3000);
+      stopPolling(pollingRef.current);
+      pollingRef.current = startPolling(() => loadMessages(true), 3000);
     } else {
-      if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
+      stopPolling(pollingRef.current); pollingRef.current = null;
     }
-    return () => { if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; } };
+    return () => { stopPolling(pollingRef.current); pollingRef.current = null; };
   }, [open, loadMessages]);
 
   useEffect(() => {
     if (open) return;
     loadUnread();
-    const t = setInterval(loadUnread, 5000);
-    return () => clearInterval(t);
+    const t = startPolling(loadUnread, 5000);
+    return () => stopPolling(t);
   }, [open, loadUnread]);
 
   useEffect(() => {

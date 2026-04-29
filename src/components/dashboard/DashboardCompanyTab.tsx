@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { EMPLOYEES_URL, type Employee, ROLE_LABELS } from "@/components/dashboard/profile/types";
+import { startPolling, stopPolling } from "@/lib/polling";
 
 interface CompanyMessage {
   id: string;
@@ -93,9 +94,9 @@ export default function DashboardCompanyTab() {
     setLoadingMsgs(true);
     isAtBottomRef.current = true;
     loadMessages();
-    if (pollingRef.current) clearInterval(pollingRef.current);
-    pollingRef.current = setInterval(() => loadMessages(true), 3000);
-    return () => { if (pollingRef.current) clearInterval(pollingRef.current); };
+    stopPolling(pollingRef.current);
+    pollingRef.current = startPolling(() => loadMessages(true), 3000);
+    return () => stopPolling(pollingRef.current);
   }, [companyId, chatMode, loadMessages]);
 
   useEffect(() => { loadEmployees(); }, [loadEmployees]);

@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
+import { startPolling, stopPolling } from "@/lib/polling";
 import ChatSidebar from "@/components/chat/ChatSidebar";
 import ChatMessages from "@/components/chat/ChatMessages";
 import ChatInput from "@/components/chat/ChatInput";
@@ -79,22 +80,13 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
     });
     setConversations(prev => prev.map(c => c.id === activeConvId ? { ...c, unread: 0 } : c));
     const convId = activeConvId;
-    // Поллинг управляется через Админ → Настройки
-    const gl = window as never as Record<string, unknown>;
-    if (!gl.__GL_POLLING_ENABLED__) return;
-    const interval = gl.__GL_POLLING_INTERVAL__ as number || 5000;
     let tick = 0;
-    pollingRef.current = setInterval(() => {
+    pollingRef.current = startPolling(() => {
       loadMessages(convId, true);
       tick++;
       if (tick % 3 === 0) loadConversations(true);
-    }, interval);
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
+    }, 5000);
+    return () => { stopPolling(pollingRef.current); pollingRef.current = null; };
   }, [activeConvId, user, loadMessages]);
 
   // ── Upload file to S3 via chat backend ──────────────────────────────────
