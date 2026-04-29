@@ -5,6 +5,7 @@ GET  ?action=list  — список запросов для админа (тре
 POST ?action=rate  — оценить ответ (helpful: true/false)
 """
 import json, os, urllib.request, urllib.error, psycopg2
+from openai import OpenAI
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 ADMIN_URL = "https://functions.poehali.dev/19ba5519-e548-4443-845c-9cb446cfc909"
@@ -128,32 +129,9 @@ def get_session_user(session_id: str) -> dict | None:
     return row[0] if isinstance(row[0], dict) else json.loads(row[0])
 
 
-def call_gemini(api_key: str, model: str, system: str, question: str) -> str | None:
-    """Вызывает Google Gemini API."""
-    prompt = f"{system}\n\nВопрос пользователя: {question}"
-    payload = json.dumps({
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 800}
-    }).encode("utf-8")
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
-    req = urllib.request.Request(url, data=payload,
-                                 headers={"Content-Type": "application/json"}, method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except urllib.error.HTTPError as e:
-        body = e.read().decode("utf-8", errors="replace")
-        print(f"[ai] Gemini {model} HTTP {e.code}: {body[:200]}")
-        return None
-    except Exception as ex:
-        print(f"[ai] Gemini {model} exception: {ex}")
-        return None
-
-
 def ask_ai(question: str, user_role: str) -> str:
-    """Отправляет вопрос в Google Gemini, перебирает модели при исчерпании лимита."""
-    api_key = os.environ.get("GEMINI_API_KEY", "")
+    """Отправляет вопрос через AiTunnel (OpenAI-совместимый)."""
+    api_key = os.environ.get("AITUNNEL_API_KEY", "")
     if not api_key:
         return "ИИ-ассистент временно недоступен — не задан API-ключ. Обратитесь к администратору."
 
@@ -165,11 +143,26 @@ def ask_ai(question: str, user_role: str) -> str:
 
     system = SYSTEM_PROMPT + role_hint
 
-    for model in ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-8b", "gemini-1.5-flash"]:
-        result = call_gemini(api_key, model, system, question)
-        if result:
-            print(f"[ai] answered via {model}")
+    client = OpenAI(api_key=api_key, base_url="https://api.aitunnel.ru/v1/")
+
+    for model in ["gpt-5-nano", "gpt-4o-mini", "gpt-4o"]:
+        try:
+            response = client.chat.completions.create(
+                model=model,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": question},
+                ],
+                temperature=0.4,
+                max_tokens=800,
+                timeout=25,
+            )
+            result = response.choices[0].message.content.strip()
+            print(f"[ai] answered via AiTunnel/{model}")
             return result
+        except Exception as ex:
+            print(f"[ai] AiTunnel/{model} error: {ex}")
+            continue
 
     return "Не удалось получить ответ от ИИ. Попробуйте позже или напишите в поддержку."
 
