@@ -7,12 +7,14 @@ interface Settings {
   pollingEnabled: boolean;
   pollingInterval: number; // секунд
   devMode: boolean;
+  aiEnabled: boolean;
 }
 
 const DEFAULTS: Settings = {
   pollingEnabled: false,
   pollingInterval: 10,
   devMode: true,
+  aiEnabled: false,
 };
 
 export function loadSettings(): Settings {
@@ -68,9 +70,11 @@ export default function AdminSettingsTab() {
 
   // Применяем настройки: пишем в window для доступа из других компонентов
   useEffect(() => {
-    (window as never as Record<string, unknown>).__GL_POLLING_ENABLED__ = settings.pollingEnabled;
-    (window as never as Record<string, unknown>).__GL_POLLING_INTERVAL__ = settings.pollingInterval * 1000;
-    (window as never as Record<string, unknown>).__GL_DEV_MODE__ = settings.devMode;
+    const gl = window as never as Record<string, unknown>;
+    gl.__GL_POLLING_ENABLED__ = settings.pollingEnabled;
+    gl.__GL_POLLING_INTERVAL__ = settings.pollingInterval * 1000;
+    gl.__GL_DEV_MODE__ = settings.devMode;
+    gl.__GL_AI_ENABLED__ = settings.aiEnabled;
   }, [settings]);
 
   return (
@@ -141,6 +145,24 @@ export default function AdminSettingsTab() {
         )}
       </div>
 
+      {/* Секция: ИИ-ассистент */}
+      <div className="glass rounded-2xl border border-white/8 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon name="Sparkles" size={16} className="text-neon-pink" />
+          <h3 className="font-oswald font-bold text-neon-pink text-sm uppercase tracking-wider">ИИ-ассистент</h3>
+        </div>
+        <p className="text-white/30 text-xs mb-4">Управляет доступностью ИИ-помощника в разделе «Помочь» для всех пользователей</p>
+        <Toggle
+          value={settings.aiEnabled}
+          onChange={v => update({ aiEnabled: v })}
+          label="Включить ИИ-ассистента"
+          description={settings.aiEnabled
+            ? "ИИ-ассистент доступен пользователям — лимиты Gemini активны"
+            : "Показывается плашка «скоро заработает» — запросы не расходуются"}
+          color="neon-pink"
+        />
+      </div>
+
       {/* Секция: Состояние */}
       <div className="glass rounded-2xl border border-white/8 p-5">
         <div className="flex items-center gap-2 mb-4">
@@ -149,9 +171,10 @@ export default function AdminSettingsTab() {
         </div>
         <div className="space-y-2">
           {[
-            { label: "Dev Mode", value: settings.devMode, icon: "Code2", color: "neon-cyan" },
-            { label: "Автообновление чата", value: settings.pollingEnabled, icon: "MessageCircle", color: "neon-purple" },
-            { label: "Автообновление уведомлений", value: settings.pollingEnabled, icon: "Bell", color: "neon-purple" },
+            { label: "Dev Mode",                    value: settings.devMode,       icon: "Code2",         color: "neon-cyan"   },
+            { label: "ИИ-ассистент",                value: settings.aiEnabled,     icon: "Sparkles",      color: "neon-pink"   },
+            { label: "Автообновление чата",          value: settings.pollingEnabled, icon: "MessageCircle", color: "neon-purple" },
+            { label: "Автообновление уведомлений",   value: settings.pollingEnabled, icon: "Bell",          color: "neon-purple" },
           ].map((row, i) => (
             <div key={i} className="flex items-center justify-between py-2">
               <div className="flex items-center gap-2">

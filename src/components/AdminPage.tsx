@@ -94,9 +94,11 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
   // Инициализируем глобальные флаги из настроек при старте
   useEffect(() => {
     const s = loadSettings();
-    (window as never as Record<string, unknown>).__GL_POLLING_ENABLED__ = s.pollingEnabled;
-    (window as never as Record<string, unknown>).__GL_POLLING_INTERVAL__ = s.pollingInterval * 1000;
-    (window as never as Record<string, unknown>).__GL_DEV_MODE__ = s.devMode;
+    const gl = window as never as Record<string, unknown>;
+    gl.__GL_POLLING_ENABLED__ = s.pollingEnabled;
+    gl.__GL_POLLING_INTERVAL__ = s.pollingInterval * 1000;
+    gl.__GL_DEV_MODE__ = s.devMode;
+    gl.__GL_AI_ENABLED__ = s.aiEnabled;
   }, []);
   const [presMenuOpen, setPresMenuOpen] = useState(false);
   const [presLoading, setPresLoading]   = useState<string | null>(null);

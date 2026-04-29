@@ -22,10 +22,27 @@ const SUGGESTIONS = [
   "Как пройти верификацию?",
 ];
 
-const MAINTENANCE = true; // убрать когда ИИ заработает
+function isAiEnabled(): boolean {
+  // Приоритет: window-флаг (выставляется AdminPage при загрузке) → localStorage → false
+  const gl = window as never as Record<string, unknown>;
+  if (typeof gl.__GL_AI_ENABLED__ === "boolean") return gl.__GL_AI_ENABLED__ as boolean;
+  try {
+    const raw = localStorage.getItem("gl_admin_settings");
+    if (raw) return JSON.parse(raw)?.aiEnabled === true;
+  } catch { /* ignore */ }
+  return false;
+}
 
 export default function DashboardAITab() {
   const { user } = useAuth();
+  const [aiEnabled, setAiEnabled] = useState(isAiEnabled);
+
+  // Перепроверяем флаг при фокусе вкладки (если открыли настройки в другой вкладке)
+  useEffect(() => {
+    const onFocus = () => setAiEnabled(isAiEnabled());
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
@@ -45,7 +62,7 @@ export default function DashboardAITab() {
 
   const sendMessage = async (text: string) => {
     const question = text.trim();
-    if (!question || loading) return;
+    if (!question || loading || !aiEnabled) return;
 
     const userMsg: Message = { id: Date.now().toString(), role: "user", text: question };
     const loadingMsg: Message = { id: `loading-${Date.now()}`, role: "assistant", text: "", loading: true };
@@ -117,7 +134,7 @@ export default function DashboardAITab() {
 
   return (
     <div className="flex flex-col h-full min-h-0" style={{ height: "calc(100vh - 80px)" }}>
-      {MAINTENANCE && (
+      {!aiEnabled && (
         <div className="mx-4 mt-4 flex items-start gap-3 bg-neon-purple/10 border border-neon-purple/30 rounded-2xl px-4 py-3">
           <Icon name="Clock" size={18} className="text-neon-purple shrink-0 mt-0.5" />
           <div>
