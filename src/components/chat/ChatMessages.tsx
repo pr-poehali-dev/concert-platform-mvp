@@ -7,6 +7,8 @@ interface Props {
   loadingMsgs: boolean;
   userId: string;
   dragOver: boolean;
+  /** Время последнего прочтения диалога собеседником — для галочек "прочитано" */
+  otherLastReadAt?: string;
 }
 
 // Плашка-подпись отправителя для чужих сообщений
@@ -49,7 +51,8 @@ function SenderBadge({ msg }: { msg: Message }) {
   );
 }
 
-export default function ChatMessages({ messages, loadingMsgs, userId, dragOver }: Props) {
+export default function ChatMessages({ messages, loadingMsgs, userId, dragOver, otherLastReadAt }: Props) {
+  const otherReadTs = otherLastReadAt ? new Date(otherLastReadAt).getTime() : 0;
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef   = useRef<HTMLDivElement>(null);
   const isAtBottomRef  = useRef(true);
@@ -211,12 +214,20 @@ export default function ChatMessages({ messages, loadingMsgs, userId, dragOver }
                       </p>
                     )}
 
-                    {/* Время */}
+                    {/* Время + статус прочтения */}
                     <div className={`flex items-center gap-1 px-4 pb-2 justify-end ${msg.text || hasAttachment ? "pt-0" : "pt-2"}`}>
                       <span className={`text-[10px] ${isMe ? "text-white/50" : "text-white/30"}`}>
                         {formatTime(msg.createdAt)}
                       </span>
-                      {isOptimistic && <Icon name="Clock" size={10} className="text-white/40" />}
+                      {isMe && (
+                        isOptimistic ? (
+                          <Icon name="Clock" size={11} className="text-white/50" />
+                        ) : otherReadTs && new Date(msg.createdAt).getTime() <= otherReadTs ? (
+                          <Icon name="CheckCheck" size={13} className="text-neon-cyan" />
+                        ) : (
+                          <Icon name="Check" size={13} className="text-white/55" />
+                        )
+                      )}
                     </div>
                   </div>
                 </div>

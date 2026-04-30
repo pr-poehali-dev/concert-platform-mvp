@@ -432,13 +432,56 @@ def handler(event: dict, context) -> dict:
             row = cur.fetchone()
             if row:
                 is_organizer = str(row[0]) == user_id
-                col = "organizer_unread" if is_organizer else "venue_unread"
+                col_unread = "organizer_unread"      if is_organizer else "venue_unread"
+                col_read   = "organizer_last_read_at" if is_organizer else "venue_last_read_at"
                 cur.execute(
-                    f"UPDATE {SCHEMA}.conversations SET {col} = 0 WHERE id = %s", (conv_id,)
+                    f"UPDATE {SCHEMA}.conversations SET {col_unread} = 0, {col_read} = NOW() WHERE id = %s",
+                    (conv_id,),
                 )
                 conn.commit()
         finally:
             conn.close()
         return ok({"ok": True})
+
+    # ── GET presence — онлайн-статус собеседника по диалогу ────────────────
+    if method == "GET" and action == "presence":
+        conv_id = params.get("conversation_id", "")
+        user_id = params.get("user_id", "")
+        if not conv_id or not user_id:
+            return err("conversation_id, user_id обязательны")
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Узнаём id собеседника
+            cur.execute(
+                f"""SELECT organizer_id, venue_user_id,
+                           organizer_last_read_at, venue_last_read_at
+                    FROM {SCHEMA}.conversations WHERE id = %s""",
+                (conv_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return err("Диалог не найден", 404)
+            is_organizer = str(row[0]) == user_id
+            other_id = str(row[1]) if is_organizer else str(row[0])
+            # last_read_at собеседника — по нему отмечаем "прочитано" (две галочки)
+            other_last_read = row[3] if is_organizer else row[2]
+
+            # Самая свежая активность собеседника из sessions
+            cur.execute(
+                f"SELECT MAX(last_seen) FROM {SCHEMA}.sessions WHERE user_id = %s",
+                (other_id,),
+            )
+            last_row = cur.fetchone()
+            last_seen = last_row[0] if last_row else None
+        finally:
+            conn.close()
+
+        return ok({
+            "otherUserId":      other_id,
+            "lastSeen":         str(last_seen) if last_seen else "",
+            "otherLastReadAt":  str(other_last_read) if other_last_read else "",
+        })
 
     return err("Неизвестное действие", 404)

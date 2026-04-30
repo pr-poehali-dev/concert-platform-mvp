@@ -39,6 +39,22 @@
       "expectedStatus": 200,
       "expectedBody": { "conversations": [{ "id": "string", "organizerName": "string" }] },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Presence missing user_id",
+      "method": "GET",
+      "path": "/?action=presence&conversation_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Presence non-existing conv",
+      "method": "GET",
+      "path": "/?action=presence&conversation_id=00000000-0000-0000-0000-000000000099&user_id=00000000-0000-0000-0000-000000000001",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -27,8 +27,10 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
   const [search, setSearch] = useState("");
   const [pendingAttachment, setPendingAttachment] = useState<PendingAttachment | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [presence, setPresence] = useState<{ lastSeen: string; otherLastReadAt: string }>({ lastSeen: "", otherLastReadAt: "" });
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const presencePollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activeConv = conversations.find(c => c.id === activeConvId) || null;
 
@@ -85,9 +87,42 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
       loadMessages(convId, true);
       tick++;
       if (tick % 3 === 0) loadConversations(true);
+      // Обновляем presence (онлайн + read) каждые 10с
+      if (tick % 2 === 0 && user) {
+        fetch(`${CHAT_URL}?action=presence&conversation_id=${convId}&user_id=${user.id}`)
+          .then(r => r.ok ? r.json() : null)
+          .then(d => d && setPresence({ lastSeen: d.lastSeen || "", otherLastReadAt: d.otherLastReadAt || "" }))
+          .catch(() => { /* silent */ });
+      }
     }, 5000);
     return () => { stopPolling(pollingRef.current); pollingRef.current = null; };
   }, [activeConvId, user, loadMessages]);
+
+  // ── Presence: подгружаем онлайн-статус собеседника + last_read раз в 15с ──
+  useEffect(() => {
+    if (presencePollRef.current) {
+      clearInterval(presencePollRef.current);
+      presencePollRef.current = null;
+    }
+    if (!activeConvId || !user) {
+      setPresence({ lastSeen: "", otherLastReadAt: "" });
+      return;
+    }
+    const fetchPresence = async () => {
+      try {
+        const res = await fetch(`${CHAT_URL}?action=presence&conversation_id=${activeConvId}&user_id=${user.id}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setPresence({
+          lastSeen: data.lastSeen || "",
+          otherLastReadAt: data.otherLastReadAt || "",
+        });
+      } catch { /* silent */ }
+    };
+    fetchPresence();
+    presencePollRef.current = setInterval(fetchPresence, 15_000);
+    return () => { if (presencePollRef.current) clearInterval(presencePollRef.current); };
+  }, [activeConvId, user]);
 
   // ── Upload file to S3 via chat backend ──────────────────────────────────
   const uploadFile = async (file: File) => {
@@ -238,15 +273,34 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
                       || (activeConv.isOrganizer
                         ? activeConv.venueCompany || activeConv.venueName
                         : activeConv.organizerCompany || activeConv.organizerName || "Организатор");
+                    // online-статус собеседника
+                    const ls = presence.lastSeen ? new Date(presence.lastSeen) : null;
+                    const diffMin = ls ? Math.floor((Date.now() - ls.getTime()) / 60000) : -1;
+                    const isOnline = diffMin >= 0 && diffMin < 5;
+                    let statusText = activeConv.isOrganizer ? "Концертная площадка" : "Организатор тура";
+                    if (isOnline) {
+                      statusText = "в сети";
+                    } else if (ls && diffMin >= 0) {
+                      if (diffMin < 60) statusText = `был ${diffMin} мин назад`;
+                      else if (diffMin < 1440) statusText = `был ${Math.floor(diffMin / 60)} ч назад`;
+                      else if (diffMin < 10080) statusText = `был ${Math.floor(diffMin / 1440)} дн назад`;
+                      else statusText = `был ${ls.toLocaleDateString("ru", { day: "numeric", month: "short" })}`;
+                    }
                     return (
                       <>
-                        <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(companyName)} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
-                          {getInitial(companyName)}
+                        <div className="relative shrink-0">
+                          <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${getAvatarColor(companyName)} flex items-center justify-center font-oswald font-bold text-white text-sm`}>
+                            {getInitial(companyName)}
+                          </div>
+                          {isOnline && (
+                            <span className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-neon-green border-2 border-background animate-pulse" />
+                          )}
                         </div>
-                        <div>
-                          <h3 className="font-oswald font-semibold text-white">{companyName}</h3>
-                          <p className="text-xs text-white/40">
-                            {activeConv.isOrganizer ? "Концертная площадка" : "Организатор тура"}
+                        <div className="min-w-0">
+                          <h3 className="font-oswald font-semibold text-white truncate">{companyName}</h3>
+                          <p className={`text-xs flex items-center gap-1.5 ${isOnline ? "text-neon-green" : "text-white/45"}`}>
+                            {isOnline && <span className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse" />}
+                            {statusText}
                           </p>
                         </div>
                       </>
@@ -268,6 +322,7 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
                   loadingMsgs={loadingMsgs}
                   userId={user!.id}
                   dragOver={dragOver}
+                  otherLastReadAt={presence.otherLastReadAt}
                 />
 
                 {/* Input */}
