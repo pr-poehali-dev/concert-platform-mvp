@@ -29,8 +29,8 @@ export default function TabHeader({
   className = "",
 }: TabHeaderProps) {
   return (
-    <div className={`flex items-start justify-between gap-4 mb-6 flex-wrap ${className}`}>
-      <div className="flex items-start gap-3 min-w-0 flex-1">
+    <div className={`flex items-center justify-between gap-3 mb-4 flex-wrap ${className}`}>
+      <div className="flex items-center gap-3 min-w-0 flex-1">
         <div
           className={`w-11 h-11 rounded-xl bg-${iconColor}/15 border border-${iconColor}/25 flex items-center justify-center shrink-0`}
         >
@@ -38,15 +38,15 @@ export default function TabHeader({
         </div>
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="font-oswald font-bold text-2xl text-white leading-tight">{title}</h2>
+            <h2 className="font-oswald font-bold text-2xl text-white uppercase leading-none">{title}</h2>
             {badgeText && (
-              <Badge className={badgeClassName || "bg-white/10 text-white border-white/15 text-xs"}>
+              <Badge className={badgeClassName || "bg-white/10 text-white border-white/15 text-[10px] py-0 px-2"}>
                 {badgeText}
               </Badge>
             )}
           </div>
           {description && (
-            <p className="text-white/65 text-sm mt-0.5">{description}</p>
+            <p className="text-white/45 text-xs mt-0.5">{description}</p>
           )}
         </div>
       </div>
