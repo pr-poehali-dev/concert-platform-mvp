@@ -42,6 +42,7 @@ export interface User {
     canViewSummary: boolean;
     canEditExpenses: boolean;
     canEditIncome: boolean;
+    allowedSections?: string[];
   };
 }
 

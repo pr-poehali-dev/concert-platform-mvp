@@ -57,16 +57,23 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
 
   const isVenue = user.role === "venue";
   const isOrg   = user.role === "organizer";
-
   const isDash = activePage === "dashboard";
+
+  // Для сотрудников — фильтруем по allowedSections
+  const allowed = user.isEmployee
+    ? (user.accessPermissions?.allowedSections ?? null)
+    : null; // null = всё разрешено (владелец)
+
+  const canSee = (sectionId: string) =>
+    allowed === null || allowed.includes(sectionId);
 
   // ── Главные страницы ───────────────────────────────────────────────────
   const mainItems: NavItem[] = [
     { id: "search",    label: "Площадки",    icon: "Search",        page: "search",                                 color: "cyan"   },
-    ...(!isVenue ? [{ id: "tours",    label: "Туры",     icon: "Route",         page: "tours",    color: "purple" as const }] : []),
-    ...(isOrg ? [{ id: "projects", label: "Проекты",  icon: "FolderOpen",    page: "projects", color: "purple" as const }] : []),
-    { id: "chat",      label: "Чат",         icon: "MessageCircle", page: "chat",                                   color: "green"  },
-    { id: "mail",      label: "Почта",       icon: "Mail",          page: "mail",                                   color: "cyan"   },
+    ...(!isVenue && canSee("tours") ? [{ id: "tours", label: "Туры", icon: "Route", page: "tours", color: "purple" as const }] : []),
+    ...(isOrg && canSee("projects") ? [{ id: "projects", label: "Проекты", icon: "FolderOpen", page: "projects", color: "purple" as const }] : []),
+    ...(canSee("chat") ? [{ id: "chat", label: "Чат", icon: "MessageCircle", page: "chat", color: "green" as const }] : []),
+    ...(canSee("mail") ? [{ id: "mail", label: "Почта", icon: "Mail", page: "mail", color: "cyan" as const }] : []),
   ];
 
   // ── Личный кабинет ──────────────────────────────────────────────────────
@@ -80,7 +87,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "crm",           label: "CRM",          icon: "Kanban",       page: "crm",                                  color: "purple" },
     { id: "ai_help",       label: "Помощь",       icon: "Sparkles",     page: "dashboard", dashTab: "ai_help",       color: "pink"   },
     { id: "ai_lawyer",     label: "ИИ-юрист",     icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer",     color: "cyan"   },
-  ];
+  ].filter(item => canSee(item.id));
 
   const dashVenueItems: NavItem[] = [
     { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues",        color: "cyan"   },
@@ -93,7 +100,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "company",       label: "Компания",      icon: "Users",        page: "dashboard", dashTab: "company",       color: "green"  },
     { id: "ai_help",       label: "Помощь",        icon: "Sparkles",     page: "dashboard", dashTab: "ai_help",       color: "pink"   },
     { id: "ai_lawyer",     label: "ИИ-юрист",      icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer",     color: "cyan"   },
-  ];
+  ].filter(item => canSee(item.id));
 
   const dashItems = isVenue ? dashVenueItems : dashOrgItems;
 

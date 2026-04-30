@@ -21,10 +21,29 @@ AVATAR_COLORS = [
 
 ROLES = ["employee", "manager", "accountant", "admin"]
 
+ALL_SECTIONS = [
+    "tours", "history", "documents", "signing", "notifications",
+    "company", "crm", "ai_help", "ai_lawyer",
+    "venues", "projects", "concerts", "venue_crm",
+    "search", "chat", "mail",
+]
+
 DEFAULT_PERMISSIONS = {
     "canViewExpenses": True, "canViewIncome": True, "canViewSummary": True,
     "canEditExpenses": True, "canEditIncome": True,
+    "allowedSections": ALL_SECTIONS,
 }
+
+
+def normalize_perms(perms: dict) -> dict:
+    """Заполняет отсутствующие поля дефолтами."""
+    for k, v in DEFAULT_PERMISSIONS.items():
+        if k not in perms:
+            perms[k] = v
+    # allowedSections должен быть списком
+    if not isinstance(perms.get("allowedSections"), list):
+        perms["allowedSections"] = ALL_SECTIONS[:]
+    return perms
 
 
 def get_conn():
@@ -179,6 +198,7 @@ def row_to_emp(row) -> dict:
             perms = DEFAULT_PERMISSIONS.copy()
     else:
         perms = DEFAULT_PERMISSIONS.copy()
+    perms = normalize_perms(perms)
     last_seen = row[10] if len(row) > 10 else None
     return {
         "id": str(row[0]),
@@ -255,10 +275,7 @@ def handler(event: dict, context) -> dict:
         password = b.get("password") or ""
         role_c   = b.get("roleInCompany") or "employee"
         perms    = b.get("accessPermissions") or DEFAULT_PERMISSIONS.copy()
-        # Валидируем и дополняем permissions
-        for k, v in DEFAULT_PERMISSIONS.items():
-            if k not in perms:
-                perms[k] = v
+        perms = normalize_perms(perms)
 
         if not cid:            return err("companyUserId required")
         if not name:           return err("Введите имя сотрудника")
@@ -324,10 +341,7 @@ def handler(event: dict, context) -> dict:
                 return err("Неизвестная роль")
             fields["role_in_company"] = role
         if "accessPermissions" in b:
-            perms = b["accessPermissions"]
-            for k, v in DEFAULT_PERMISSIONS.items():
-                if k not in perms:
-                    perms[k] = v
+            perms = normalize_perms(b["accessPermissions"])
             fields["access_permissions"] = json.dumps(perms)
         if not fields:
             return err("Нет данных для обновления")
@@ -390,9 +404,7 @@ def handler(event: dict, context) -> dict:
         perms  = b.get("accessPermissions")
         if not emp_id: return err("id required")
         if not perms:  return err("accessPermissions required")
-        for k, v in DEFAULT_PERMISSIONS.items():
-            if k not in perms:
-                perms[k] = v
+        perms = normalize_perms(perms)
         conn = get_conn()
         try:
             cur = conn.cursor()

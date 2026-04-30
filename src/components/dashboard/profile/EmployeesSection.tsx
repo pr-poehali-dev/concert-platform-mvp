@@ -1,7 +1,46 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL, formatEmployeeLastSeen } from "./types";
+import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL, formatEmployeeLastSeen, type SectionId } from "./types";
+
+// Разделы, которыми можно управлять через интерфейс
+const SECTION_ITEMS: { id: SectionId; label: string; icon: string; color: string }[] = [
+  { id: "tours",         label: "Мои туры",       icon: "Route",          color: "text-neon-purple" },
+  { id: "history",       label: "История",         icon: "Clock",          color: "text-neon-cyan"   },
+  { id: "documents",     label: "Документы",       icon: "FileArchive",    color: "text-neon-cyan"   },
+  { id: "signing",       label: "Подписание",      icon: "PenLine",        color: "text-neon-purple" },
+  { id: "notifications", label: "Уведомления",     icon: "Bell",           color: "text-neon-pink"   },
+  { id: "company",       label: "Компания",        icon: "Building2",      color: "text-neon-green"  },
+  { id: "crm",           label: "CRM",             icon: "Kanban",         color: "text-neon-purple" },
+  { id: "ai_help",       label: "ИИ-помощник",     icon: "Sparkles",       color: "text-neon-pink"   },
+  { id: "ai_lawyer",     label: "ИИ-юрист",        icon: "Scale",          color: "text-neon-cyan"   },
+  { id: "chat",          label: "Чат",             icon: "MessageCircle",  color: "text-neon-green"  },
+  { id: "mail",          label: "Почта",           icon: "Mail",           color: "text-neon-cyan"   },
+  { id: "projects",      label: "Проекты",         icon: "FolderOpen",     color: "text-neon-purple" },
+];
+
+function SectionToggle({
+  item, allowed, onChange,
+}: { item: typeof SECTION_ITEMS[number]; allowed: SectionId[]; onChange: (sections: SectionId[]) => void }) {
+  const checked = allowed.includes(item.id);
+  return (
+    <div
+      className={`flex items-center justify-between px-3 py-2 rounded-xl border transition-all cursor-pointer ${checked ? "bg-white/5 border-white/10" : "bg-black/20 border-white/5 opacity-60"}`}
+      onClick={() => onChange(checked ? allowed.filter(s => s !== item.id) : [...allowed, item.id])}
+    >
+      <div className="flex items-center gap-2">
+        <Icon name={item.icon as never} size={13} className={checked ? item.color : "text-white/25"} />
+        <span className="text-white/80 text-xs font-medium">{item.label}</span>
+      </div>
+      <button
+        type="button"
+        className={`w-9 h-5 rounded-full transition-all relative shrink-0 ${checked ? "bg-neon-purple" : "bg-white/15"}`}
+      >
+        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? "left-4" : "left-0.5"}`} />
+      </button>
+    </div>
+  );
+}
 
 interface EditForm { name: string; email: string; roleInCompany: string }
 
@@ -208,7 +247,34 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
             </div>
           </div>
 
-          {/* Настройка доступа */}
+          {/* Доступные разделы */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-white/65 uppercase tracking-wider flex items-center gap-1.5">
+                <Icon name="Layout" size={12} className="text-neon-cyan" />
+                Доступные разделы
+              </p>
+              <div className="flex gap-1.5">
+                <button type="button" onClick={() => setPerms(p => ({ ...p, allowedSections: SECTION_ITEMS.map(s => s.id) }))}
+                  className="text-[10px] text-neon-cyan hover:underline">все</button>
+                <span className="text-white/30 text-[10px]">/</span>
+                <button type="button" onClick={() => setPerms(p => ({ ...p, allowedSections: [] }))}
+                  className="text-[10px] text-neon-pink hover:underline">ни один</button>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {SECTION_ITEMS.map(item => (
+                <SectionToggle
+                  key={item.id}
+                  item={item}
+                  allowed={perms.allowedSections}
+                  onChange={sections => setPerms(p => ({ ...p, allowedSections: sections }))}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Настройка доступа к финансам */}
           <div>
             <p className="text-xs text-white/65 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <Icon name="ShieldCheck" size={12} className="text-neon-purple" />
@@ -222,7 +288,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                   description={item.description}
                   icon={item.icon}
                   color={item.color}
-                  value={perms[item.key]}
+                  value={perms[item.key as keyof Omit<AccessPermissions, 'allowedSections'>] as boolean}
                   onChange={v => setPerms(p => ({ ...p, [item.key]: v }))}
                 />
               ))}
@@ -256,20 +322,55 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
               </button>
             </div>
             <p className="text-white/65 text-xs mb-4">
-              Сотрудник: <span className="text-white/70">{employees.find(e => e.id === editPermId)?.name}</span>
+              Сотрудник: <span className="text-white font-semibold">{employees.find(e => e.id === editPermId)?.name}</span>
             </p>
-            <div className="space-y-1.5 mb-5">
-              {PERM_ITEMS.map(item => (
-                <PermToggle
-                  key={item.key}
-                  label={item.label}
-                  description={item.description}
-                  icon={item.icon}
-                  color={item.color}
-                  value={editPerms[item.key]}
-                  onChange={v => setEditPerms(p => ({ ...p, [item.key]: v }))}
-                />
-              ))}
+            <div className="space-y-4 max-h-[60vh] overflow-y-auto scrollbar-thin pr-1 mb-5">
+              {/* Разделы */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[11px] text-white/55 uppercase tracking-wider flex items-center gap-1.5">
+                    <Icon name="Layout" size={11} className="text-neon-cyan" />
+                    Доступные разделы
+                  </p>
+                  <div className="flex gap-1.5">
+                    <button type="button" onClick={() => setEditPerms(p => ({ ...p, allowedSections: SECTION_ITEMS.map(s => s.id) }))}
+                      className="text-[10px] text-neon-cyan hover:underline">все</button>
+                    <span className="text-white/30 text-[10px]">/</span>
+                    <button type="button" onClick={() => setEditPerms(p => ({ ...p, allowedSections: [] }))}
+                      className="text-[10px] text-neon-pink hover:underline">ни один</button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 gap-1.5">
+                  {SECTION_ITEMS.map(item => (
+                    <SectionToggle
+                      key={item.id}
+                      item={item}
+                      allowed={editPerms.allowedSections}
+                      onChange={sections => setEditPerms(p => ({ ...p, allowedSections: sections }))}
+                    />
+                  ))}
+                </div>
+              </div>
+              {/* Финансы */}
+              <div>
+                <p className="text-[11px] text-white/55 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Icon name="ShieldCheck" size={11} className="text-neon-purple" />
+                  Финансовая информация
+                </p>
+                <div className="space-y-1.5">
+                  {PERM_ITEMS.map(item => (
+                    <PermToggle
+                      key={item.key}
+                      label={item.label}
+                      description={item.description}
+                      icon={item.icon}
+                      color={item.color}
+                      value={editPerms[item.key as keyof Omit<AccessPermissions, 'allowedSections'>] as boolean}
+                      onChange={v => setEditPerms(p => ({ ...p, [item.key]: v }))}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
             <div className="flex gap-2">
               <button onClick={() => setEditPermId(null)}
@@ -298,7 +399,9 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
         <div className="space-y-2">
           {employees.map(emp => {
             const p = emp.accessPermissions || DEFAULT_ACCESS_PERMISSIONS;
-            const deniedCount = Object.values(p).filter(v => !v).length;
+            const deniedFinance = (["canViewExpenses","canViewIncome","canViewSummary","canEditExpenses","canEditIncome"] as const).filter(k => !p[k]).length;
+            const deniedSections = SECTION_ITEMS.length - (p.allowedSections?.length ?? SECTION_ITEMS.length);
+            const deniedCount = deniedFinance + (deniedSections > 0 ? 1 : 0);
             return (
               <div key={emp.id} className={`glass rounded-2xl p-4 flex items-center gap-4 ${!emp.isActive ? "opacity-50" : ""}`}>
                 <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${emp.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>

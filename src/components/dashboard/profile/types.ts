@@ -18,12 +18,23 @@ export const ROLE_LABELS: Record<string, string> = {
   admin:      "Администратор",
 };
 
+export const ALL_SECTIONS = [
+  "tours", "history", "documents", "signing", "notifications",
+  "company", "crm", "ai_help", "ai_lawyer",
+  // venue
+  "venues", "projects", "concerts", "venue_crm",
+  // top-level pages
+  "search", "chat", "mail",
+] as const;
+export type SectionId = typeof ALL_SECTIONS[number];
+
 export interface AccessPermissions {
   canViewExpenses: boolean;
   canViewIncome: boolean;
   canViewSummary: boolean;
   canEditExpenses: boolean;
   canEditIncome: boolean;
+  allowedSections: SectionId[];
 }
 
 export const DEFAULT_ACCESS_PERMISSIONS: AccessPermissions = {
@@ -32,6 +43,7 @@ export const DEFAULT_ACCESS_PERMISSIONS: AccessPermissions = {
   canViewSummary: true,
   canEditExpenses: true,
   canEditIncome: true,
+  allowedSections: [...ALL_SECTIONS],
 };
 
 export interface Employee {
