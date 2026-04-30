@@ -42,41 +42,48 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
   const filtered = filter==="all" ? projects : projects.filter(p=>p.status===filter);
 
   return (
-    <div className="min-h-screen pt-20">
-      {/* Hero */}
-      <div className="relative py-14 overflow-hidden">
-        <div className="absolute inset-0 gradient-bg-purple opacity-35" />
+    <div className="min-h-screen pt-2">
+      {/* Hero — компактная шапка */}
+      <div className="relative py-4 overflow-hidden">
+        <div className="absolute inset-0 gradient-bg-purple opacity-25" />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <Badge className="bg-neon-purple/20 text-neon-purple border-neon-purple/40 mb-3">Проекты организатора</Badge>
-              <h1 className="font-oswald font-bold text-5xl text-white uppercase mb-1">
-                Мои <span className="gradient-text">Проекты</span>
-              </h1>
-              <p className="text-white/40 text-sm">Управление бюджетами, P&L и финансовая отчётность</p>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-neon-purple/15 border border-neon-purple/25 flex items-center justify-center shrink-0">
+                <Icon name="FolderOpen" size={20} className="text-neon-purple"/>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-oswald font-bold text-2xl text-white uppercase leading-none">
+                    Мои <span className="gradient-text">Проекты</span>
+                  </h1>
+                  <Badge className="bg-neon-purple/15 text-neon-purple border-neon-purple/30 text-[10px] py-0 px-2">Организатор</Badge>
+                </div>
+                <p className="text-white/45 text-xs mt-0.5">Управление бюджетами, P&L и финансовая отчётность</p>
+              </div>
             </div>
             <button onClick={()=>setShowCreate(true)}
-              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity mt-2">
-              <Icon name="Plus" size={18}/>Новый проект
+              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm">
+              <Icon name="Plus" size={16}/>Новый проект
             </button>
           </div>
 
           {/* Сводка */}
           {projects.length>0 && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-3">
               {[
                 {icon:"FolderOpen",label:"Всего проектов",val:projects.length,color:"text-neon-purple"},
                 {icon:"TrendingUp",label:"Доход (план)",val:fmt(projects.reduce((s,p)=>s+p.totalIncomePlan,0))+" ₽",color:"text-neon-green"},
                 {icon:"TrendingDown",label:"Расходы (план)",val:fmt(projects.reduce((s,p)=>s+p.totalExpensesPlan,0))+" ₽",color:"text-neon-pink"},
                 {icon:"BarChart3",label:"Прибыль (план)",val:fmt(projects.reduce((s,p)=>s+p.finance.profitPlan,0))+" ₽",color:projects.reduce((s,p)=>s+p.finance.profitPlan,0)>=0?"text-neon-green":"text-neon-pink"},
               ].map((s,i)=>(
-                <div key={i} className="glass rounded-xl px-4 py-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Icon name={s.icon} size={14} className={s.color}/>
-                    <span className="text-white/40 text-xs">{s.label}</span>
+                <div key={i} className="glass rounded-lg px-3 py-2">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <Icon name={s.icon} size={12} className={s.color}/>
+                    <span className="text-white/45 text-[11px]">{s.label}</span>
                   </div>
-                  <p className={`font-oswald font-bold text-xl ${s.color}`}>{s.val}</p>
+                  <p className={`font-oswald font-bold text-base ${s.color} leading-tight`}>{s.val}</p>
                 </div>
               ))}
             </div>
@@ -84,7 +91,7 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-24">
         {/* Фильтры */}
         <div className="flex flex-wrap gap-2 mb-6">
           {[["all","Все"],["planning","Планируется"],["active","Активные"],["completed","Завершённые"]].map(([v,l])=>(
