@@ -265,18 +265,23 @@ def rk_shifts_report(server_url: str, cash_id: str, license_code: str,
 
 def row_to_integration(row) -> dict:
     return {
-        "id":              str(row[0]),
-        "venueUserId":     str(row[1]),
-        "type":            row[2],
-        "iikoApiLogin":    row[3] or "",
-        "iikoOrgId":       row[4] or "",
-        "rkServerUrl":     row[5] or "",
-        "rkCashId":        row[6] or "",
-        "rkLicenseCode":   row[7] or "",
-        "displayName":     row[8],
-        "isActive":        row[9],
-        "lastSyncAt":      str(row[10]) if row[10] else None,
-        "createdAt":       str(row[11]),
+        "id":                   str(row[0]),
+        "venueUserId":          str(row[1]),
+        "type":                 row[2],
+        "iikoApiLogin":         row[3] or "",
+        "iikoOrgId":            row[4] or "",
+        "rkServerUrl":          row[5] or "",
+        "rkCashId":             row[6] or "",
+        "rkLicenseCode":        row[7] or "",
+        "displayName":          row[8],
+        "isActive":             row[9],
+        "lastSyncAt":           str(row[10]) if row[10] else None,
+        "createdAt":            str(row[11]),
+        "emailReportEnabled":   row[12] if len(row) > 12 else False,
+        "emailReportTo":        row[13] or "" if len(row) > 13 else "",
+        "emailReportTime":      row[14] or "08:00" if len(row) > 14 else "08:00",
+        "emailReportTypes":     list(row[15]) if (len(row) > 15 and row[15]) else [],
+        "emailReportLastSent":  str(row[16]) if (len(row) > 16 and row[16]) else None,
     }
 
 
@@ -286,7 +291,9 @@ def get_integration(conn, integration_id: str) -> dict | None:
         f"""SELECT id, venue_user_id, integration_type,
                    iiko_api_login, iiko_org_id,
                    rk_server_url, rk_cash_id, rk_license_code,
-                   display_name, is_active, last_sync_at, created_at
+                   display_name, is_active, last_sync_at, created_at,
+                   email_report_enabled, email_report_to, email_report_time,
+                   email_report_types, email_report_last_sent
             FROM {SCHEMA}.bar_integrations WHERE id = %s""",
         (integration_id,)
     )
@@ -350,7 +357,9 @@ def handler(event: dict, context) -> dict:
                 f"""SELECT id, venue_user_id, integration_type,
                            iiko_api_login, iiko_org_id,
                            rk_server_url, rk_cash_id, rk_license_code,
-                           display_name, is_active, last_sync_at, created_at
+                           display_name, is_active, last_sync_at, created_at,
+                           email_report_enabled, email_report_to, email_report_time,
+                           email_report_types, email_report_last_sent
                     FROM {SCHEMA}.bar_integrations
                     WHERE venue_user_id = %s ORDER BY created_at""",
                 (venue_user_id,)
@@ -565,5 +574,198 @@ def handler(event: dict, context) -> dict:
              "endDate":   str(r[3]) if r[3] else None}
             for r in rows
         ]})
+
+    # ── POST update_email_schedule ────────────────────────────────────────
+    if method == "POST" and action == "update_email_schedule":
+        b = json.loads(event.get("body") or "{}")
+        integration_id       = b.get("id", "")
+        enabled              = bool(b.get("enabled", False))
+        email_to             = (b.get("emailTo") or "").strip()
+        report_time          = (b.get("reportTime") or "08:00").strip()
+        report_types         = b.get("reportTypes") or []
+
+        if not integration_id: return err("id обязателен")
+        if enabled and not email_to: return err("Укажите email для отправки")
+        if enabled and "@" not in email_to: return err("Некорректный email")
+        if not isinstance(report_types, list): report_types = []
+        valid_types = {"sales", "stock", "shifts"}
+        report_types = [t for t in report_types if t in valid_types]
+        if enabled and not report_types: return err("Выберите хотя бы один тип отчёта")
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""UPDATE {SCHEMA}.bar_integrations
+                    SET email_report_enabled = %s,
+                        email_report_to      = %s,
+                        email_report_time    = %s,
+                        email_report_types   = %s
+                    WHERE id = %s RETURNING id""",
+                (enabled, email_to or None, report_time, report_types, integration_id)
+            )
+            if not cur.fetchone():
+                conn.close(); return err("Интеграция не найдена", 404)
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True, "enabled": enabled})
+
+    # ── POST send_report_email — отправить отчёт немедленно ───────────────
+    if method == "POST" and action == "send_report_email":
+        b = json.loads(event.get("body") or "{}")
+        integration_id = b.get("id", "")
+        report_types   = b.get("reportTypes") or []
+        email_to       = (b.get("emailTo") or "").strip()
+
+        if not integration_id: return err("id обязателен")
+        if not email_to or "@" not in email_to: return err("Укажите корректный email")
+        if not report_types: return err("Выберите хотя бы один тип отчёта")
+
+        conn = get_conn()
+        try:
+            integration = get_integration(conn, integration_id)
+        finally:
+            conn.close()
+        if not integration or not integration["isActive"]:
+            return err("Интеграция не найдена", 404)
+
+        api_key  = os.environ.get("RESEND_API_KEY", "")
+        app_url  = os.environ.get("APP_URL", "")
+        if not api_key:
+            return err("RESEND_API_KEY не настроен", 500)
+
+        now   = datetime.now(timezone.utc)
+        d_from = now.replace(hour=0, minute=0, second=0, microsecond=0).strftime("%Y-%m-%d %H:%M:%S.000")
+        d_to   = now.strftime("%Y-%m-%d %H:%M:%S.000")
+        date_label = now.strftime("%d.%m.%Y")
+
+        REPORT_LABELS = {"sales": "Продажи", "stock": "Остатки", "shifts": "Смены"}
+        sections_html = ""
+        errors = []
+
+        for rtype in report_types:
+            if rtype not in REPORT_LABELS: continue
+            try:
+                itype = integration["type"]
+                data = {}
+                if itype == "iiko":
+                    if rtype == "sales":
+                        data = iiko_sales_report(integration["iikoApiLogin"], integration["iikoOrgId"], d_from, d_to)
+                    elif rtype == "stock":
+                        data = iiko_stock_report(integration["iikoApiLogin"], integration["iikoOrgId"])
+                    elif rtype == "shifts":
+                        data = iiko_shifts_report(integration["iikoApiLogin"], integration["iikoOrgId"], d_from, d_to)
+                elif itype == "rkeeper":
+                    sv = integration["rkServerUrl"]
+                    cid = integration["rkCashId"]
+                    lc  = integration["rkLicenseCode"]
+                    if rtype == "sales":
+                        data = rk_sales_report(sv, cid, lc, d_from, d_to)
+                    elif rtype == "stock":
+                        data = rk_stock_report(sv, cid, lc)
+                    elif rtype == "shifts":
+                        data = rk_shifts_report(sv, cid, lc, d_from, d_to)
+
+                # Строим HTML-секцию
+                label = REPORT_LABELS[rtype]
+                rows_html = ""
+
+                if rtype == "sales":
+                    total = data.get("totalSum", 0)
+                    count = data.get("count", 0)
+                    avg   = round(total / count) if count else 0
+                    rows_html = f"""
+                      <tr><td style="color:#aaa;padding:4px 8px;">Выручка</td><td style="color:#22d3ee;font-weight:bold;padding:4px 8px;">{total:,.0f} ₽</td></tr>
+                      <tr><td style="color:#aaa;padding:4px 8px;">Чеков</td><td style="color:#fff;padding:4px 8px;">{count}</td></tr>
+                      <tr><td style="color:#aaa;padding:4px 8px;">Средний чек</td><td style="color:#fff;padding:4px 8px;">{avg:,.0f} ₽</td></tr>
+                    """
+                elif rtype == "stock":
+                    items = data.get("items", [])
+                    low   = [i for i in items if float(str(i.get("amount","0")).replace(",",".") or 0) < 5]
+                    rows_html = f"""
+                      <tr><td style="color:#aaa;padding:4px 8px;">Позиций на складе</td><td style="color:#fff;padding:4px 8px;">{len(items)}</td></tr>
+                      <tr><td style="color:#aaa;padding:4px 8px;">Заканчивается (< 5)</td><td style="color:{'#ff4d7d' if low else '#aaa'};padding:4px 8px;">{len(low)}</td></tr>
+                    """
+                    if low:
+                        low_names = ", ".join(i.get("name","") for i in low[:5])
+                        rows_html += f'<tr><td colspan="2" style="color:#ff4d7d;padding:4px 8px;font-size:12px;">{low_names}</td></tr>'
+                elif rtype == "shifts":
+                    shifts = data.get("shifts", [])
+                    total  = sum(float(str(s.get("sum",0))) for s in shifts)
+                    rows_html = f"""
+                      <tr><td style="color:#aaa;padding:4px 8px;">Смен за день</td><td style="color:#fff;padding:4px 8px;">{len(shifts)}</td></tr>
+                      <tr><td style="color:#aaa;padding:4px 8px;">Итоговая выручка</td><td style="color:#22d3ee;font-weight:bold;padding:4px 8px;">{total:,.0f} ₽</td></tr>
+                    """
+
+                sections_html += f"""
+                <div style="margin-bottom:20px;">
+                  <p style="color:#a855f7;font-size:13px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;margin:0 0 8px;">{label}</p>
+                  <table style="width:100%;border-collapse:collapse;">
+                    {rows_html}
+                  </table>
+                </div>"""
+            except Exception as ex:
+                errors.append(f"{REPORT_LABELS.get(rtype, rtype)}: {str(ex)[:100]}")
+
+        if not sections_html and errors:
+            return err("Не удалось получить данные: " + "; ".join(errors), 502)
+
+        system_name = "iiko Cloud" if integration["type"] == "iiko" else "R-Keeper"
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:32px 16px;">
+<tr><td align="center">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+  <tr><td style="padding-bottom:20px;text-align:center;">
+    <span style="font-size:20px;font-weight:bold;color:#fff;letter-spacing:2px;">GLOBAL LINK</span>
+    <span style="color:#a855f7;margin-left:8px;font-size:13px;">Бар</span>
+  </td></tr>
+  <tr><td style="background:#15152a;border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:28px;">
+    <h2 style="color:#fff;font-size:18px;margin:0 0 4px;">Отчёт за {date_label}</h2>
+    <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:0 0 24px;">{integration["displayName"]} · {system_name}</p>
+    {sections_html}
+    {"<p style='color:#ff4d7d;font-size:12px;margin-top:12px;'>Ошибки: " + "; ".join(errors) + "</p>" if errors else ""}
+    {"<a href='" + app_url + "' style='display:inline-block;background:linear-gradient(135deg,#a855f7,#22d3ee);color:#fff;text-decoration:none;padding:10px 24px;border-radius:10px;font-weight:bold;font-size:13px;margin-top:16px;'>Открыть кабинет</a>" if app_url else ""}
+  </td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>"""
+
+        payload = json.dumps({
+            "from": "GLOBAL LINK <noreply@globallink.art>",
+            "to": [email_to],
+            "subject": f"Отчёт бара за {date_label} — {integration['displayName']}",
+            "html": html,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails", data=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                sent_ok = resp.status == 200
+        except urllib.error.HTTPError as he:
+            body_err = he.read().decode("utf-8", errors="replace")[:200]
+            return err(f"Ошибка отправки email: {he.code} {body_err}", 502)
+        except Exception as ex:
+            return err(f"Ошибка отправки email: {str(ex)[:200]}", 502)
+
+        # Обновляем last_sent
+        if sent_ok:
+            conn2 = get_conn()
+            try:
+                cur2 = conn2.cursor()
+                cur2.execute(
+                    f"UPDATE {SCHEMA}.bar_integrations SET email_report_last_sent = NOW() WHERE id = %s",
+                    (integration_id,)
+                )
+                conn2.commit()
+            finally:
+                conn2.close()
+
+        return ok({"sent": sent_ok, "to": email_to})
 
     return err("Неизвестное действие", 404)
