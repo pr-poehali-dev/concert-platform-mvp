@@ -2,11 +2,12 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import {
-  MAIL_URL, formatMailDate,
+  MAIL_URL,
   type MailAccount, type MailListItem, type MailFull,
 } from "./mail/mailTypes";
 import MailAccountModal from "./mail/MailAccountModal";
 import MailComposeModal from "./mail/MailComposeModal";
+import MailListItemRow from "./mail/MailListItem";
 
 const FOLDER_LABELS: Record<string, { label: string; icon: string; color: string }> = {
   INBOX:    { label: "Входящие",   icon: "Inbox",       color: "text-neon-purple" },
@@ -212,6 +213,30 @@ export default function MailPage() {
       setSelectedUids(new Set());
       if (openMail && sel.has(openMail.uid)) setOpenMail(null);
     } finally { setBulkLoading(false); }
+  };
+
+  const swipeDelete = async (uid: string) => {
+    if (!activeAccountId) return;
+    await fetch(`${MAIL_URL}?action=delete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: activeAccountId, folder: activeFolder, uids: [uid] }),
+    });
+    setMessages(prev => prev.filter(m => m.uid !== uid));
+    if (openMail?.uid === uid) setOpenMail(null);
+  };
+
+  const swipeArchive = async (uid: string) => {
+    if (!activeAccountId) return;
+    // Ищем папку Archive / Архив / All Mail, иначе Trash
+    const target = folders.find(f => /archive|архив|all.?mail/i.test(f)) || "Trash";
+    await fetch(`${MAIL_URL}?action=move`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ accountId: activeAccountId, folder: activeFolder, target, uids: [uid] }),
+    });
+    setMessages(prev => prev.filter(m => m.uid !== uid));
+    if (openMail?.uid === uid) setOpenMail(null);
   };
 
   const openMessage = async (uid: string) => {
@@ -548,65 +573,34 @@ export default function MailPage() {
               </div>
             ) : (
               <div className="divide-y divide-white/5">
-                {messages.map(m => {
-                  const checked = selectedUids.has(m.uid);
-                  const isDragging = dragUids.includes(m.uid) && dragUids.length > 0;
-                  return (
-                    <div
-                      key={m.uid}
-                      draggable
-                      onDragStart={(e) => {
-                        // Если письмо входит в выборку — тащим все выбранные, иначе только это
-                        const uids = selectedUids.size > 0 && selectedUids.has(m.uid)
-                          ? Array.from(selectedUids)
-                          : [m.uid];
-                        setDragUids(uids);
-                        // Кастомный ghost: текст с количеством
-                        const ghost = document.createElement("div");
-                        ghost.style.cssText = "position:fixed;top:-999px;left:-999px;padding:6px 10px;background:#6c3bff;color:#fff;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;";
-                        ghost.textContent = uids.length > 1 ? `${uids.length} писем` : (m.subject || "(без темы)").slice(0, 32);
-                        document.body.appendChild(ghost);
-                        e.dataTransfer.setDragImage(ghost, 0, 0);
-                        setTimeout(() => document.body.removeChild(ghost), 0);
-                        e.dataTransfer.effectAllowed = "move";
-                      }}
-                      onDragEnd={() => setDragUids([])}
-                      className={`group relative flex items-stretch hover:bg-white/5 transition-colors cursor-grab active:cursor-grabbing ${
-                        openMail?.uid === m.uid ? "bg-neon-purple/10" : ""
-                      } ${isDragging ? "opacity-40" : ""} ${!m.isRead ? "border-l-2 border-neon-purple" : "border-l-2 border-transparent"}`}
-                    >
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleSelect(m.uid); }}
-                        className={`pl-3 pr-1 flex items-center transition-opacity ${
-                          checked || selectedUids.size > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
-                        }`}
-                        title={checked ? "Снять выделение" : "Выделить"}
-                      >
-                        <span className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                          checked
-                            ? "bg-neon-purple border-neon-purple"
-                            : "border-white/30 hover:border-white/55"
-                        }`}>
-                          {checked && <Icon name="Check" size={10} className="text-white" />}
-                        </span>
-                      </button>
-                      <button
-                        onClick={() => selectedUids.size > 0 ? toggleSelect(m.uid) : openMessage(m.uid)}
-                        className="flex-1 text-left px-2 py-2.5 min-w-0"
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-0.5">
-                          <span className={`text-sm truncate ${!m.isRead ? "text-white font-bold" : "text-white/80"}`}>
-                            {m.fromName || m.fromEmail}
-                          </span>
-                          <span className="text-[10px] text-white/35 shrink-0">{formatMailDate(m.date)}</span>
-                        </div>
-                        <p className={`text-xs truncate ${!m.isRead ? "text-white/85 font-semibold" : "text-white/55"}`}>
-                          {m.subject || "(без темы)"}
-                        </p>
-                      </button>
-                    </div>
-                  );
-                })}
+                {messages.map(m => (
+                  <MailListItemRow
+                    key={m.uid}
+                    m={m}
+                    checked={selectedUids.has(m.uid)}
+                    isDragging={dragUids.includes(m.uid) && dragUids.length > 0}
+                    isOpen={openMail?.uid === m.uid}
+                    hasSelection={selectedUids.size > 0}
+                    onOpen={() => openMessage(m.uid)}
+                    onToggleSelect={() => toggleSelect(m.uid)}
+                    onDelete={() => swipeDelete(m.uid)}
+                    onArchive={() => swipeArchive(m.uid)}
+                    onDragStart={(e) => {
+                      const uids = selectedUids.size > 0 && selectedUids.has(m.uid)
+                        ? Array.from(selectedUids)
+                        : [m.uid];
+                      setDragUids(uids);
+                      const ghost = document.createElement("div");
+                      ghost.style.cssText = "position:fixed;top:-999px;left:-999px;padding:6px 10px;background:#6c3bff;color:#fff;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;";
+                      ghost.textContent = uids.length > 1 ? `${uids.length} писем` : (m.subject || "(без темы)").slice(0, 32);
+                      document.body.appendChild(ghost);
+                      e.dataTransfer.setDragImage(ghost, 0, 0);
+                      setTimeout(() => document.body.removeChild(ghost), 0);
+                      e.dataTransfer.effectAllowed = "move";
+                    }}
+                    onDragEnd={() => setDragUids([])}
+                  />
+                ))}
                 {/* Подгрузка следующей страницы */}
                 {hasMore && (
                   <div className="px-3 py-3 text-center">
