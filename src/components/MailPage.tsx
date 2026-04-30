@@ -50,6 +50,8 @@ export default function MailPage() {
   const [filterAttach, setFilterAttach] = useState(false);
   const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [dragUids, setDragUids] = useState<string[]>([]);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const PAGE_SIZE = 40;
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
@@ -353,20 +355,66 @@ export default function MailPage() {
             {folders.map(f => {
               const info = folderInfo(f);
               const active = activeFolder === f;
+              const isOver = dragOverFolder === f && f !== activeFolder;
               return (
                 <button
                   key={f}
                   onClick={() => { setActiveFolder(f); setOpenMail(null); }}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all ${
-                    active ? "bg-neon-purple/20 text-white border border-neon-purple/30"
-                           : "text-white/65 hover:text-white hover:bg-white/5"
+                  onDragOver={(e) => {
+                    if (dragUids.length === 0 || f === activeFolder) return;
+                    e.preventDefault();
+                    setDragOverFolder(f);
+                  }}
+                  onDragLeave={() => setDragOverFolder(null)}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    setDragOverFolder(null);
+                    if (dragUids.length === 0 || f === activeFolder || !activeAccountId) return;
+                    setBulkLoading(true);
+                    try {
+                      await fetch(`${MAIL_URL}?action=move`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          accountId: activeAccountId,
+                          folder: activeFolder,
+                          target: f,
+                          uids: dragUids,
+                        }),
+                      });
+                      const moved = new Set(dragUids);
+                      setMessages(prev => prev.filter(m => !moved.has(m.uid)));
+                      setSelectedUids(prev => { const n = new Set(prev); dragUids.forEach(u => n.delete(u)); return n; });
+                      if (openMail && moved.has(openMail.uid)) setOpenMail(null);
+                    } finally {
+                      setBulkLoading(false);
+                      setDragUids([]);
+                    }
+                  }}
+                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all border ${
+                    isOver
+                      ? "bg-neon-cyan/20 text-white border-neon-cyan/50 scale-[1.02]"
+                      : active
+                        ? "bg-neon-purple/20 text-white border-neon-purple/30"
+                        : "text-white/65 hover:text-white hover:bg-white/5 border-transparent"
                   }`}
                 >
-                  <Icon name={info.icon as never} size={14} className={active ? "text-neon-purple" : info.color} />
+                  <Icon name={info.icon as never} size={14} className={isOver ? "text-neon-cyan" : active ? "text-neon-purple" : info.color} />
                   <span className="flex-1 text-left truncate">{info.label}</span>
+                  {isOver && (
+                    <span className="text-[10px] text-neon-cyan font-bold shrink-0">
+                      {dragUids.length}
+                    </span>
+                  )}
                 </button>
               );
             })}
+            {/* Подсказка при перетаскивании */}
+            {dragUids.length > 0 && (
+              <p className="text-white/35 text-[10px] text-center mt-2 px-1">
+                Перетащи {dragUids.length > 1 ? `${dragUids.length} письма` : "письмо"} в папку
+              </p>
+            )}
           </aside>
 
           {/* Список писем */}
@@ -502,12 +550,30 @@ export default function MailPage() {
               <div className="divide-y divide-white/5">
                 {messages.map(m => {
                   const checked = selectedUids.has(m.uid);
+                  const isDragging = dragUids.includes(m.uid) && dragUids.length > 0;
                   return (
                     <div
                       key={m.uid}
-                      className={`group relative flex items-stretch hover:bg-white/5 transition-colors ${
+                      draggable
+                      onDragStart={(e) => {
+                        // Если письмо входит в выборку — тащим все выбранные, иначе только это
+                        const uids = selectedUids.size > 0 && selectedUids.has(m.uid)
+                          ? Array.from(selectedUids)
+                          : [m.uid];
+                        setDragUids(uids);
+                        // Кастомный ghost: текст с количеством
+                        const ghost = document.createElement("div");
+                        ghost.style.cssText = "position:fixed;top:-999px;left:-999px;padding:6px 10px;background:#6c3bff;color:#fff;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;";
+                        ghost.textContent = uids.length > 1 ? `${uids.length} писем` : (m.subject || "(без темы)").slice(0, 32);
+                        document.body.appendChild(ghost);
+                        e.dataTransfer.setDragImage(ghost, 0, 0);
+                        setTimeout(() => document.body.removeChild(ghost), 0);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => setDragUids([])}
+                      className={`group relative flex items-stretch hover:bg-white/5 transition-colors cursor-grab active:cursor-grabbing ${
                         openMail?.uid === m.uid ? "bg-neon-purple/10" : ""
-                      } ${!m.isRead ? "border-l-2 border-neon-purple" : "border-l-2 border-transparent"}`}
+                      } ${isDragging ? "opacity-40" : ""} ${!m.isRead ? "border-l-2 border-neon-purple" : "border-l-2 border-transparent"}`}
                     >
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleSelect(m.uid); }}
