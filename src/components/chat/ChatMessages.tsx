@@ -53,6 +53,8 @@ export default function ChatMessages({ messages, loadingMsgs, userId, dragOver }
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef   = useRef<HTMLDivElement>(null);
   const isAtBottomRef  = useRef(true);
+  const lastConvKeyRef = useRef<string>("");
+  const lastMsgIdRef   = useRef<string>("");
 
   const handleScroll = () => {
     const el = containerRef.current;
@@ -60,11 +62,55 @@ export default function ChatMessages({ messages, loadingMsgs, userId, dragOver }
     isAtBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   };
 
+  // Мгновенный скролл вниз — до самого конца контейнера (даже если изображения ещё не загрузились).
+  const scrollToBottom = (smooth = false) => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+    // Дублируем после следующего кадра — на случай дорисовки
+    requestAnimationFrame(() => {
+      if (!containerRef.current) return;
+      if (smooth) {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+      } else {
+        containerRef.current.scrollTop = containerRef.current.scrollHeight;
+      }
+    });
+  };
+
+  // Срабатывает при изменении сообщений
   useEffect(() => {
-    if (isAtBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messages.length === 0) return;
+    const firstId = messages[0]?.id || "";
+    const lastId  = messages[messages.length - 1]?.id || "";
+    const convKey = `${firstId}|${messages.length > 0 ? "x" : ""}`;
+
+    // Если сменился диалог (первый id отличается) — мгновенно вниз
+    if (convKey !== lastConvKeyRef.current) {
+      lastConvKeyRef.current = convKey;
+      lastMsgIdRef.current = lastId;
+      // Дёргаем несколько раз — после рендера и после возможной догрузки шрифтов/картинок
+      scrollToBottom(false);
+      setTimeout(() => scrollToBottom(false), 50);
+      setTimeout(() => scrollToBottom(false), 200);
+      isAtBottomRef.current = true;
+      return;
+    }
+
+    // Иначе — добавилось новое сообщение, плавно вниз если был внизу
+    if (lastId !== lastMsgIdRef.current) {
+      lastMsgIdRef.current = lastId;
+      if (isAtBottomRef.current) scrollToBottom(true);
     }
   }, [messages]);
+
+  // При окончании загрузки — финальный скролл вниз (на случай поздней дорисовки)
+  useEffect(() => {
+    if (!loadingMsgs && messages.length > 0) {
+      scrollToBottom(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadingMsgs]);
 
   // Группируем подряд идущие сообщения от одного отправителя
   let lastDate    = "";
@@ -127,6 +173,12 @@ export default function ChatMessages({ messages, loadingMsgs, userId, dragOver }
                           alt={msg.attachmentName}
                           className="rounded-t-2xl w-full max-w-xs object-cover"
                           style={{ maxHeight: 240 }}
+                          onLoad={() => {
+                            // Если последнее сообщение — картинка, после её загрузки скроллим вниз
+                            if (idx === messages.length - 1 && isAtBottomRef.current && containerRef.current) {
+                              containerRef.current.scrollTop = containerRef.current.scrollHeight;
+                            }
+                          }}
                         />
                       </a>
                     )}

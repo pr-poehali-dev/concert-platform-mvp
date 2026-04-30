@@ -183,8 +183,8 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
   };
 
   return (
-    <div className="min-h-screen pt-16 pb-0">
-      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 sm:py-8 h-[calc(100vh-4rem)]">
+    <div className="min-h-screen pt-2 pb-0">
+      <div className="max-w-7xl mx-auto px-0 sm:px-6 lg:px-8 sm:py-2 h-[calc(100vh-4rem)]">
         <div className="flex gap-4 h-full">
 
           {/* ── Sidebar ── */}
