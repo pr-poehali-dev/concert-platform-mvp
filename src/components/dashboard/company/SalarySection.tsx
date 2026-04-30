@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { EMPLOYEES_URL, ROLE_LABELS } from "@/components/dashboard/profile/types";
+import * as XLSX from "xlsx";
 
 interface SalaryRow {
   employeeId: string;
@@ -16,6 +17,7 @@ interface SalaryRow {
   status: "pending" | "paid";
   paidAt: string | null;
   period: string;
+  displayId: string;
 }
 
 interface HistoryRow {
@@ -140,7 +142,10 @@ function SalaryRow({ row, companyId, period, selected, onToggleSelect, onSaved }
           </div>
           <div className="min-w-0">
             <p className="text-white text-sm font-medium truncate">{row.name}</p>
-            <p className="text-white/40 text-[10px] truncate">{ROLE_LABELS[row.roleInCompany] || row.roleInCompany}</p>
+            <p className="text-white/40 text-[10px] truncate">
+              {ROLE_LABELS[row.roleInCompany] || row.roleInCompany}
+              {row.displayId && <span className="ml-1.5 font-mono text-white/20">{row.displayId}</span>}
+            </p>
           </div>
         </div>
 
@@ -279,6 +284,73 @@ export default function SalarySection({ companyId }: Props) {
     setSelected(prev => prev.size === unpaid.length ? new Set() : new Set(unpaid));
   };
 
+  const exportExcel = () => {
+    if (rows.length === 0) return;
+    const data = rows.map(r => ({
+      "ID":                r.displayId || "",
+      "Сотрудник":         r.name,
+      "Должность":         ROLE_LABELS[r.roleInCompany] || r.roleInCompany,
+      "Оклад (₽)":         r.baseSalary,
+      "Премия (₽)":        r.bonus,
+      "Вычет (₽)":         r.deduction,
+      "Итого (₽)":         r.baseSalary + r.bonus - r.deduction,
+      "Статус":            r.status === "paid" ? "Выплачено" : "К выплате",
+      "Дата выплаты":      r.paidAt ? new Date(r.paidAt).toLocaleDateString("ru") : "",
+      "Заметка":           r.note,
+    }));
+
+    // Итоговая строка
+    const total = rows.reduce((s, r) => s + r.baseSalary + r.bonus - r.deduction, 0);
+    data.push({
+      "ID": "", "Сотрудник": `ИТОГО (${rows.length} чел.)`,
+      "Должность": "", "Оклад (₽)": rows.reduce((s, r) => s + r.baseSalary, 0),
+      "Премия (₽)": rows.reduce((s, r) => s + r.bonus, 0),
+      "Вычет (₽)": rows.reduce((s, r) => s + r.deduction, 0),
+      "Итого (₽)": total, "Статус": "", "Дата выплаты": "", "Заметка": "",
+    });
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    ws["!cols"] = [6, 22, 16, 12, 12, 12, 12, 14, 14, 20].map(wch => ({ wch }));
+
+    // Лист «Инфо»
+    const info = XLSX.utils.aoa_to_sheet([
+      ["Ведомость зарплат"],
+      ["Период:", periodLabel(period)],
+      ["Дата выгрузки:", new Date().toLocaleString("ru")],
+      ["Фонд оплаты труда:", `${total.toLocaleString("ru")} ₽`],
+    ]);
+    info["!cols"] = [{ wch: 22 }, { wch: 24 }];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Ведомость");
+    XLSX.utils.book_append_sheet(wb, info, "Инфо");
+    XLSX.writeFile(wb, `Зарплаты_${period}.xlsx`);
+  };
+
+  const exportCSV = () => {
+    if (rows.length === 0) return;
+    const headers = ["ID", "Сотрудник", "Должность", "Оклад", "Премия", "Вычет", "Итого", "Статус"];
+    const lines = [
+      headers.join(";"),
+      ...rows.map(r => [
+        r.displayId || "",
+        r.name,
+        ROLE_LABELS[r.roleInCompany] || r.roleInCompany,
+        r.baseSalary,
+        r.bonus,
+        r.deduction,
+        r.baseSalary + r.bonus - r.deduction,
+        r.status === "paid" ? "Выплачено" : "К выплате",
+      ].join(";")),
+    ];
+    const blob = new Blob(["\uFEFF" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `Зарплаты_${period}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
   const markPaid = async (status: "paid" | "pending") => {
     if (selected.size === 0) return;
     setMarkingPaid(true);
@@ -313,21 +385,37 @@ export default function SalarySection({ companyId }: Props) {
           <p className="text-white/45 text-xs mt-0.5">Управляй начислениями сотрудников по периодам</p>
         </div>
 
-        {/* Переключатель периода */}
-        <div className="flex items-center gap-1 glass rounded-xl border border-white/10 px-1 py-1">
-          <button onClick={() => setPeriod(p => prevPeriod(p))}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/8 transition-all">
-            <Icon name="ChevronLeft" size={14} />
-          </button>
-          <span className="text-white text-sm font-semibold px-3 min-w-[130px] text-center">
-            {periodLabel(period)}
-          </span>
-          <button
-            onClick={() => setPeriod(p => nextPeriod(p))}
-            disabled={period >= currentPeriod()}
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/8 disabled:opacity-30 transition-all">
-            <Icon name="ChevronRight" size={14} />
-          </button>
+        {/* Переключатель периода + экспорт */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1 glass rounded-xl border border-white/10 px-1 py-1">
+            <button onClick={() => setPeriod(p => prevPeriod(p))}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/8 transition-all">
+              <Icon name="ChevronLeft" size={14} />
+            </button>
+            <span className="text-white text-sm font-semibold px-3 min-w-[130px] text-center">
+              {periodLabel(period)}
+            </span>
+            <button
+              onClick={() => setPeriod(p => nextPeriod(p))}
+              disabled={period >= currentPeriod()}
+              className="w-7 h-7 rounded-lg flex items-center justify-center text-white/45 hover:text-white hover:bg-white/8 disabled:opacity-30 transition-all">
+              <Icon name="ChevronRight" size={14} />
+            </button>
+          </div>
+          {rows.length > 0 && !loading && (
+            <div className="flex items-center gap-1.5">
+              <button onClick={exportCSV}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-neon-cyan/80 hover:text-neon-cyan border border-neon-cyan/20 hover:border-neon-cyan/40 hover:bg-neon-cyan/5 transition-all"
+                title="Скачать CSV">
+                <Icon name="FileText" size={12} /> CSV
+              </button>
+              <button onClick={exportExcel}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-neon-green/80 hover:text-neon-green border border-neon-green/20 hover:border-neon-green/40 hover:bg-neon-green/5 transition-all"
+                title="Скачать Excel">
+                <Icon name="FileSpreadsheet" size={12} /> Excel
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

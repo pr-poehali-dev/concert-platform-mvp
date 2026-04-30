@@ -198,11 +198,12 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
   };
 
   const PERM_ITEMS: { key: keyof AccessPermissions; label: string; description: string; icon: string; color: string }[] = [
-    { key: "canViewExpenses", label: "Видит расходы",  description: "Вкладка «Бюджет расходов»", icon: "TrendingDown", color: "text-neon-pink" },
-    { key: "canViewIncome",   label: "Видит доходы",   description: "Вкладка «Доходы»",           icon: "TrendingUp",   color: "text-neon-green" },
-    { key: "canViewSummary",  label: "Видит P&L",      description: "Итоговый отчёт прибыли",     icon: "BarChart3",    color: "text-neon-cyan" },
-    { key: "canEditExpenses", label: "Редактирует расходы", description: "Добавлять/изменять/удалять", icon: "Pencil", color: "text-neon-pink" },
-    { key: "canEditIncome",   label: "Редактирует доходы",  description: "Добавлять/изменять/удалять", icon: "Pencil", color: "text-neon-green" },
+    { key: "canViewExpenses", label: "Видит расходы",       description: "Вкладка «Бюджет расходов»",       icon: "TrendingDown", color: "text-neon-pink"   },
+    { key: "canViewIncome",   label: "Видит доходы",        description: "Вкладка «Доходы»",                icon: "TrendingUp",   color: "text-neon-green" },
+    { key: "canViewSummary",  label: "Видит P&L",           description: "Итоговый отчёт прибыли",          icon: "BarChart3",    color: "text-neon-cyan"  },
+    { key: "canEditExpenses", label: "Редактирует расходы", description: "Добавлять/изменять/удалять",       icon: "Pencil",       color: "text-neon-pink"  },
+    { key: "canEditIncome",   label: "Редактирует доходы",  description: "Добавлять/изменять/удалять",       icon: "Pencil",       color: "text-neon-green" },
+    { key: "canViewSalary",   label: "Видит свою зарплату", description: "Раздел «Зарплаты» в Компании",    icon: "Banknote",     color: "text-neon-cyan"  },
   ];
 
   return (
@@ -404,12 +405,17 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
             const deniedCount = deniedFinance + (deniedSections > 0 ? 1 : 0);
             return (
               <div key={emp.id} className={`glass rounded-2xl p-4 flex items-center gap-4 ${!emp.isActive ? "opacity-50" : ""}`}>
-                <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${emp.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
-                  {emp.avatar}
+                <div className="relative shrink-0">
+                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${emp.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm`}>
+                    {emp.avatar}
+                  </div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-white font-bold text-sm">{emp.name}</span>
+                    {emp.displayId && (
+                      <span className="text-white/30 text-[10px] font-mono">{emp.displayId}</span>
+                    )}
                     <Badge className="text-xs bg-white/5 text-white/65 border-white/10">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</Badge>
                     {!emp.isActive && <Badge className="text-xs bg-neon-pink/10 text-neon-pink border-neon-pink/20">Заблокирован</Badge>}
                     {deniedCount > 0 && (
@@ -420,6 +426,12 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                   </div>
                   <div className="flex items-center gap-3 mt-0.5 flex-wrap">
                     <p className="text-white/65 text-xs">{emp.email}</p>
+                    {emp.salaryAmount != null && (
+                      <span className="flex items-center gap-1 text-xs text-neon-green/80">
+                        <Icon name="Banknote" size={11} />
+                        {emp.salaryAmount.toLocaleString("ru")} ₽/мес
+                      </span>
+                    )}
                     {(() => {
                       const ls = formatEmployeeLastSeen(emp.lastSeen);
                       return (

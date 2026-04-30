@@ -34,6 +34,7 @@ export interface AccessPermissions {
   canViewSummary: boolean;
   canEditExpenses: boolean;
   canEditIncome: boolean;
+  canViewSalary: boolean;
   allowedSections: SectionId[];
 }
 
@@ -43,6 +44,7 @@ export const DEFAULT_ACCESS_PERMISSIONS: AccessPermissions = {
   canViewSummary: true,
   canEditExpenses: true,
   canEditIncome: true,
+  canViewSalary: false,
   allowedSections: [...ALL_SECTIONS],
 };
 
@@ -52,6 +54,8 @@ export interface Employee {
   isActive: boolean; createdAt: string;
   accessPermissions: AccessPermissions;
   lastSeen?: string;
+  displayId?: string;
+  salaryAmount?: number;
 }
 
 export function formatEmployeeLastSeen(str?: string): { text: string; isOnline: boolean; color: string; dot: string } {

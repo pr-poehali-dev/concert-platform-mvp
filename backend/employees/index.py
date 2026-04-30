@@ -31,6 +31,7 @@ ALL_SECTIONS = [
 DEFAULT_PERMISSIONS = {
     "canViewExpenses": True, "canViewIncome": True, "canViewSummary": True,
     "canEditExpenses": True, "canEditIncome": True,
+    "canViewSalary":   False,
     "allowedSections": ALL_SECTIONS,
 }
 
@@ -187,7 +188,9 @@ def send_employee_invite(to_email: str, emp_name: str, company_name: str, passwo
 
 
 def row_to_emp(row) -> dict:
-    # row: id, company_user_id, name, email, role_in_company, avatar, avatar_color, is_active, created_at, access_permissions, last_seen
+    # row: id(0), company_user_id(1), name(2), email(3), role_in_company(4),
+    #      avatar(5), avatar_color(6), is_active(7), created_at(8),
+    #      access_permissions(9), last_seen(10), display_id(11), salary_amount(12)
     raw_perms = row[9] if len(row) > 9 else None
     if isinstance(raw_perms, dict):
         perms = raw_perms
@@ -199,19 +202,23 @@ def row_to_emp(row) -> dict:
     else:
         perms = DEFAULT_PERMISSIONS.copy()
     perms = normalize_perms(perms)
-    last_seen = row[10] if len(row) > 10 else None
+    last_seen    = row[10] if len(row) > 10 else None
+    display_id   = row[11] if len(row) > 11 else None
+    salary_amount = float(row[12]) if (len(row) > 12 and row[12] is not None) else None
     return {
-        "id": str(row[0]),
-        "companyUserId": str(row[1]),
-        "name": row[2],
-        "email": row[3],
-        "roleInCompany": row[4],
-        "avatar": row[5],
-        "avatarColor": row[6],
-        "isActive": row[7],
-        "createdAt": str(row[8]),
+        "id":             str(row[0]),
+        "companyUserId":  str(row[1]),
+        "name":           row[2],
+        "email":          row[3],
+        "roleInCompany":  row[4],
+        "avatar":         row[5],
+        "avatarColor":    row[6],
+        "isActive":       row[7],
+        "createdAt":      str(row[8]),
         "accessPermissions": perms,
-        "lastSeen": str(last_seen) if last_seen else "",
+        "lastSeen":       str(last_seen) if last_seen else "",
+        "displayId":      display_id or "",
+        "salaryAmount":   salary_amount,
     }
 
 
@@ -228,16 +235,23 @@ def handler(event: dict, context) -> dict:
         cid = params.get("company_user_id", "")
         if not cid:
             return err("company_user_id required")
+        from datetime import datetime as _dt
+        cur_period = _dt.now().strftime("%Y-%m")
         conn = get_conn()
         try:
             cur = conn.cursor()
             cur.execute(
-                f"""SELECT id, company_user_id, name, email, role_in_company,
-                           avatar, avatar_color, is_active, created_at,
-                           access_permissions, last_seen
-                    FROM {SCHEMA}.employees WHERE company_user_id = %s
-                    ORDER BY created_at""",
-                (cid,)
+                f"""SELECT e.id, e.company_user_id, e.name, e.email, e.role_in_company,
+                           e.avatar, e.avatar_color, e.is_active, e.created_at,
+                           e.access_permissions, e.last_seen,
+                           CONCAT('#EMP', UPPER(SUBSTRING(e.id::text, 1, 6))) as display_id,
+                           COALESCE(s.base_salary + s.bonus - s.deduction, NULL) as salary_amount
+                    FROM {SCHEMA}.employees e
+                    LEFT JOIN {SCHEMA}.salary_records s
+                      ON s.employee_id = e.id AND s.company_user_id = %s AND s.period = %s
+                    WHERE e.company_user_id = %s
+                    ORDER BY e.created_at""",
+                (cid, cur_period, cid)
             )
             rows = cur.fetchall()
         finally:
@@ -574,13 +588,14 @@ def handler(event: dict, context) -> dict:
             # Все активные сотрудники + их запись за период (может отсутствовать)
             cur.execute(
                 f"""SELECT e.id, e.name, e.role_in_company, e.avatar, e.avatar_color,
-                           s.id, s.base_salary, s.bonus, s.deduction, s.note, s.status, s.paid_at, s.period
+                           s.id, s.base_salary, s.bonus, s.deduction, s.note, s.status, s.paid_at, s.period,
+                           CONCAT('#EMP', UPPER(SUBSTRING(e.id::text, 1, 6))) as display_id
                     FROM {SCHEMA}.employees e
                     LEFT JOIN {SCHEMA}.salary_records s
-                      ON s.employee_id = e.id AND s.period = %s
+                      ON s.employee_id = e.id AND s.period = %s AND s.company_user_id = %s
                     WHERE e.company_user_id = %s AND e.is_active = TRUE
                     ORDER BY e.name""",
-                (period, company_user_id)
+                (period, company_user_id, company_user_id)
             )
             rows = cur.fetchall()
         finally:
@@ -601,6 +616,7 @@ def handler(event: dict, context) -> dict:
                 "status":        r[10] or "pending",
                 "paidAt":        str(r[11]) if r[11] else None,
                 "period":        r[12] or period,
+                "displayId":     r[13] or "",
             })
         return ok({"salaries": result, "period": period})
 
