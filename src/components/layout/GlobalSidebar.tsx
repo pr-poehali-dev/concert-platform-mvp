@@ -110,30 +110,30 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
   };
 
   return (
-    <aside className="hidden xl:flex flex-col w-60 shrink-0 gap-2.5 sticky top-20 self-start max-h-[calc(100vh-6rem)] overflow-y-auto scrollbar-thin pb-4">
+    <aside className="hidden xl:flex flex-col w-56 shrink-0 gap-1.5 sticky top-20 self-start max-h-[calc(100vh-5rem)] overflow-y-auto scrollbar-thin pb-2">
 
       {/* Профиль */}
       <div
-        className="glass rounded-2xl border border-white/15 px-3 py-3 cursor-pointer hover:border-neon-purple/40 transition-all group"
+        className="glass rounded-xl border border-white/15 px-2.5 py-2 cursor-pointer hover:border-neon-purple/40 transition-all group"
         onClick={() => onNavigate("dashboard:profile")}
       >
-        <div className="flex items-center gap-3">
-          <div className={`w-11 h-11 rounded-xl bg-gradient-to-br ${user.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-base shrink-0`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-lg bg-gradient-to-br ${user.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm shrink-0`}>
             {user.avatar}
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-white text-sm font-bold truncate">{user.name}</p>
-            <p className={`text-xs font-semibold ${isVenue ? "text-neon-cyan" : "text-neon-purple"}`}>
+            <p className="text-white text-xs font-bold truncate leading-tight">{user.name}</p>
+            <p className={`text-[10px] font-semibold leading-tight ${isVenue ? "text-neon-cyan" : "text-neon-purple"}`}>
               {isVenue ? "Площадка" : "Организатор"}
             </p>
           </div>
-          <Icon name="Settings" size={16} className="text-white/35 shrink-0 group-hover:text-white/70 transition-colors" />
+          <Icon name="Settings" size={14} className="text-white/35 shrink-0 group-hover:text-white/70 transition-colors" />
         </div>
       </div>
 
       {/* Платформа */}
-      <nav className="glass rounded-2xl border border-white/15 p-2 flex flex-col gap-1">
-        <p className="text-white/45 text-[11px] uppercase tracking-wider px-3 pt-1 pb-1 font-bold">Платформа</p>
+      <nav className="glass rounded-xl border border-white/15 p-1.5 flex flex-col gap-0.5">
+        <p className="text-white/45 text-[10px] uppercase tracking-wider px-2.5 pt-0.5 pb-0.5 font-bold">Платформа</p>
         {mainItems.map(item => {
           const active = activePage === item.page;
           const c = COLOR_CLASSES[item.color || "purple"];
@@ -141,13 +141,13 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
             <button
               key={item.id}
               onClick={() => handleClick(item)}
-              className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
+              className={`group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
                 active
                   ? `${c.bg} ${c.shadow}`
                   : "text-white/80 hover:text-white hover:bg-white/8"
               }`}
             >
-              <Icon name={item.icon as never} size={18} className={active ? c.iconActive : `text-white/65 ${c.hoverIcon}`} />
+              <Icon name={item.icon as never} size={16} className={active ? c.iconActive : `text-white/65 ${c.hoverIcon}`} />
               <span className="flex-1">{item.label}</span>
             </button>
           );
@@ -155,8 +155,8 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
       </nav>
 
       {/* Личный кабинет */}
-      <nav className="glass rounded-2xl border border-white/15 p-2 flex flex-col gap-1">
-        <p className="text-white/45 text-[11px] uppercase tracking-wider px-3 pt-1 pb-1 font-bold">Кабинет</p>
+      <nav className="glass rounded-xl border border-white/15 p-1.5 flex flex-col gap-0.5">
+        <p className="text-white/45 text-[10px] uppercase tracking-wider px-2.5 pt-0.5 pb-0.5 font-bold">Кабинет</p>
         {dashItems.map(item => {
           const active = isItemActive(item);
           const badge = item.badge ? item.badge() : 0;
@@ -165,16 +165,16 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
             <button
               key={item.id}
               onClick={() => handleClick(item)}
-              className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
+              className={`group w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all text-left ${
                 active
                   ? `${c.bg} ${c.shadow}`
                   : "text-white/80 hover:text-white hover:bg-white/8"
               }`}
             >
-              <Icon name={item.icon as never} size={18} className={active ? c.iconActive : `text-white/65 ${c.hoverIcon}`} />
+              <Icon name={item.icon as never} size={16} className={active ? c.iconActive : `text-white/65 ${c.hoverIcon}`} />
               <span className="flex-1">{item.label}</span>
               {badge > 0 && (
-                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
+                <span className={`text-[9px] font-bold px-1 py-0 rounded-full min-w-[16px] text-center ${
                   active ? "bg-white/25 text-white" : "bg-neon-pink text-white shadow-md shadow-neon-pink/30"
                 }`}>
                   {badge > 9 ? "9+" : badge}
@@ -188,9 +188,9 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
       {/* Выйти */}
       <button
         onClick={logout}
-        className="flex items-center gap-3 px-3 py-2.5 rounded-2xl text-sm font-semibold text-neon-pink/80 hover:text-neon-pink hover:bg-neon-pink/10 border border-white/10 hover:border-neon-pink/30 transition-all glass"
+        className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-neon-pink/80 hover:text-neon-pink hover:bg-neon-pink/10 border border-white/10 hover:border-neon-pink/30 transition-all glass"
       >
-        <Icon name="LogOut" size={16} />
+        <Icon name="LogOut" size={14} />
         <span>Выйти</span>
       </button>
     </aside>
