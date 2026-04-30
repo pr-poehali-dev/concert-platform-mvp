@@ -141,7 +141,7 @@ export default function ProjectLogisticsTab({
     setAiLoading(true);
     setAiAdvice(null);
     try {
-      const sessionId = localStorage.getItem("session_id") || "";
+      const sessionId = localStorage.getItem("tourlink_session") || "";
       const res = await fetch(`${AI_URL}?action=logistics`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
@@ -171,7 +171,7 @@ export default function ProjectLogisticsTab({
     setAiSuggestLoading(true);
     setAiSuggest(null);
     try {
-      const sessionId = localStorage.getItem("session_id") || "";
+      const sessionId = localStorage.getItem("tourlink_session") || "";
       const res = await fetch(`${AI_URL}?action=logistics`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
