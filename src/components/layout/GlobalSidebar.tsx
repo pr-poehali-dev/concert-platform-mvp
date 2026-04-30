@@ -2,6 +2,7 @@ import Icon from "@/components/ui/icon";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
+import { useHiddenSections } from "@/hooks/useHiddenSections";
 
 interface Props {
   activePage: string;
@@ -52,6 +53,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const { theme, toggleTheme } = useTheme();
+  const { isHidden } = useHiddenSections();
 
   if (!user) return null;
 
@@ -59,13 +61,16 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
   const isOrg   = user.role === "organizer";
   const isDash = activePage === "dashboard";
 
-  // Для сотрудников — фильтруем по allowedSections
+  // Для сотрудников — фильтруем по allowedSections из прав
+  // Для владельца — фильтруем по персональным настройкам скрытия (localStorage)
   const allowed = user.isEmployee
     ? (user.accessPermissions?.allowedSections ?? null)
-    : null; // null = всё разрешено (владелец)
+    : null;
 
-  const canSee = (sectionId: string) =>
-    allowed === null || allowed.includes(sectionId);
+  const canSee = (sectionId: string) => {
+    if (user.isEmployee) return allowed === null || allowed.includes(sectionId);
+    return !isHidden(sectionId);
+  };
 
   // ── Главные страницы ───────────────────────────────────────────────────
   const mainItems: NavItem[] = [

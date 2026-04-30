@@ -6,6 +6,7 @@ import ProfileSection from "./profile/ProfileSection";
 import RequisitesSection from "./profile/RequisitesSection";
 import LogoSection from "./profile/LogoSection";
 import EmployeesSection from "./profile/EmployeesSection";
+import NavigationSection from "./profile/NavigationSection";
 import TabHeader from "@/components/dashboard/TabHeader";
 
 interface DashboardProfileTabProps {
@@ -27,7 +28,7 @@ export default function DashboardProfileTab({
   onEditFormChange, onEditToggle, onSave, onCancelEdit, onLogout,
   onProfileUpdate,
 }: DashboardProfileTabProps) {
-  const [section, setSection] = useState<"profile" | "security" | "requisites" | "logo" | "employees">("profile");
+  const [section, setSection] = useState<"profile" | "security" | "requisites" | "logo" | "employees" | "navigation">("profile");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [empLoading, setEmpLoading] = useState(false);
 
@@ -197,11 +198,12 @@ export default function DashboardProfileTab({
   };
 
   const SECTIONS = [
-    { id: "profile",    label: "Профиль",    icon: "User" },
-    { id: "security",   label: "Безопасность", icon: "ShieldCheck" },
-    { id: "requisites", label: "Реквизиты",  icon: "FileText" },
-    { id: "logo",       label: "Логотип",    icon: "Image" },
-    { id: "employees",  label: "Сотрудники", icon: "Users" },
+    { id: "profile",    label: "Профиль",     icon: "User" },
+    { id: "security",   label: "Безопасность",icon: "ShieldCheck" },
+    { id: "requisites", label: "Реквизиты",   icon: "FileText" },
+    { id: "logo",       label: "Логотип",     icon: "Image" },
+    { id: "employees",  label: "Сотрудники",  icon: "Users" },
+    { id: "navigation", label: "Навигация",   icon: "LayoutDashboard" },
   ] as const;
 
   return (
@@ -396,6 +398,10 @@ export default function DashboardProfileTab({
           empLoading={empLoading}
           onReload={loadEmployees}
         />
+      )}
+
+      {section === "navigation" && (
+        <NavigationSection user={user} />
       )}
     </div>
   );
