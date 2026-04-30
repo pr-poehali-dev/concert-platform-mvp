@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import SendToConversationModal from "@/components/chat/SendToConversationModal";
@@ -10,10 +10,13 @@ import {
 import DocUploadModal from "./documents/DocUploadModal";
 import DocDeleteModal from "./documents/DocDeleteModal";
 import DocCard from "./documents/DocCard";
+import DocHeader from "./documents/DocHeader";
+import DocCategoryFilter from "./documents/DocCategoryFilter";
+import DocFolderBar from "./documents/DocFolderBar";
+import DocDeleteFolderModal from "./documents/DocDeleteFolderModal";
 
 export default function DashboardDocumentsTab() {
   const { user } = useAuth();
-  const fileRef = useRef<HTMLInputElement>(null);
 
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
@@ -153,7 +156,6 @@ export default function DashboardDocumentsTab() {
 
   // ── Move to folder ─────────────────────────────────────────────────────
   const moveToFolder = async (docId: string, folder: string) => {
-    // Оптимистичное обновление UI
     setDocs(prev => prev.map(d => d.id === docId ? { ...d, folder } : d));
     try {
       const res = await fetch(`${DOCS_URL}?action=update_folder`, {
@@ -161,10 +163,7 @@ export default function DashboardDocumentsTab() {
         headers: { "Content-Type": "application/json", "X-Session-Id": session() },
         body: JSON.stringify({ id: docId, folder }),
       });
-      if (!res.ok) {
-        // Откатываем если ошибка
-        await loadDocs();
-      }
+      if (!res.ok) await loadDocs();
     } catch {
       await loadDocs();
     }
@@ -175,7 +174,6 @@ export default function DashboardDocumentsTab() {
     const trimmed = newName.trim();
     if (!trimmed || trimmed === oldName) { setRenamingFolder(null); return; }
     const toUpdate = docs.filter(d => d.folder === oldName);
-    // Оптимистичное обновление
     setDocs(prev => prev.map(d => d.folder === oldName ? { ...d, folder: trimmed } : d));
     setExtraFolders(prev => prev.map(f => f === oldName ? trimmed : f));
     if (filterFolder === oldName) setFilterFolder(trimmed);
@@ -197,7 +195,6 @@ export default function DashboardDocumentsTab() {
   // ── Delete folder ──────────────────────────────────────────────────────
   const deleteFolder = async (name: string) => {
     const toUpdate = docs.filter(d => d.folder === name);
-    // Оптимистичное обновление
     setDocs(prev => prev.map(d => d.folder === name ? { ...d, folder: "" } : d));
     setExtraFolders(prev => prev.filter(f => f !== name));
     if (filterFolder === name) setFilterFolder("all");
@@ -225,13 +222,6 @@ export default function DashboardDocumentsTab() {
     ...docs.map(d => d.folder || "").filter(Boolean),
   ])).sort();
 
-  const totalSize = docs.reduce((sum, d) => sum + (d.size || 0), 0);
-  const formatSize = (bytes: number) => {
-    if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
-    if (bytes >= 1024) return `${Math.round(bytes / 1024)} КБ`;
-    return `${bytes} Б`;
-  };
-
   const filtered = docs.filter(d => {
     if (filterCat !== "all" && d.category !== filterCat) return false;
     if (filterFolder !== "all") {
@@ -245,197 +235,53 @@ export default function DashboardDocumentsTab() {
     return true;
   });
 
-  // suppress unused warning — uploading used implicitly via uploadProgress
   void uploading;
 
   // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h2 className="font-oswald font-bold text-xl text-white">Мои документы</h2>
-          <div className="flex items-center gap-3 mt-0.5">
-            <p className="text-white/40 text-sm">
-              {isVenue
-                ? "Технические райдеры, договоры и другие файлы"
-                : "Райдеры, договоры с артистами и другие файлы"}
-            </p>
-            {docs.length > 0 && (
-              <span className="text-white/20 text-xs">
-                {docs.length} файл{docs.length === 1 ? "" : docs.length < 5 ? "а" : "ов"} · {formatSize(totalSize)}
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Поиск по названию..."
-              className="glass border border-white/10 rounded-xl pl-8 pr-3 py-2.5 text-white text-sm outline-none focus:border-neon-purple/50 transition-colors w-44 placeholder:text-white/25"
-            />
-          </div>
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity whitespace-nowrap"
-          >
-            <Icon name="Upload" size={16} />
-            Загрузить
-          </button>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          className="hidden"
-          accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png"
-          onChange={handleFileSelect}
-        />
-      </div>
+      <DocHeader
+        docs={docs}
+        search={search}
+        isVenue={isVenue}
+        onSearchChange={setSearch}
+        onFileSelect={handleFileSelect}
+      />
 
-      {/* Filter tabs */}
-      <div className="flex flex-wrap gap-1 glass rounded-xl p-1 w-fit">
-        <button
-          onClick={() => setFilterCat("all")}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterCat === "all" ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
-        >
-          Все ({docs.length})
-        </button>
-        {categories.map(c => {
-          const cnt = docs.filter(d => d.category === c.value).length;
-          return (
-            <button
-              key={c.value}
-              onClick={() => setFilterCat(c.value)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterCat === c.value ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
-            >
-              <Icon name={c.icon as never} size={13} />
-              {c.label}
-              {cnt > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${filterCat === c.value ? "bg-white/20" : "bg-white/10"}`}>
-                  {cnt}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <DocCategoryFilter
+        docs={docs}
+        categories={categories}
+        filterCat={filterCat}
+        onFilterCat={setFilterCat}
+      />
 
-      {/* Папки */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <Icon name="Folder" size={14} className="text-white/30" />
-        <button
-          onClick={() => setFilterFolder("all")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "all" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
-        >
-          Все папки
-        </button>
-        <button
-          onClick={() => setFilterFolder("__none__")}
-          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "__none__" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
-        >
-          Без папки
-        </button>
-        {allFolders.map(f => (
-          renamingFolder === f ? (
-            <div key={f} className="flex items-center gap-1">
-              <input
-                value={renameValue}
-                onChange={e => setRenameValue(e.target.value)}
-                className="glass border border-neon-cyan/40 rounded-lg px-2 py-1 text-white text-xs outline-none w-32"
-                autoFocus
-                onKeyDown={e => {
-                  if (e.key === "Enter") renameFolder(f, renameValue);
-                  if (e.key === "Escape") setRenamingFolder(null);
-                }}
-              />
-              <button
-                onClick={() => renameFolder(f, renameValue)}
-                className="text-neon-cyan text-xs px-2 py-1 bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg hover:bg-neon-cyan/20"
-              >
-                ОК
-              </button>
-              <button
-                onClick={() => setRenamingFolder(null)}
-                className="text-white/30 text-xs px-1.5 py-1 hover:text-white/60 rounded-lg"
-              >
-                <Icon name="X" size={12} />
-              </button>
-            </div>
-          ) : (
-            <div key={f} className={`group flex items-center gap-1 rounded-lg border transition-all ${filterFolder === f ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30" : "glass text-white/40 border-white/10 hover:text-white"}`}>
-              <button
-                onClick={() => setFilterFolder(f)}
-                className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-xs font-medium"
-              >
-                <Icon name="FolderOpen" size={11} />
-                {f}
-                <span className="text-[10px] opacity-60">({docs.filter(d => d.folder === f).length})</span>
-              </button>
-              <div className="flex items-center gap-0.5 pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={e => { e.stopPropagation(); setRenamingFolder(f); setRenameValue(f); }}
-                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/30 hover:text-neon-cyan transition-all"
-                  title="Переименовать"
-                >
-                  <Icon name="Pencil" size={10} />
-                </button>
-                <button
-                  onClick={e => { e.stopPropagation(); setDeletingFolder(f); }}
-                  className="w-5 h-5 flex items-center justify-center rounded hover:bg-neon-pink/10 text-white/30 hover:text-neon-pink transition-all"
-                  title="Удалить папку"
-                >
-                  <Icon name="Trash2" size={10} />
-                </button>
-              </div>
-            </div>
-          )
-        ))}
-        {showNewFolder ? (
-          <div className="flex items-center gap-1.5">
-            <input
-              value={newFolder}
-              onChange={e => setNewFolder(e.target.value)}
-              placeholder="Название папки"
-              className="glass border border-neon-cyan/30 rounded-lg px-3 py-1.5 text-white text-xs outline-none w-36"
-              onKeyDown={e => {
-                if (e.key === "Enter" && newFolder.trim()) {
-                  const name = newFolder.trim();
-                  setExtraFolders(prev => prev.includes(name) ? prev : [...prev, name]);
-                  setFilterFolder(name);
-                  setShowNewFolder(false);
-                  setNewFolder("");
-                }
-                if (e.key === "Escape") { setShowNewFolder(false); setNewFolder(""); }
-              }}
-              autoFocus
-            />
-            <button
-              onClick={() => {
-                if (newFolder.trim()) {
-                  const name = newFolder.trim();
-                  setExtraFolders(prev => prev.includes(name) ? prev : [...prev, name]);
-                  setFilterFolder(name);
-                }
-                setShowNewFolder(false);
-                setNewFolder("");
-              }}
-              className="text-neon-cyan text-xs px-2 py-1.5 bg-neon-cyan/10 border border-neon-cyan/20 rounded-lg hover:bg-neon-cyan/20"
-            >
-              ОК
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowNewFolder(true)}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-white/25 border border-dashed border-white/10 hover:text-white/50 hover:border-white/20 transition-all"
-          >
-            <Icon name="Plus" size={11} />Новая папка
-          </button>
-        )}
-      </div>
+      <DocFolderBar
+        docs={docs}
+        allFolders={allFolders}
+        filterFolder={filterFolder}
+        renamingFolder={renamingFolder}
+        renameValue={renameValue}
+        showNewFolder={showNewFolder}
+        newFolder={newFolder}
+        onFilterFolder={setFilterFolder}
+        onStartRename={f => { setRenamingFolder(f); setRenameValue(f); }}
+        onRenameValueChange={setRenameValue}
+        onRenameConfirm={renameFolder}
+        onRenameCancel={() => setRenamingFolder(null)}
+        onDeleteFolder={f => setDeletingFolder(f)}
+        onShowNewFolder={() => setShowNewFolder(true)}
+        onNewFolderChange={setNewFolder}
+        onNewFolderConfirm={() => {
+          const name = newFolder.trim();
+          if (name) {
+            setExtraFolders(prev => prev.includes(name) ? prev : [...prev, name]);
+            setFilterFolder(name);
+          }
+          setShowNewFolder(false);
+          setNewFolder("");
+        }}
+        onNewFolderCancel={() => { setShowNewFolder(false); setNewFolder(""); }}
+      />
 
       {/* Content */}
       {loading ? (
@@ -491,7 +337,6 @@ export default function DashboardDocumentsTab() {
         </div>
       )}
 
-      {/* Upload Modal */}
       {uploadModal && uploadFile && (
         <DocUploadModal
           file={uploadFile}
@@ -507,7 +352,6 @@ export default function DashboardDocumentsTab() {
         />
       )}
 
-      {/* Delete Modal */}
       {deleteId && (
         <DocDeleteModal
           deleting={deleting}
@@ -516,7 +360,6 @@ export default function DashboardDocumentsTab() {
         />
       )}
 
-      {/* Send to Chat Modal */}
       {sendChatFile && (
         <SendToConversationModal
           file={sendChatFile}
@@ -524,37 +367,12 @@ export default function DashboardDocumentsTab() {
         />
       )}
 
-      {/* Delete Folder Confirm */}
       {deletingFolder && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setDeletingFolder(null)} />
-          <div className="relative glass-strong rounded-2xl border border-white/10 p-6 w-full max-w-sm animate-scale-in">
-            <div className="w-12 h-12 rounded-xl bg-neon-pink/10 border border-neon-pink/20 flex items-center justify-center mx-auto mb-4">
-              <Icon name="FolderX" size={22} className="text-neon-pink" />
-            </div>
-            <h3 className="font-oswald font-bold text-lg text-white text-center mb-1">Удалить папку?</h3>
-            <p className="text-white/50 text-sm text-center mb-1">
-              Папка <span className="text-white font-medium">«{deletingFolder}»</span> будет удалена.
-            </p>
-            <p className="text-white/30 text-xs text-center mb-6">
-              Документы останутся, но будут перемещены в «Без папки»
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setDeletingFolder(null)}
-                className="flex-1 py-2.5 rounded-xl border border-white/15 text-white/60 text-sm hover:text-white hover:border-white/30 transition-all"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={() => deleteFolder(deletingFolder)}
-                className="flex-1 py-2.5 rounded-xl bg-neon-pink/20 border border-neon-pink/30 text-neon-pink text-sm font-medium hover:bg-neon-pink/30 transition-all"
-              >
-                Удалить
-              </button>
-            </div>
-          </div>
-        </div>
+        <DocDeleteFolderModal
+          folderName={deletingFolder}
+          onConfirm={deleteFolder}
+          onCancel={() => setDeletingFolder(null)}
+        />
       )}
     </div>
   );
