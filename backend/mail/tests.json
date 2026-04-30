@@ -51,6 +51,33 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Mark read missing params",
+      "method": "POST",
+      "path": "/?action=mark_read",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Move missing params",
+      "method": "POST",
+      "path": "/?action=move",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Delete missing params",
+      "method": "POST",
+      "path": "/?action=delete",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Unknown action",
       "method": "GET",
       "path": "/?action=foo",

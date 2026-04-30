@@ -350,6 +350,8 @@ def handler(event: dict, context) -> dict:
         limit      = int(params.get("limit", 30))
         offset     = int(params.get("offset", 0))
         search_q   = (params.get("q") or "").strip()
+        f_unread   = params.get("filter_unread") == "1"
+        f_attach   = params.get("filter_attach") == "1"
         if not account_id:
             return err("account_id обязателен")
         conn = get_conn()
@@ -365,25 +367,31 @@ def handler(event: dict, context) -> dict:
                 imap.select(f'"{folder}"', readonly=True)
             except Exception:
                 imap.select(folder, readonly=True)
-            # Поиск через IMAP SEARCH (по теме / отправителю / тексту)
+            # Собираем критерии поиска
+            criteria_parts = []
+            if f_unread:
+                criteria_parts.append("UNSEEN")
+            if f_attach:
+                # >50KB обычно содержит вложение (грубо, но без BODYSTRUCTURE никак)
+                criteria_parts.append("LARGER")
+                criteria_parts.append("50000")
             if search_q:
                 try:
                     encoded = search_q.encode("utf-8")
-                    # SEARCH CHARSET UTF-8 OR OR SUBJECT FROM BODY
-                    typ, data = imap.uid(
-                        "search", "CHARSET", "UTF-8",
-                        "OR", "OR",
-                        "SUBJECT", encoded,
-                        "FROM", encoded,
-                        "BODY", encoded,
-                    )
+                    args = ["search", "CHARSET", "UTF-8"]
+                    args += criteria_parts
+                    args += ["OR", "OR", "SUBJECT", encoded, "FROM", encoded, "BODY", encoded]
+                    typ, data = imap.uid(*args)
                 except Exception:
-                    # fallback без CHARSET — некоторые серверы не поддерживают
                     safe = search_q.replace('"', "")
+                    crit = " ".join(criteria_parts) + (" " if criteria_parts else "")
                     typ, data = imap.uid(
                         "search", None,
-                        f'OR OR SUBJECT "{safe}" FROM "{safe}" BODY "{safe}"',
+                        f'{crit}OR OR SUBJECT "{safe}" FROM "{safe}" BODY "{safe}"',
                     )
+            elif criteria_parts:
+                args = ["search", None] + criteria_parts
+                typ, data = imap.uid(*args)
             else:
                 typ, data = imap.uid("search", None, "ALL")
             all_uids = (data[0] or b"").split()
@@ -541,5 +549,94 @@ def handler(event: dict, context) -> dict:
         except Exception as e:
             return err(f"SMTP error: {str(e)[:200]}", 500)
         return ok({"sent": True})
+
+    # ── POST mark_read — пометить несколько писем прочит./непрочит. ────────
+    if method == "POST" and action == "mark_read":
+        body = json.loads(event.get("body") or "{}")
+        account_id = body.get("accountId", "")
+        folder     = body.get("folder", "INBOX")
+        uids       = body.get("uids", [])
+        is_read    = bool(body.get("isRead", True))
+        if not account_id or not uids:
+            return err("accountId и uids обязательны")
+        conn = get_conn()
+        try:
+            account = get_account(conn, account_id)
+        finally:
+            conn.close()
+        if not account:
+            return err("Аккаунт не найден", 404)
+        try:
+            imap = imap_connect(account)
+            try: imap.select(f'"{folder}"')
+            except Exception: imap.select(folder)
+            uid_list = ",".join(str(u) for u in uids)
+            flag_op = "+FLAGS" if is_read else "-FLAGS"
+            imap.uid("store", uid_list, flag_op, "\\Seen")
+            imap.logout()
+        except Exception as e:
+            return err(f"IMAP error: {str(e)[:200]}", 500)
+        return ok({"updated": len(uids)})
+
+    # ── POST move — переместить письма в другую папку ──────────────────────
+    if method == "POST" and action == "move":
+        body = json.loads(event.get("body") or "{}")
+        account_id = body.get("accountId", "")
+        folder     = body.get("folder", "INBOX")
+        target     = body.get("target", "")
+        uids       = body.get("uids", [])
+        if not account_id or not uids or not target:
+            return err("accountId, uids и target обязательны")
+        conn = get_conn()
+        try:
+            account = get_account(conn, account_id)
+        finally:
+            conn.close()
+        if not account:
+            return err("Аккаунт не найден", 404)
+        try:
+            imap = imap_connect(account)
+            try: imap.select(f'"{folder}"')
+            except Exception: imap.select(folder)
+            uid_list = ",".join(str(u) for u in uids)
+            # MOVE если поддерживается (быстро), иначе COPY+DELETE
+            try:
+                imap.uid("move", uid_list, f'"{target}"')
+            except Exception:
+                imap.uid("copy", uid_list, f'"{target}"')
+                imap.uid("store", uid_list, "+FLAGS", "\\Deleted")
+                imap.expunge()
+            imap.logout()
+        except Exception as e:
+            return err(f"IMAP error: {str(e)[:200]}", 500)
+        return ok({"moved": len(uids)})
+
+    # ── POST delete — удалить письма (в корзину, либо навсегда) ────────────
+    if method == "POST" and action == "delete":
+        body = json.loads(event.get("body") or "{}")
+        account_id = body.get("accountId", "")
+        folder     = body.get("folder", "INBOX")
+        uids       = body.get("uids", [])
+        if not account_id or not uids:
+            return err("accountId и uids обязательны")
+        conn = get_conn()
+        try:
+            account = get_account(conn, account_id)
+        finally:
+            conn.close()
+        if not account:
+            return err("Аккаунт не найден", 404)
+        try:
+            imap = imap_connect(account)
+            try: imap.select(f'"{folder}"')
+            except Exception: imap.select(folder)
+            uid_list = ",".join(str(u) for u in uids)
+            imap.uid("store", uid_list, "+FLAGS", "\\Deleted")
+            try: imap.expunge()
+            except Exception: pass
+            imap.logout()
+        except Exception as e:
+            return err(f"IMAP error: {str(e)[:200]}", 500)
+        return ok({"deleted": len(uids)})
 
     return err("Неизвестное действие", 404)

@@ -46,6 +46,10 @@ export default function MailPage() {
   const [searchInput, setSearchInput] = useState("");
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [filterUnread, setFilterUnread] = useState(false);
+  const [filterAttach, setFilterAttach] = useState(false);
+  const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
+  const [bulkLoading, setBulkLoading] = useState(false);
   const PAGE_SIZE = 40;
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
@@ -76,14 +80,28 @@ export default function MailPage() {
     } catch { /* silent */ }
   }, [activeFolder]);
 
+  const buildListUrl = (accId: string, folder: string, q: string, offset: number) => {
+    const parts = [
+      `action=list`,
+      `account_id=${accId}`,
+      `folder=${encodeURIComponent(folder)}`,
+      `limit=${PAGE_SIZE}`,
+      `offset=${offset}`,
+    ];
+    if (q) parts.push(`q=${encodeURIComponent(q)}`);
+    if (filterUnread) parts.push(`filter_unread=1`);
+    if (filterAttach) parts.push(`filter_attach=1`);
+    return `${MAIL_URL}?${parts.join("&")}`;
+  };
+
   const loadList = useCallback(async (accId: string, folder: string, q: string = "") => {
     setLoadingList(true);
     setMessages([]);
     setHasMore(false);
     setTotalCount(0);
+    setSelectedUids(new Set());
     try {
-      const url = `${MAIL_URL}?action=list&account_id=${accId}&folder=${encodeURIComponent(folder)}&limit=${PAGE_SIZE}&offset=0${q ? `&q=${encodeURIComponent(q)}` : ""}`;
-      const res = await fetch(url);
+      const res = await fetch(buildListUrl(accId, folder, q, 0));
       const data = await res.json();
       setMessages(data.messages || []);
       setHasMore(!!data.hasMore);
@@ -93,18 +111,17 @@ export default function MailPage() {
     } finally {
       setLoadingList(false);
     }
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filterUnread, filterAttach]);
 
   const loadMore = useCallback(async () => {
     if (!activeAccountId || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const offset = messages.length;
-      const url = `${MAIL_URL}?action=list&account_id=${activeAccountId}&folder=${encodeURIComponent(activeFolder)}&limit=${PAGE_SIZE}&offset=${offset}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`;
-      const res = await fetch(url);
+      const res = await fetch(buildListUrl(activeAccountId, activeFolder, searchQuery, offset));
       const data = await res.json();
       const next: MailListItem[] = data.messages || [];
-      // Дедупликация по uid (на случай прихода нового письма во время пагинации)
       setMessages(prev => {
         const seen = new Set(prev.map(m => m.uid));
         return [...prev, ...next.filter(m => !seen.has(m.uid))];
@@ -112,7 +129,88 @@ export default function MailPage() {
       setHasMore(!!data.hasMore);
     } catch { /* silent */ }
     finally { setLoadingMore(false); }
-  }, [activeAccountId, activeFolder, messages.length, hasMore, loadingMore, searchQuery]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountId, activeFolder, messages.length, hasMore, loadingMore, searchQuery, filterUnread, filterAttach]);
+
+  // ── Массовые действия ─────────────────────────────────────────────────
+  const toggleSelect = (uid: string) => {
+    setSelectedUids(prev => {
+      const next = new Set(prev);
+      if (next.has(uid)) next.delete(uid);
+      else next.add(uid);
+      return next;
+    });
+  };
+
+  const selectAllVisible = () => {
+    if (selectedUids.size === messages.length) {
+      setSelectedUids(new Set());
+    } else {
+      setSelectedUids(new Set(messages.map(m => m.uid)));
+    }
+  };
+
+  const bulkMarkRead = async (isRead: boolean) => {
+    if (!activeAccountId || selectedUids.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await fetch(`${MAIL_URL}?action=mark_read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: activeAccountId,
+          folder: activeFolder,
+          uids: Array.from(selectedUids),
+          isRead,
+        }),
+      });
+      const sel = selectedUids;
+      setMessages(prev => prev.map(m => sel.has(m.uid) ? { ...m, isRead } : m));
+      setSelectedUids(new Set());
+    } finally { setBulkLoading(false); }
+  };
+
+  const bulkDelete = async () => {
+    if (!activeAccountId || selectedUids.size === 0) return;
+    if (!confirm(`Удалить ${selectedUids.size} писем(а)?`)) return;
+    setBulkLoading(true);
+    try {
+      await fetch(`${MAIL_URL}?action=delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: activeAccountId,
+          folder: activeFolder,
+          uids: Array.from(selectedUids),
+        }),
+      });
+      const sel = selectedUids;
+      setMessages(prev => prev.filter(m => !sel.has(m.uid)));
+      setSelectedUids(new Set());
+      if (openMail && sel.has(openMail.uid)) setOpenMail(null);
+    } finally { setBulkLoading(false); }
+  };
+
+  const bulkMove = async (target: string) => {
+    if (!activeAccountId || selectedUids.size === 0) return;
+    setBulkLoading(true);
+    try {
+      await fetch(`${MAIL_URL}?action=move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: activeAccountId,
+          folder: activeFolder,
+          target,
+          uids: Array.from(selectedUids),
+        }),
+      });
+      const sel = selectedUids;
+      setMessages(prev => prev.filter(m => !sel.has(m.uid)));
+      setSelectedUids(new Set());
+      if (openMail && sel.has(openMail.uid)) setOpenMail(null);
+    } finally { setBulkLoading(false); }
+  };
 
   const openMessage = async (uid: string) => {
     if (!activeAccountId) return;
@@ -154,7 +252,8 @@ export default function MailPage() {
   }, [activeAccountId]);
   useEffect(() => {
     if (activeAccountId && activeFolder) loadList(activeAccountId, activeFolder, searchQuery);
-  }, [activeFolder, searchQuery]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFolder, searchQuery, filterUnread, filterAttach]);
 
   // Debounce поискового ввода
   useEffect(() => {
@@ -280,30 +379,113 @@ export default function MailPage() {
               }
             }}
           >
-            {/* Поиск */}
-            <div className="sticky top-0 bg-[var(--glass-strong-bg,#13131f)]/80 backdrop-blur-md border-b border-white/8 px-2 py-2 z-10">
-              <div className="flex items-center gap-2 px-2 py-1.5 bg-white/5 rounded-lg border border-white/10">
-                <Icon name="Search" size={14} className="text-white/45 shrink-0" />
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={e => setSearchInput(e.target.value)}
-                  placeholder={`Поиск ${searchQuery ? "..." : "по теме, отправителю, тексту"}`}
-                  className="flex-1 bg-transparent text-white text-xs outline-none placeholder:text-white/30 min-w-0"
-                />
-                {searchInput && (
+            {/* Поиск + фильтры + массовые действия */}
+            <div className="sticky top-0 bg-[var(--glass-strong-bg,#13131f)]/85 backdrop-blur-md border-b border-white/8 px-2 py-2 z-10 space-y-2">
+              {selectedUids.size > 0 ? (
+                /* Панель массовых действий */
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-white/85 text-xs font-bold px-1">
+                    Выбрано: {selectedUids.size}
+                  </span>
                   <button
-                    onClick={() => { setSearchInput(""); setSearchQuery(""); }}
-                    className="text-white/45 hover:text-white shrink-0"
+                    onClick={() => bulkMarkRead(true)}
+                    disabled={bulkLoading}
+                    title="Прочитано"
+                    className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-white/75 hover:text-white text-[11px] flex items-center gap-1 disabled:opacity-50"
                   >
-                    <Icon name="X" size={12} />
+                    <Icon name="MailCheck" size={12} /> Прочит.
                   </button>
-                )}
-              </div>
-              {searchQuery && (
-                <p className="text-white/40 text-[10px] mt-1.5 px-1">
-                  Найдено: {totalCount} {totalCount === 1 ? "письмо" : totalCount < 5 ? "письма" : "писем"}
-                </p>
+                  <button
+                    onClick={() => bulkMarkRead(false)}
+                    disabled={bulkLoading}
+                    title="Непрочитано"
+                    className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-white/75 hover:text-white text-[11px] flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Icon name="Mail" size={12} /> Непрочит.
+                  </button>
+                  {activeFolder.toUpperCase() !== "TRASH" && (
+                    <button
+                      onClick={() => bulkMove("Trash")}
+                      disabled={bulkLoading}
+                      title="В корзину"
+                      className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-white/75 hover:text-white text-[11px] flex items-center gap-1 disabled:opacity-50"
+                    >
+                      <Icon name="Archive" size={12} /> В корзину
+                    </button>
+                  )}
+                  <button
+                    onClick={bulkDelete}
+                    disabled={bulkLoading}
+                    className="px-2 py-1 bg-neon-pink/15 hover:bg-neon-pink/25 rounded text-neon-pink text-[11px] flex items-center gap-1 disabled:opacity-50"
+                  >
+                    <Icon name="Trash2" size={12} /> Удалить
+                  </button>
+                  <button
+                    onClick={() => setSelectedUids(new Set())}
+                    className="ml-auto text-white/55 hover:text-white text-[11px]"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 px-2 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                    <Icon name="Search" size={14} className="text-white/45 shrink-0" />
+                    <input
+                      type="text"
+                      value={searchInput}
+                      onChange={e => setSearchInput(e.target.value)}
+                      placeholder={`Поиск ${searchQuery ? "..." : "по теме, отправителю, тексту"}`}
+                      className="flex-1 bg-transparent text-white text-xs outline-none placeholder:text-white/30 min-w-0"
+                    />
+                    {searchInput && (
+                      <button
+                        onClick={() => { setSearchInput(""); setSearchQuery(""); }}
+                        className="text-white/45 hover:text-white shrink-0"
+                      >
+                        <Icon name="X" size={12} />
+                      </button>
+                    )}
+                  </div>
+                  {/* Фильтры-чипы */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <button
+                      onClick={() => setFilterUnread(v => !v)}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
+                        filterUnread
+                          ? "bg-neon-purple/20 text-neon-purple border-neon-purple/40"
+                          : "bg-white/5 text-white/55 border-white/10 hover:text-white"
+                      }`}
+                    >
+                      <Icon name="Mail" size={10} className="inline mr-1" />
+                      Непрочитанные
+                    </button>
+                    <button
+                      onClick={() => setFilterAttach(v => !v)}
+                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
+                        filterAttach
+                          ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40"
+                          : "bg-white/5 text-white/55 border-white/10 hover:text-white"
+                      }`}
+                    >
+                      <Icon name="Paperclip" size={10} className="inline mr-1" />
+                      С вложениями
+                    </button>
+                    {messages.length > 0 && (
+                      <button
+                        onClick={selectAllVisible}
+                        className="ml-auto text-white/55 hover:text-white text-[11px] flex items-center gap-1"
+                      >
+                        <Icon name="CheckSquare" size={11} /> Выбрать все
+                      </button>
+                    )}
+                  </div>
+                  {(searchQuery || filterUnread || filterAttach) && (
+                    <p className="text-white/40 text-[10px] px-1">
+                      Найдено: {totalCount} {totalCount === 1 ? "письмо" : totalCount < 5 ? "письма" : "писем"}
+                    </p>
+                  )}
+                </>
               )}
             </div>
 
@@ -318,25 +500,47 @@ export default function MailPage() {
               </div>
             ) : (
               <div className="divide-y divide-white/5">
-                {messages.map(m => (
-                  <button
-                    key={m.uid}
-                    onClick={() => openMessage(m.uid)}
-                    className={`w-full text-left px-3 py-2.5 hover:bg-white/5 transition-colors ${
-                      openMail?.uid === m.uid ? "bg-neon-purple/10" : ""
-                    } ${!m.isRead ? "border-l-2 border-neon-purple" : "border-l-2 border-transparent"}`}
-                  >
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <span className={`text-sm truncate ${!m.isRead ? "text-white font-bold" : "text-white/80"}`}>
-                        {m.fromName || m.fromEmail}
-                      </span>
-                      <span className="text-[10px] text-white/35 shrink-0">{formatMailDate(m.date)}</span>
+                {messages.map(m => {
+                  const checked = selectedUids.has(m.uid);
+                  return (
+                    <div
+                      key={m.uid}
+                      className={`group relative flex items-stretch hover:bg-white/5 transition-colors ${
+                        openMail?.uid === m.uid ? "bg-neon-purple/10" : ""
+                      } ${!m.isRead ? "border-l-2 border-neon-purple" : "border-l-2 border-transparent"}`}
+                    >
+                      <button
+                        onClick={(e) => { e.stopPropagation(); toggleSelect(m.uid); }}
+                        className={`pl-3 pr-1 flex items-center transition-opacity ${
+                          checked || selectedUids.size > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                        }`}
+                        title={checked ? "Снять выделение" : "Выделить"}
+                      >
+                        <span className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                          checked
+                            ? "bg-neon-purple border-neon-purple"
+                            : "border-white/30 hover:border-white/55"
+                        }`}>
+                          {checked && <Icon name="Check" size={10} className="text-white" />}
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => selectedUids.size > 0 ? toggleSelect(m.uid) : openMessage(m.uid)}
+                        className="flex-1 text-left px-2 py-2.5 min-w-0"
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-0.5">
+                          <span className={`text-sm truncate ${!m.isRead ? "text-white font-bold" : "text-white/80"}`}>
+                            {m.fromName || m.fromEmail}
+                          </span>
+                          <span className="text-[10px] text-white/35 shrink-0">{formatMailDate(m.date)}</span>
+                        </div>
+                        <p className={`text-xs truncate ${!m.isRead ? "text-white/85 font-semibold" : "text-white/55"}`}>
+                          {m.subject || "(без темы)"}
+                        </p>
+                      </button>
                     </div>
-                    <p className={`text-xs truncate ${!m.isRead ? "text-white/85 font-semibold" : "text-white/55"}`}>
-                      {m.subject || "(без темы)"}
-                    </p>
-                  </button>
-                ))}
+                  );
+                })}
                 {/* Подгрузка следующей страницы */}
                 {hasMore && (
                   <div className="px-3 py-3 text-center">
