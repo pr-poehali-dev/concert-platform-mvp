@@ -3,6 +3,9 @@ import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { EMPLOYEES_URL, type Employee, ROLE_LABELS } from "@/components/dashboard/profile/types";
 import { startPolling, stopPolling } from "@/lib/polling";
+import SalarySection from "@/components/dashboard/company/SalarySection";
+
+type CompanyView = "chat" | "salary";
 
 interface CompanyMessage {
   id: string;
@@ -29,6 +32,7 @@ function formatTime(dateStr: string) {
 
 export default function DashboardCompanyTab() {
   const { user } = useAuth();
+  const [view, setView] = useState<CompanyView>("chat");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [messages, setMessages] = useState<CompanyMessage[]>([]);
   const [inputText, setInputText] = useState("");
@@ -150,8 +154,51 @@ export default function DashboardCompanyTab() {
     ? `${activeEmps.length + 1} участников`
     : (selectedEmp ? ROLE_LABELS[selectedEmp.roleInCompany] || selectedEmp.roleInCompany : "");
 
+  const NAV_ITEMS: { id: CompanyView; label: string; icon: string }[] = [
+    { id: "chat",   label: "Чаты",     icon: "MessageSquare" },
+    { id: "salary", label: "Зарплаты", icon: "Banknote"      },
+  ];
+
   return (
-    <div className="flex gap-4 h-[calc(100vh-16rem)] min-h-[400px] animate-fade-in">
+    <div className="flex gap-4 animate-fade-in">
+
+      {/* Правая навигация */}
+      <div className="hidden lg:flex flex-col gap-1 w-44 shrink-0 order-last sticky top-24 self-start">
+        <p className="text-white/30 text-[10px] uppercase tracking-wider font-bold px-2 mb-1">Компания</p>
+        {NAV_ITEMS.map(item => (
+          <button
+            key={item.id}
+            onClick={() => setView(item.id)}
+            className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
+              view === item.id
+                ? "bg-neon-purple/20 text-white border border-neon-purple/30"
+                : "text-white/55 hover:text-white hover:bg-white/5 border border-transparent"
+            }`}
+          >
+            <Icon name={item.icon as never} size={15} className={view === item.id ? "text-neon-purple" : "text-white/40"} />
+            {item.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Мобильная навигация */}
+      <div className="flex lg:hidden gap-1 mb-2 glass rounded-xl p-1 w-full">
+        {NAV_ITEMS.map(item => (
+          <button key={item.id} onClick={() => setView(item.id)}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+              view === item.id ? "bg-neon-purple text-white" : "text-white/55 hover:text-white"
+            }`}>
+            <Icon name={item.icon as never} size={13} />{item.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Контент */}
+      <div className="flex-1 min-w-0">
+
+      {view === "salary" && <SalarySection companyId={user?.id ?? ""} />}
+
+      {view === "chat" && <div className="flex gap-4 h-[calc(100vh-16rem)] min-h-[400px]">
 
       {/* Левая панель — список чатов */}
       <div className="w-60 shrink-0 flex flex-col glass rounded-2xl overflow-hidden border border-white/10">
@@ -300,6 +347,12 @@ export default function DashboardCompanyTab() {
           </div>
         </div>
       </div>
+      </div>}
+      {/* конец view=chat */}
+
+      </div>
+      {/* конец flex-1 контент */}
+
     </div>
   );
 }

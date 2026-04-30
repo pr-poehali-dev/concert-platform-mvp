@@ -560,4 +560,132 @@ def handler(event: dict, context) -> dict:
             "text": text, "createdAt": str(row[1]),
         }, 201)
 
+    # ── GET salary_list — зарплаты за период ─────────────────────────────
+    if method == "GET" and action == "salary_list":
+        company_user_id = params.get("company_user_id", "")
+        period          = params.get("period", "")   # YYYY-MM
+        if not company_user_id: return err("company_user_id required")
+        if not period:
+            from datetime import datetime
+            period = datetime.now().strftime("%Y-%m")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Все активные сотрудники + их запись за период (может отсутствовать)
+            cur.execute(
+                f"""SELECT e.id, e.name, e.role_in_company, e.avatar, e.avatar_color,
+                           s.id, s.base_salary, s.bonus, s.deduction, s.note, s.status, s.paid_at, s.period
+                    FROM {SCHEMA}.employees e
+                    LEFT JOIN {SCHEMA}.salary_records s
+                      ON s.employee_id = e.id AND s.period = %s
+                    WHERE e.company_user_id = %s AND e.is_active = TRUE
+                    ORDER BY e.name""",
+                (period, company_user_id)
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        result = []
+        for r in rows:
+            result.append({
+                "employeeId":    str(r[0]),
+                "name":          r[1],
+                "roleInCompany": r[2],
+                "avatar":        r[3],
+                "avatarColor":   r[4],
+                "recordId":      str(r[5]) if r[5] else None,
+                "baseSalary":    float(r[6]) if r[6] is not None else 0,
+                "bonus":         float(r[7]) if r[7] is not None else 0,
+                "deduction":     float(r[8]) if r[8] is not None else 0,
+                "note":          r[9] or "",
+                "status":        r[10] or "pending",
+                "paidAt":        str(r[11]) if r[11] else None,
+                "period":        r[12] or period,
+            })
+        return ok({"salaries": result, "period": period})
+
+    # ── POST salary_save — создать / обновить запись зарплаты ────────────
+    if method == "POST" and action == "salary_save":
+        b = json.loads(event.get("body") or "{}")
+        company_user_id = b.get("companyUserId", "")
+        employee_id     = b.get("employeeId", "")
+        period          = b.get("period", "")
+        base_salary     = float(b.get("baseSalary", 0) or 0)
+        bonus           = float(b.get("bonus", 0) or 0)
+        deduction       = float(b.get("deduction", 0) or 0)
+        note            = (b.get("note") or "").strip()
+        if not company_user_id or not employee_id or not period:
+            return err("companyUserId, employeeId, period required")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.salary_records
+                    (company_user_id, employee_id, period, base_salary, bonus, deduction, note)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s)
+                    ON CONFLICT (company_user_id, employee_id, period) DO UPDATE SET
+                      base_salary = EXCLUDED.base_salary,
+                      bonus       = EXCLUDED.bonus,
+                      deduction   = EXCLUDED.deduction,
+                      note        = EXCLUDED.note,
+                      updated_at  = NOW()
+                    RETURNING id""",
+                (company_user_id, employee_id, period, base_salary, bonus, deduction, note)
+            )
+            rec_id = str(cur.fetchone()[0])
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"id": rec_id, "success": True})
+
+    # ── POST salary_mark_paid — отметить выплачено ────────────────────────
+    if method == "POST" and action == "salary_mark_paid":
+        b = json.loads(event.get("body") or "{}")
+        record_ids = b.get("ids", [])   # список id записей
+        status     = b.get("status", "paid")   # "paid" | "pending"
+        if not record_ids: return err("ids required")
+        if status not in ("paid", "pending"): return err("status: paid | pending")
+        from datetime import datetime, timezone as tz
+        paid_at = datetime.now(tz.utc) if status == "paid" else None
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            placeholders = ",".join(["%s"] * len(record_ids))
+            cur.execute(
+                f"""UPDATE {SCHEMA}.salary_records
+                    SET status = %s, paid_at = %s, updated_at = NOW()
+                    WHERE id IN ({placeholders})""",
+                [status, paid_at] + record_ids
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"updated": len(record_ids), "status": status})
+
+    # ── GET salary_history — история по сотруднику ────────────────────────
+    if method == "GET" and action == "salary_history":
+        employee_id     = params.get("employee_id", "")
+        company_user_id = params.get("company_user_id", "")
+        if not employee_id or not company_user_id:
+            return err("employee_id и company_user_id required")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id, period, base_salary, bonus, deduction, note, status, paid_at
+                    FROM {SCHEMA}.salary_records
+                    WHERE employee_id = %s AND company_user_id = %s
+                    ORDER BY period DESC LIMIT 24""",
+                (employee_id, company_user_id)
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return ok({"history": [
+            {"id": str(r[0]), "period": r[1], "baseSalary": float(r[2]),
+             "bonus": float(r[3]), "deduction": float(r[4]), "note": r[5] or "",
+             "status": r[6], "paidAt": str(r[7]) if r[7] else None}
+            for r in rows
+        ]})
+
     return err("Not found", 404)
