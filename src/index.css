@@ -3,7 +3,8 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root,
+  .dark {
     --background: 220 20% 6%;
     --foreground: 0 0% 95%;
 
@@ -47,6 +48,60 @@
     --sidebar-accent-foreground: 0 0% 90%;
     --sidebar-border: 220 15% 18%;
     --sidebar-ring: 270 80% 65%;
+
+    --glass-bg: rgba(255, 255, 255, 0.04);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-strong-bg: #13131f;
+    --glass-strong-border: rgba(255, 255, 255, 0.12);
+  }
+
+  .light {
+    --background: 220 30% 97%;
+    --foreground: 220 25% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 25% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 25% 12%;
+
+    --primary: 270 70% 55%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 20% 92%;
+    --secondary-foreground: 220 25% 15%;
+
+    --muted: 220 20% 92%;
+    --muted-foreground: 220 15% 40%;
+
+    --accent: 175 70% 42%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 15% 88%;
+    --input: 220 15% 88%;
+    --ring: 270 70% 55%;
+
+    --neon-purple: #8b3fe0;
+    --neon-cyan: #0891b2;
+    --neon-pink: #db2777;
+    --neon-green: #16a34a;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 25% 15%;
+    --sidebar-primary: 270 70% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 20% 92%;
+    --sidebar-accent-foreground: 220 25% 15%;
+    --sidebar-border: 220 15% 88%;
+    --sidebar-ring: 270 70% 55%;
+
+    --glass-bg: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(0, 0, 0, 0.08);
+    --glass-strong-bg: #ffffff;
+    --glass-strong-border: rgba(0, 0, 0, 0.1);
   }
 }
 
@@ -115,15 +170,15 @@
   }
 
   .glass {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--glass-bg);
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--glass-border);
   }
 
   .glass-strong {
-    background: #13131f;
+    background: var(--glass-strong-bg);
     backdrop-filter: blur(24px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--glass-strong-border);
   }
 
   .gradient-text {
@@ -238,6 +293,116 @@
 select.gl-input option {
   background: #141722;
   color: white;
+}
+
+/* ─── Светлая тема: переопределение белых цветов ──────────────────────────── */
+.light {
+  color-scheme: light;
+}
+
+/* В светлой теме цвета "белого текста" становятся тёмными */
+.light .text-white {
+  color: hsl(var(--foreground));
+}
+.light .text-white\/90 {
+  color: hsl(220 25% 18%);
+}
+.light .text-white\/85 {
+  color: hsl(220 25% 22%);
+}
+.light .text-white\/80 {
+  color: hsl(220 25% 25%);
+}
+.light .text-white\/70 {
+  color: hsl(220 20% 32%);
+}
+.light .text-white\/65 {
+  color: hsl(220 20% 38%);
+}
+.light .text-white\/60 {
+  color: hsl(220 20% 40%);
+}
+.light .text-white\/55 {
+  color: hsl(220 18% 45%);
+}
+.light .text-white\/50 {
+  color: hsl(220 18% 50%);
+}
+.light .text-white\/45 {
+  color: hsl(220 15% 52%);
+}
+.light .text-white\/40 {
+  color: hsl(220 15% 55%);
+}
+.light .text-white\/35 {
+  color: hsl(220 15% 60%);
+}
+.light .text-white\/30 {
+  color: hsl(220 12% 65%);
+}
+.light .text-white\/25 {
+  color: hsl(220 12% 70%);
+}
+.light .text-white\/20 {
+  color: hsl(220 10% 75%);
+}
+
+/* Фоны "bg-white/X" в светлой теме делаем тёмнее */
+.light .bg-white\/5 {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+.light .bg-white\/8 {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+.light .bg-white\/10 {
+  background-color: rgba(0, 0, 0, 0.07);
+}
+.light .bg-white\/15 {
+  background-color: rgba(0, 0, 0, 0.1);
+}
+.light .bg-white\/20 {
+  background-color: rgba(0, 0, 0, 0.12);
+}
+
+/* Бордеры "border-white/X" */
+.light .border-white\/5 {
+  border-color: rgba(0, 0, 0, 0.06);
+}
+.light .border-white\/8 {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.light .border-white\/10 {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light .border-white\/15 {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light .border-white\/20 {
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+/* Светлая тема: разделители и hover-эффекты */
+.light .hover\:bg-white\/5:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+.light .hover\:bg-white\/8:hover {
+  background-color: rgba(0, 0, 0, 0.06);
+}
+.light .hover\:bg-white\/10:hover {
+  background-color: rgba(0, 0, 0, 0.07);
+}
+
+/* Активный пункт меню в светлой теме — белый текст на цветной кнопке остаётся белым */
+.light button.bg-gradient-to-r.from-neon-purple .text-white,
+.light button.bg-gradient-to-r .text-white,
+.light .bg-neon-purple .text-white,
+.light .bg-neon-pink .text-white {
+  color: #ffffff;
+}
+
+/* Скроллбар в светлой теме */
+.light .scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(139, 63, 224, 0.35);
 }
 
 .scrollbar-thin::-webkit-scrollbar {

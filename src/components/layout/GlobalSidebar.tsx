@@ -1,6 +1,7 @@
 import Icon from "@/components/ui/icon";
 import { useNotifications } from "@/context/NotificationsContext";
 import { useAuth } from "@/context/AuthContext";
+import { useTheme } from "@/context/ThemeContext";
 
 interface Props {
   activePage: string;
@@ -50,6 +51,7 @@ const COLOR_CLASSES: Record<string, { bg: string; shadow: string; iconActive: st
 export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: Props) {
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
+  const { theme, toggleTheme } = useTheme();
 
   if (!user) return null;
 
@@ -170,6 +172,18 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
       </nav>
 
       <div className="h-px bg-white/10 mx-3 my-1" />
+
+      {/* Переключатель темы */}
+      <button
+        onClick={toggleTheme}
+        className="flex items-center gap-3 px-3 py-2 mx-1 rounded-xl text-[15px] font-semibold text-white/80 hover:text-white hover:bg-white/8 transition-all"
+        title={theme === "dark" ? "Включить светлую тему" : "Включить тёмную тему"}
+      >
+        <Icon name={theme === "dark" ? "Sun" : "Moon"} size={18} className="text-white/70" />
+        <span className="leading-none flex-1 text-left">
+          {theme === "dark" ? "Светлая тема" : "Тёмная тема"}
+        </span>
+      </button>
 
       {/* Выйти */}
       <button
