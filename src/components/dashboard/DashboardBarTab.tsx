@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import TabHeader from "@/components/dashboard/TabHeader";
+import { exportCSV, exportExcel, type ReportType } from "./bar/exportReport";
 
 const BAR_URL = "https://functions.poehali.dev/506e1ffe-4de6-4c2c-acd7-e558c2b91ce1";
 
@@ -361,6 +362,31 @@ function ReportPanel({ integration, events }: { integration: Integration; events
 
   const inp = "glass rounded-xl px-3 py-2 text-white text-xs outline-none border border-white/10 focus:border-neon-purple/50 bg-transparent";
 
+  const REPORT_NAMES: Record<ReportType, string> = { sales: "Продажи", stock: "Остатки", shifts: "Смены" };
+
+  const buildFilename = () => {
+    const ev = events.find(e => e.id === eventId);
+    const evPart = ev ? `_${ev.name.slice(0, 20).replace(/\s+/g, "_")}` : "";
+    const datePart = reportType !== "stock" ? `_${dateFrom}_${dateTo}` : "";
+    return `Бар_${REPORT_NAMES[reportType]}${evPart}${datePart}`;
+  };
+
+  const handleExportCSV = () => {
+    if (!report) return;
+    exportCSV(reportType, report, buildFilename());
+  };
+
+  const handleExportExcel = () => {
+    if (!report) return;
+    const ev = events.find(e => e.id === eventId);
+    exportExcel(reportType, report, buildFilename(), {
+      integrationName: `${integration.displayName} (${integration.type === "iiko" ? "iiko Cloud" : "R-Keeper"})`,
+      dateFrom,
+      dateTo,
+      eventName: ev?.name,
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* Тулбар фильтров */}
@@ -413,11 +439,37 @@ function ReportPanel({ integration, events }: { integration: Integration; events
           </button>
         </div>
 
-        {fromCache && cachedAt && (
-          <p className="text-white/25 text-[10px]">
-            Кэш от {new Date(cachedAt).toLocaleTimeString("ru")} · нажмите «Обновить» для свежих данных
-          </p>
-        )}
+        {/* Строка с кнопками экспорта + кэш */}
+        <div className="flex items-center justify-between gap-3 pt-0.5 border-t border-white/8">
+          <div className="flex items-center gap-1.5">
+            {fromCache && cachedAt && (
+              <p className="text-white/25 text-[10px]">
+                Кэш от {new Date(cachedAt).toLocaleTimeString("ru")}
+              </p>
+            )}
+          </div>
+          {report && !loading && (
+            <div className="flex items-center gap-1.5">
+              <span className="text-white/30 text-[10px] mr-1">Экспорт:</span>
+              <button
+                onClick={handleExportCSV}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-neon-cyan/80 hover:text-neon-cyan border border-neon-cyan/20 hover:border-neon-cyan/40 hover:bg-neon-cyan/5 transition-all"
+                title="Скачать CSV"
+              >
+                <Icon name="FileText" size={12} />
+                CSV
+              </button>
+              <button
+                onClick={handleExportExcel}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs text-neon-green/80 hover:text-neon-green border border-neon-green/20 hover:border-neon-green/40 hover:bg-neon-green/5 transition-all"
+                title="Скачать Excel"
+              >
+                <Icon name="FileSpreadsheet" size={12} />
+                Excel
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Ошибка */}
