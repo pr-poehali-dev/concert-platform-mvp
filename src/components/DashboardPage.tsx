@@ -138,13 +138,13 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
       )}
 
       {/* Основной layout: контент */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 lg:pt-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 pt-4 lg:pt-2">
         <div className="flex gap-6 items-start">
 
           {/* Контент */}
           <div className="flex-1 min-w-0">
             {/* Мобильный горизонтальный таб-бар (до lg) */}
-            <div className="lg:hidden flex gap-1 mb-6 glass rounded-xl p-1 overflow-x-auto scrollbar-thin">
+            <div className="lg:hidden flex gap-1 mb-4 glass rounded-xl p-1 overflow-x-auto scrollbar-thin">
               {mobileTabs.map(t => (
                 <button
                   key={t.id}
