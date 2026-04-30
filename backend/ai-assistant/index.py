@@ -315,10 +315,13 @@ def handler(event: dict, context) -> dict:
 
     # ── POST logistics ────────────────────────────────────────────────────
     if method == "POST" and action == "logistics":
+        print(f"[logistics] session_id={session_id[:8] if session_id else 'EMPTY'}")
         user = get_session_user(session_id)
         if not user:
+            print(f"[logistics] user not found for session")
             return err("Не авторизован", 401)
 
+        print(f"[logistics] user={user.get('email','?')} aitunnel_key={bool(os.environ.get('AITUNNEL_API_KEY',''))}")
         body = json.loads(event.get("body") or "{}")
         answer = ask_logistics(
             log_type=body.get("type", "flight"),
@@ -331,6 +334,7 @@ def handler(event: dict, context) -> dict:
             notes=body.get("notes", ""),
             venue=body.get("venue", ""),
         )
+        print(f"[logistics] answer_len={len(answer)}")
         return ok({"answer": answer})
 
     # ── POST ask ──────────────────────────────────────────────────────────
