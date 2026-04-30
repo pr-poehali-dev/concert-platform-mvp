@@ -42,16 +42,16 @@ export default function DocFolderBar({
 }: Props) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
-      <Icon name="Folder" size={14} className="text-white/30" />
+      <Icon name="Folder" size={14} className="text-white/55" />
       <button
         onClick={() => onFilterFolder("all")}
-        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "all" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "all" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/65 border border-white/10 hover:text-white"}`}
       >
         Все папки
       </button>
       <button
         onClick={() => onFilterFolder("__none__")}
-        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "__none__" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/40 border border-white/10 hover:text-white"}`}
+        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filterFolder === "__none__" ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : "glass text-white/65 border border-white/10 hover:text-white"}`}
       >
         Без папки
       </button>
@@ -77,13 +77,13 @@ export default function DocFolderBar({
             </button>
             <button
               onClick={onRenameCancel}
-              className="text-white/30 text-xs px-1.5 py-1 hover:text-white/60 rounded-lg"
+              className="text-white/55 text-xs px-1.5 py-1 hover:text-white/60 rounded-lg"
             >
               <Icon name="X" size={12} />
             </button>
           </div>
         ) : (
-          <div key={f} className={`group flex items-center gap-1 rounded-lg border transition-all ${filterFolder === f ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30" : "glass text-white/40 border-white/10 hover:text-white"}`}>
+          <div key={f} className={`group flex items-center gap-1 rounded-lg border transition-all ${filterFolder === f ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30" : "glass text-white/65 border-white/10 hover:text-white"}`}>
             <button
               onClick={() => onFilterFolder(f)}
               className="flex items-center gap-1.5 pl-3 pr-1 py-1.5 text-xs font-medium"
@@ -95,14 +95,14 @@ export default function DocFolderBar({
             <div className="flex items-center gap-0.5 pr-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
                 onClick={e => { e.stopPropagation(); onStartRename(f); }}
-                className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/30 hover:text-neon-cyan transition-all"
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 text-white/55 hover:text-neon-cyan transition-all"
                 title="Переименовать"
               >
                 <Icon name="Pencil" size={10} />
               </button>
               <button
                 onClick={e => { e.stopPropagation(); onDeleteFolder(f); }}
-                className="w-5 h-5 flex items-center justify-center rounded hover:bg-neon-pink/10 text-white/30 hover:text-neon-pink transition-all"
+                className="w-5 h-5 flex items-center justify-center rounded hover:bg-neon-pink/10 text-white/55 hover:text-neon-pink transition-all"
                 title="Удалить папку"
               >
                 <Icon name="Trash2" size={10} />
@@ -135,7 +135,7 @@ export default function DocFolderBar({
       ) : (
         <button
           onClick={onShowNewFolder}
-          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-white/25 border border-dashed border-white/10 hover:text-white/50 hover:border-white/20 transition-all"
+          className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-white/25 border border-dashed border-white/10 hover:text-white/70 hover:border-white/20 transition-all"
         >
           <Icon name="Plus" size={11} />Новая папка
         </button>

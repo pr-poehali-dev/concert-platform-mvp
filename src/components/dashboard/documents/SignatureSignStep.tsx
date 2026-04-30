@@ -32,7 +32,7 @@ export default function SignatureSignStep({
             <Icon name="Eye" size={12} />Открыть
           </a>
         </div>
-        <p className="text-white/50 text-sm">Выберите способ подписания:</p>
+        <p className="text-white/70 text-sm">Выберите способ подписания:</p>
 
         <button onClick={onRequestCode} disabled={codeLoading}
           className="w-full text-left p-4 rounded-xl border border-neon-purple/30 bg-neon-purple/5 hover:bg-neon-purple/10 transition-all group">
@@ -44,7 +44,7 @@ export default function SignatureSignStep({
             </div>
             <div>
               <p className="text-white font-semibold text-sm">Простая ЭП (ПЭП)</p>
-              <p className="text-white/40 text-xs mt-0.5">Подтверждение кодом из email. Юридически значима при наличии соглашения сторон.</p>
+              <p className="text-white/65 text-xs mt-0.5">Подтверждение кодом из email. Юридически значима при наличии соглашения сторон.</p>
             </div>
           </div>
         </button>
@@ -55,14 +55,14 @@ export default function SignatureSignStep({
               <Icon name="ShieldCheck" size={16} className="text-white/20" />
             </div>
             <div>
-              <p className="text-white/50 font-semibold text-sm">Квалифицированная ЭП (КЭП)</p>
+              <p className="text-white/70 font-semibold text-sm">Квалифицированная ЭП (КЭП)</p>
               <p className="text-white/25 text-xs mt-0.5">Скоро · Требует КЭП-сертификата (Контур, СБИС и др.)</p>
             </div>
           </div>
         </div>
 
         <button onClick={onBack}
-          className="w-full py-2.5 text-white/30 hover:text-white/60 text-sm transition-colors flex items-center justify-center gap-2">
+          className="w-full py-2.5 text-white/55 hover:text-white/60 text-sm transition-colors flex items-center justify-center gap-2">
           <Icon name="ArrowLeft" size={14} />Назад
         </button>
       </div>
@@ -77,7 +77,7 @@ export default function SignatureSignStep({
       </div>
       <div>
         <p className="text-white font-semibold mb-1">Введите код из письма</p>
-        <p className="text-white/40 text-sm">Код отправлен на вашу почту</p>
+        <p className="text-white/65 text-sm">Код отправлен на вашу почту</p>
       </div>
 
       <div className="flex gap-2 justify-center">
@@ -112,7 +112,7 @@ export default function SignatureSignStep({
       </button>
 
       <button onClick={onRequestCode} disabled={codeLoading}
-        className="text-white/30 hover:text-white/60 text-sm transition-colors">
+        className="text-white/55 hover:text-white/60 text-sm transition-colors">
         {codeLoading ? "Отправка..." : "Отправить код повторно"}
       </button>
     </div>

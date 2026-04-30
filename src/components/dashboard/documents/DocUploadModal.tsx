@@ -42,7 +42,7 @@ export default function DocUploadModal({
           </div>
           <div className="flex-1">
             <h3 className="font-oswald font-bold text-base text-white">Загрузка документа</h3>
-            <p className="text-white/40 text-xs truncate">{file.name}</p>
+            <p className="text-white/65 text-xs truncate">{file.name}</p>
           </div>
           <span className="text-white/25 text-xs flex-shrink-0">
             {file.size > 1024 * 1024
@@ -54,7 +54,7 @@ export default function DocUploadModal({
         <div className="px-5 py-4 space-y-4">
           {/* Category */}
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Категория</label>
+            <label className="text-xs text-white/65 uppercase tracking-wider mb-2 block">Категория</label>
             <div className="grid grid-cols-2 gap-1.5">
               {categories.map(c => (
                 <button
@@ -64,7 +64,7 @@ export default function DocUploadModal({
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-xs font-medium transition-all ${
                     uploadCategory === c.value
                       ? "border-neon-purple/60 bg-neon-purple/20 text-white"
-                      : "border-white/10 bg-white/5 text-white/50 hover:text-white hover:border-white/20"
+                      : "border-white/10 bg-white/5 text-white/70 hover:text-white hover:border-white/20"
                   }`}
                 >
                   <Icon name={c.icon as never} size={13} className={uploadCategory === c.value ? c.color : ""} />
@@ -79,7 +79,7 @@ export default function DocUploadModal({
 
           {/* Note */}
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">
+            <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">
               Заметка <span className="normal-case text-white/20">(необязательно)</span>
             </label>
             <input
@@ -104,7 +104,7 @@ export default function DocUploadModal({
             <button
               onClick={onClose}
               disabled={uploadProgress}
-              className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all disabled:opacity-40"
+              className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/70 hover:text-white text-sm transition-all disabled:opacity-40"
             >
               Отмена
             </button>

@@ -143,7 +143,7 @@ function CounterpartySection({
               </span>
             )}
           </div>
-          <p className={`text-xs mt-0.5 ${allDone ? "text-neon-green/70" : "text-white/40"}`}>
+          <p className={`text-xs mt-0.5 ${allDone ? "text-neon-green/70" : "text-white/65"}`}>
             {allDone
               ? "Все документы подписаны обеими сторонами"
               : `${requests.length} ${requests.length === 1 ? "документ" : requests.length < 5 ? "документа" : "документов"}${pendingCount > 0 ? ` · ${pendingCount} ожидает` : ""}`}
@@ -154,7 +154,7 @@ function CounterpartySection({
             {pendingCount}
           </span>
         )}
-        <Icon name={open ? "ChevronUp" : "ChevronDown"} size={16} className="text-white/30 shrink-0" />
+        <Icon name={open ? "ChevronUp" : "ChevronDown"} size={16} className="text-white/55 shrink-0" />
       </button>
 
       {/* Список документов */}
@@ -166,14 +166,14 @@ function CounterpartySection({
               <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                 req.allSigned ? "bg-neon-green/10 border border-neon-green/20" : "bg-white/5 border border-white/8"
               }`}>
-                <Icon name="FileText" size={16} className={req.allSigned ? "text-neon-green" : "text-white/40"} />
+                <Icon name="FileText" size={16} className={req.allSigned ? "text-neon-green" : "text-white/65"} />
               </div>
 
               {/* Инфо */}
               <div className="flex-1 min-w-0">
                 <p className="text-white text-sm font-medium truncate">{req.documentName}</p>
                 <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  <span className="text-white/30 text-xs">{formatDate(req.createdAt)}</span>
+                  <span className="text-white/55 text-xs">{formatDate(req.createdAt)}</span>
                   {req.signedCount > 0 && (
                     <span className="text-white/25 text-xs">· {req.signedCount} {req.signedCount === 1 ? "подпись" : "подписи"}</span>
                   )}
@@ -185,7 +185,7 @@ function CounterpartySection({
                 <StatusBadge req={req} />
                 {req.fileUrl && !req.allSigned && (
                   <a href={req.fileUrl} target="_blank" rel="noreferrer"
-                    className="w-8 h-8 flex items-center justify-center bg-white/5 border border-white/10 text-white/40 hover:text-neon-cyan hover:border-neon-cyan/30 rounded-lg transition-all"
+                    className="w-8 h-8 flex items-center justify-center bg-white/5 border border-white/10 text-white/65 hover:text-neon-cyan hover:border-neon-cyan/30 rounded-lg transition-all"
                     title="Открыть оригинал">
                     <Icon name="Eye" size={14} />
                   </a>
@@ -244,7 +244,7 @@ export default function DashboardSigningTab() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-24 text-white/30">
+      <div className="flex items-center justify-center py-24 text-white/55">
         <Icon name="Loader2" size={22} className="animate-spin mr-3" />Загрузка...
       </div>
     );
@@ -259,9 +259,9 @@ export default function DashboardSigningTab() {
         </div>
         <div>
           <h2 className="font-oswald font-bold text-xl text-white">Электронное подписание</h2>
-          <p className="text-white/40 text-sm">Документы сгруппированы по контрагентам</p>
+          <p className="text-white/65 text-sm">Документы сгруппированы по контрагентам</p>
         </div>
-        <button onClick={load} className="ml-auto text-white/30 hover:text-white/60 transition-colors" title="Обновить">
+        <button onClick={load} className="ml-auto text-white/55 hover:text-white/60 transition-colors" title="Обновить">
           <Icon name="RefreshCw" size={16} />
         </button>
       </div>
@@ -270,7 +270,7 @@ export default function DashboardSigningTab() {
       <div className="flex gap-1 glass rounded-xl p-1 w-fit">
         <button
           onClick={() => setActiveTab("incoming")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab === "incoming" ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab === "incoming" ? "bg-neon-purple text-white" : "text-white/70 hover:text-white"}`}
         >
           <Icon name="Download" size={14} />Входящие
           {incomingPending > 0 && (
@@ -281,7 +281,7 @@ export default function DashboardSigningTab() {
         </button>
         <button
           onClick={() => setActiveTab("outgoing")}
-          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab === "outgoing" ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
+          className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab === "outgoing" ? "bg-neon-purple text-white" : "text-white/70 hover:text-white"}`}
         >
           <Icon name="Upload" size={14} />Исходящие
           {outgoingPending > 0 && (
@@ -300,7 +300,7 @@ export default function DashboardSigningTab() {
               <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
                 <Icon name="Download" size={24} className="text-white/20" />
               </div>
-              <p className="text-white/40 font-medium mb-1">Нет входящих запросов</p>
+              <p className="text-white/65 font-medium mb-1">Нет входящих запросов</p>
               <p className="text-white/20 text-sm">Когда другая сторона попросит подписать документ — он появится здесь</p>
             </div>
           ) : (
@@ -326,7 +326,7 @@ export default function DashboardSigningTab() {
               <div className="w-14 h-14 rounded-2xl bg-white/5 flex items-center justify-center mx-auto mb-4">
                 <Icon name="Upload" size={24} className="text-white/20" />
               </div>
-              <p className="text-white/40 font-medium mb-1">Нет исходящих запросов</p>
+              <p className="text-white/65 font-medium mb-1">Нет исходящих запросов</p>
               <p className="text-white/20 text-sm">Отправьте документ на подпись через раздел «Документы»</p>
             </div>
           ) : (

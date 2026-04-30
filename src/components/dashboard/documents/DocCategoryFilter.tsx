@@ -13,7 +13,7 @@ export default function DocCategoryFilter({ docs, categories, filterCat, onFilte
     <div className="flex flex-wrap gap-1 glass rounded-xl p-1 w-fit">
       <button
         onClick={() => onFilterCat("all")}
-        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterCat === "all" ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
+        className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterCat === "all" ? "bg-neon-purple text-white" : "text-white/70 hover:text-white"}`}
       >
         Все ({docs.length})
       </button>
@@ -23,7 +23,7 @@ export default function DocCategoryFilter({ docs, categories, filterCat, onFilte
           <button
             key={c.value}
             onClick={() => onFilterCat(c.value)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterCat === c.value ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterCat === c.value ? "bg-neon-purple text-white" : "text-white/70 hover:text-white"}`}
           >
             <Icon name={c.icon as never} size={13} />
             {c.label}

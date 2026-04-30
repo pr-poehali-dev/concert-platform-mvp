@@ -15,7 +15,7 @@ const TYPE_COLOR: Record<string, string> = {
   review:  "text-neon-green bg-neon-green/10 border-neon-green/20",
   tour:    "text-neon-pink bg-neon-pink/10 border-neon-pink/20",
   venue:   "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20",
-  system:  "text-white/50 bg-white/5 border-white/10",
+  system:  "text-white/70 bg-white/5 border-white/10",
 };
 
 export default function DashboardNotificationsTab({
@@ -38,7 +38,7 @@ export default function DashboardNotificationsTab({
         </div>
         {unreadCount > 0 && (
           <button onClick={markAllRead}
-            className="flex items-center gap-2 px-4 py-2 glass text-white/50 hover:text-neon-cyan rounded-xl border border-white/10 text-sm transition-colors">
+            className="flex items-center gap-2 px-4 py-2 glass text-white/70 hover:text-neon-cyan rounded-xl border border-white/10 text-sm transition-colors">
             <Icon name="CheckCheck" size={14} />Прочитать все
           </button>
         )}
@@ -47,7 +47,7 @@ export default function DashboardNotificationsTab({
       {notifications.length === 0 ? (
         <div className="text-center py-20 glass rounded-2xl">
           <Icon name="BellOff" size={48} className="text-white/20 mx-auto mb-4" />
-          <p className="text-white/40 text-lg font-oswald">Нет уведомлений</p>
+          <p className="text-white/65 text-lg font-oswald">Нет уведомлений</p>
           <p className="text-white/25 text-sm mt-1">Здесь будут появляться сообщения и запросы</p>
         </div>
       ) : (
@@ -75,7 +75,7 @@ export default function DashboardNotificationsTab({
                     {n.linkPage && <Icon name="ChevronRight" size={14} className="text-white/20" />}
                   </div>
                 </div>
-                {n.body && <p className="text-xs text-white/40 mt-0.5">{n.body}</p>}
+                {n.body && <p className="text-xs text-white/65 mt-0.5">{n.body}</p>}
                 <p className="text-xs text-white/20 mt-1">
                   {new Date(n.createdAt).toLocaleDateString("ru", { day: "numeric", month: "long" })}
                 </p>

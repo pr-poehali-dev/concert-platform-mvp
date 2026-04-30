@@ -230,7 +230,7 @@ export default function DashboardAILawyerTab() {
         </div>
         <div>
           <p className="text-white font-semibold text-sm">ИИ-юрист</p>
-          <p className="text-white/40 text-xs">Договоры, анализ документов, юридические вопросы</p>
+          <p className="text-white/65 text-xs">Договоры, анализ документов, юридические вопросы</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
@@ -245,7 +245,7 @@ export default function DashboardAILawyerTab() {
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             mode === "chat"
               ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-              : "text-white/40 hover:text-white/70"
+              : "text-white/65 hover:text-white/70"
           }`}
         >
           <Icon name="MessageCircle" size={13} />
@@ -256,7 +256,7 @@ export default function DashboardAILawyerTab() {
           className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
             mode === "generate"
               ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
-              : "text-white/40 hover:text-white/70"
+              : "text-white/65 hover:text-white/70"
           }`}
         >
           <Icon name="FilePlus2" size={13} />
@@ -350,7 +350,7 @@ export default function DashboardAILawyerTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => downloadText(msg.text, `${msg.contractName || "Договор"}.txt`)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/50 text-xs hover:text-white hover:bg-white/10 transition-all"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/70 text-xs hover:text-white hover:bg-white/10 transition-all"
                   >
                     <Icon name="FileText" size={13} />
                     TXT
@@ -384,7 +384,7 @@ export default function DashboardAILawyerTab() {
               <button
                 key={s}
                 onClick={() => sendMessage(s)}
-                className="text-xs px-3 py-1.5 rounded-xl bg-white/5 border border-white/8 text-white/50 hover:text-white hover:bg-white/10 hover:border-amber-500/30 transition-all text-left"
+                className="text-xs px-3 py-1.5 rounded-xl bg-white/5 border border-white/8 text-white/70 hover:text-white hover:bg-white/10 hover:border-amber-500/30 transition-all text-left"
               >
                 {s}
               </button>
@@ -399,7 +399,7 @@ export default function DashboardAILawyerTab() {
         <div className="mx-4 mb-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
           <Icon name="FileText" size={14} className="text-amber-400 shrink-0" />
           <span className="text-amber-300 text-xs flex-1 truncate">{uploadedDoc.name}</span>
-          <button onClick={() => setUploadedDoc(null)} className="text-white/30 hover:text-white/60">
+          <button onClick={() => setUploadedDoc(null)} className="text-white/55 hover:text-white/60">
             <Icon name="X" size={13} />
           </button>
         </div>
@@ -413,7 +413,7 @@ export default function DashboardAILawyerTab() {
             <button
               onClick={() => fileInputRef.current?.click()}
               title="Загрузить документ (.txt, .doc, .rtf)"
-              className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/40 hover:text-amber-400 hover:border-amber-500/30 transition-all shrink-0 mb-0.5"
+              className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/65 hover:text-amber-400 hover:border-amber-500/30 transition-all shrink-0 mb-0.5"
             >
               <Icon name="Paperclip" size={16} />
             </button>

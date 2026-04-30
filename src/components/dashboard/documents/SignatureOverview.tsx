@@ -35,7 +35,7 @@ interface Props {
 function statusBadge(status: string) {
   if (status === "signed")   return <span className="text-xs text-neon-green bg-neon-green/10 border border-neon-green/20 px-2 py-0.5 rounded-full">Подписан</span>;
   if (status === "declined") return <span className="text-xs text-neon-pink bg-neon-pink/10 border border-neon-pink/20 px-2 py-0.5 rounded-full">Отклонён</span>;
-  return <span className="text-xs text-white/30 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">Ожидает</span>;
+  return <span className="text-xs text-white/55 bg-white/5 border border-white/10 px-2 py-0.5 rounded-full">Ожидает</span>;
 }
 
 export default function SignatureOverview({
@@ -75,7 +75,7 @@ export default function SignatureOverview({
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-white text-sm font-medium truncate">{doc.name}</p>
-          <p className="text-white/30 text-xs">{doc.fileSizeHuman || "Документ"}</p>
+          <p className="text-white/55 text-xs">{doc.fileSizeHuman || "Документ"}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <a href={doc.fileUrl} target="_blank" rel="noreferrer"
@@ -87,9 +87,9 @@ export default function SignatureOverview({
 
       {/* Подписи */}
       <div>
-        <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Подписи</p>
+        <p className="text-white/65 text-xs uppercase tracking-wider mb-2">Подписи</p>
         {loading ? (
-          <div className="flex items-center justify-center py-6 text-white/30">
+          <div className="flex items-center justify-center py-6 text-white/55">
             <Icon name="Loader2" size={18} className="animate-spin mr-2" />Загрузка...
           </div>
         ) : signatures.length === 0 ? (
@@ -112,9 +112,9 @@ export default function SignatureOverview({
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-medium truncate">
-                    {sig.signerName} {sig.isMe && <span className="text-white/30 text-xs">(вы)</span>}
+                    {sig.signerName} {sig.isMe && <span className="text-white/55 text-xs">(вы)</span>}
                   </p>
-                  <p className="text-white/30 text-xs">{sig.signerEmail} · ПЭП</p>
+                  <p className="text-white/55 text-xs">{sig.signerEmail} · ПЭП</p>
                   {sig.signedAt && <p className="text-white/20 text-xs mt-0.5">Подписан: {new Date(sig.signedAt).toLocaleString("ru")}</p>}
                   {sig.hash && <p className="text-white/15 text-[10px] font-mono mt-0.5 truncate">#{sig.hash.slice(0, 32)}…</p>}
                 </div>
@@ -128,11 +128,11 @@ export default function SignatureOverview({
       {/* Запросы на подпись */}
       {requests.length > 0 && (
         <div>
-          <p className="text-white/40 text-xs uppercase tracking-wider mb-2">Запросы на подпись</p>
+          <p className="text-white/65 text-xs uppercase tracking-wider mb-2">Запросы на подпись</p>
           <div className="space-y-2">
             {requests.map(req => (
               <div key={req.id} className="flex items-center gap-3 bg-white/3 rounded-xl px-3 py-2 border border-white/5">
-                <Icon name="Mail" size={14} className="text-white/30 shrink-0" />
+                <Icon name="Mail" size={14} className="text-white/55 shrink-0" />
                 <div className="flex-1 min-w-0">
                   <p className="text-white/60 text-sm truncate">{req.recipientName || req.recipientEmail}</p>
                   <p className="text-white/25 text-xs">{req.recipientEmail}</p>
@@ -154,7 +154,7 @@ export default function SignatureOverview({
         )}
         {signatures.some(s => s.status === "signed") && signedCount < 2 && (
           <button onClick={onDownloadSigned} disabled={dlLoading}
-            className="w-full py-2.5 border border-white/10 text-white/50 hover:text-white rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
+            className="w-full py-2.5 border border-white/10 text-white/70 hover:text-white rounded-xl text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50">
             {dlLoading
               ? <><Icon name="Loader2" size={14} className="animate-spin" />Формирую...</>
               : <><Icon name="Download" size={14} />Скачать с текущей подписью</>}

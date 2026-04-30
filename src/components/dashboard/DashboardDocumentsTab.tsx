@@ -215,7 +215,7 @@ export default function DashboardDocumentsTab() {
 
   // ── Helpers ────────────────────────────────────────────────────────────
   const catMeta = (cat: string): Category =>
-    categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/40", label: "Прочее", value: "other" };
+    categories.find(c => c.value === cat) ?? { icon: "File", color: "text-white/65", label: "Прочее", value: "other" };
 
   const allFolders = Array.from(new Set([
     ...extraFolders,
@@ -293,7 +293,7 @@ export default function DashboardDocumentsTab() {
           <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 flex items-center justify-center mx-auto mb-4">
             <Icon name={search ? "SearchX" : "FolderOpen"} size={28} className="text-neon-purple/50" />
           </div>
-          <p className="text-white/50 font-medium mb-1">
+          <p className="text-white/70 font-medium mb-1">
             {search
               ? `Ничего не найдено по запросу «${search}»`
               : filterCat === "all" && filterFolder === "all"
@@ -308,7 +308,7 @@ export default function DashboardDocumentsTab() {
           {(search || filterCat !== "all" || filterFolder !== "all") && (
             <button
               onClick={() => { setSearch(""); setFilterCat("all"); setFilterFolder("all"); }}
-              className="mt-4 px-4 py-2 rounded-xl glass border border-white/10 text-white/40 text-sm hover:text-white transition-all"
+              className="mt-4 px-4 py-2 rounded-xl glass border border-white/10 text-white/65 text-sm hover:text-white transition-all"
             >
               Сбросить фильтры
             </button>

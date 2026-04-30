@@ -214,7 +214,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
   if (projects.length === 0) return (
     <div className="glass rounded-2xl p-10 text-center">
       <Icon name="FolderOpen" size={36} className="text-white/15 mx-auto mb-3" />
-      <p className="text-white/40 text-sm">Нет подтверждённых проектов</p>
+      <p className="text-white/65 text-sm">Нет подтверждённых проектов</p>
       <p className="text-white/25 text-xs mt-1">Здесь появятся проекты после подтверждения бронирований</p>
     </div>
   );
@@ -228,21 +228,21 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
       {/* Поиск + переключатель архива */}
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-2 flex-1 min-w-48 glass rounded-xl px-3 py-2">
-          <Icon name="Search" size={14} className="text-white/30 shrink-0" />
+          <Icon name="Search" size={14} className="text-white/55 shrink-0" />
           <input
             type="text" value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Поиск по названию, артисту, организатору..."
-            className="flex-1 bg-transparent text-white text-sm placeholder:text-white/30 outline-none"
+            className="flex-1 bg-transparent text-white text-sm placeholder:text-white/55 outline-none"
           />
-          {search && <button onClick={() => setSearch("")}><Icon name="X" size={12} className="text-white/30" /></button>}
+          {search && <button onClick={() => setSearch("")}><Icon name="X" size={12} className="text-white/55" /></button>}
         </div>
         <div className="flex glass rounded-xl p-1 gap-1">
           <button onClick={() => setShowArchive(false)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${!showArchive ? "bg-neon-purple text-white" : "text-white/40 hover:text-white"}`}>
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${!showArchive ? "bg-neon-purple text-white" : "text-white/65 hover:text-white"}`}>
             <Icon name="CalendarCheck" size={12} />Активные {activeCount > 0 && <span className="bg-neon-purple/30 rounded-full px-1.5">{activeCount}</span>}
           </button>
           <button onClick={() => setShowArchive(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${showArchive ? "bg-white/10 text-white" : "text-white/40 hover:text-white"}`}>
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${showArchive ? "bg-white/10 text-white" : "text-white/65 hover:text-white"}`}>
             <Icon name="Archive" size={12} />Архив {archiveCount > 0 && <span className="bg-white/10 rounded-full px-1.5">{archiveCount}</span>}
           </button>
         </div>
@@ -251,7 +251,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
       {filtered.length === 0 && (
         <div className="glass rounded-2xl p-8 text-center">
           <Icon name="SearchX" size={28} className="text-white/15 mx-auto mb-2" />
-          <p className="text-white/40 text-sm">{search ? "Ничего не найдено" : showArchive ? "Архив пуст" : "Нет активных проектов"}</p>
+          <p className="text-white/65 text-sm">{search ? "Ничего не найдено" : showArchive ? "Архив пуст" : "Нет активных проектов"}</p>
         </div>
       )}
 
@@ -278,7 +278,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
             >
               {/* Дата — крупно */}
               <div className={`shrink-0 flex flex-col items-center justify-center w-16 h-16 rounded-xl ${past ? "bg-white/5" : "bg-neon-purple/20 border border-neon-purple/30"}`}>
-                <span className={`font-oswald font-bold text-2xl leading-none ${past ? "text-white/40" : "text-neon-purple"}`}>
+                <span className={`font-oswald font-bold text-2xl leading-none ${past ? "text-white/65" : "text-neon-purple"}`}>
                   {new Date(proj.eventDate).getDate()}
                 </span>
                 <span className={`text-xs mt-0.5 ${past ? "text-white/25" : "text-neon-purple/70"}`}>
@@ -297,18 +297,18 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                       {proj.projectTitle}
                     </h3>
                     {proj.artist && <p className="text-neon-cyan text-xs mt-0.5">{proj.artist}</p>}
-                    <p className="text-white/40 text-xs mt-1">
+                    <p className="text-white/65 text-xs mt-1">
                       {proj.organizerName}
                       {proj.eventTime && ` · ${proj.eventTime}`}
                       {proj.rentalAmount !== null && ` · ${fmt(proj.rentalAmount)} ₽`}
                     </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {past && <span className="text-xs px-2 py-0.5 rounded-lg bg-white/5 text-white/30 border border-white/10">Архив</span>}
+                    {past && <span className="text-xs px-2 py-0.5 rounded-lg bg-white/5 text-white/55 border border-white/10">Архив</span>}
                     {unread > 0 && (
                       <span className="w-5 h-5 bg-neon-pink rounded-full text-white text-[10px] font-bold flex items-center justify-center">{unread > 9 ? "9+" : unread}</span>
                     )}
-                    <Icon name={isOpen ? "ChevronUp" : "ChevronDown"} size={16} className="text-white/30" />
+                    <Icon name={isOpen ? "ChevronUp" : "ChevronDown"} size={16} className="text-white/55" />
                   </div>
                 </div>
 
@@ -320,7 +320,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                       style={{ width: `${progress}%` }}
                     />
                   </div>
-                  <span className={`text-[10px] shrink-0 ${progress === 100 ? "text-neon-green" : "text-white/30"}`}>
+                  <span className={`text-[10px] shrink-0 ${progress === 100 ? "text-neon-green" : "text-white/55"}`}>
                     {doneSteps}/{totalSteps}
                   </span>
                 </div>
@@ -333,7 +333,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
 
                 {/* Условия */}
                 {proj.venueConditions && (
-                  <div className="px-5 py-3 bg-white/3 text-xs text-white/40 border-b border-white/5">
+                  <div className="px-5 py-3 bg-white/3 text-xs text-white/65 border-b border-white/5">
                     <Icon name="FileText" size={11} className="inline mr-1" />{proj.venueConditions}
                   </div>
                 )}
@@ -347,7 +347,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                       { id: "company" as const,   label: "Компания",icon: "Users" },
                     ]).map(t => (
                       <button key={t.id} onClick={() => setInnerTab(t.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeInnerTab === t.id ? "bg-neon-purple text-white" : "text-white/40 hover:text-white"}`}>
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${activeInnerTab === t.id ? "bg-neon-purple text-white" : "text-white/65 hover:text-white"}`}>
                         <Icon name={t.icon} size={12} />{t.label}
                       </button>
                     ))}
@@ -402,7 +402,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                               ? <Icon name="Loader2" size={11} className="animate-spin text-white" />
                               : item.isDone ? <Icon name="Check" size={11} className="text-white" /> : null}
                           </button>
-                          <span className={`text-sm flex-1 ${item.isDone ? "line-through text-white/40" : "text-white"}`}>
+                          <span className={`text-sm flex-1 ${item.isDone ? "line-through text-white/65" : "text-white"}`}>
                             {item.stepTitle}
                           </span>
                           <div className="flex items-center gap-1.5">
@@ -434,10 +434,10 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
                               onKeyDown={e => { if (e.key === "Enter") saveNote(item.id, item.isDone, proj.bookingId); if (e.key === "Escape") setNoteEditing(null); }}
                               placeholder="Комментарий..." className="flex-1 glass rounded-lg px-3 py-1.5 text-white text-xs placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/40" />
                             <button onClick={() => saveNote(item.id, item.isDone, proj.bookingId)} className="px-2 py-1.5 bg-neon-purple/20 text-neon-purple rounded-lg text-xs"><Icon name="Check" size={12} /></button>
-                            <button onClick={() => setNoteEditing(null)} className="px-2 py-1.5 glass rounded-lg text-white/30 text-xs"><Icon name="X" size={12} /></button>
+                            <button onClick={() => setNoteEditing(null)} className="px-2 py-1.5 glass rounded-lg text-white/55 text-xs"><Icon name="X" size={12} /></button>
                           </div>
                         ) : item.note ? (
-                          <p className="mt-1 ml-9 text-white/30 text-xs">{item.note}</p>
+                          <p className="mt-1 ml-9 text-white/55 text-xs">{item.note}</p>
                         ) : null}
 
                         {/* Файлы шага */}

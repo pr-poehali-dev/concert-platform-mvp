@@ -187,9 +187,9 @@ export default function SignatureModal({ doc, onClose, initialStep = "overview" 
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-white font-semibold text-sm truncate">Электронная подпись</p>
-            <p className="text-white/30 text-xs truncate">{doc.name}</p>
+            <p className="text-white/55 text-xs truncate">{doc.name}</p>
           </div>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors">
+          <button onClick={onClose} className="text-white/55 hover:text-white transition-colors">
             <Icon name="X" size={18} />
           </button>
         </div>

@@ -172,7 +172,7 @@ export default function DashboardCompanyTab() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-white text-xs font-medium truncate">Общий чат</p>
-              <p className="text-white/35 text-[10px]">{activeEmps.length + 1} участников</p>
+              <p className="text-white/60 text-[10px]">{activeEmps.length + 1} участников</p>
             </div>
           </button>
 
@@ -200,7 +200,7 @@ export default function DashboardCompanyTab() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-xs font-medium truncate">{emp.name}</p>
-                  <p className="text-white/35 text-[10px]">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</p>
+                  <p className="text-white/60 text-[10px]">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</p>
                 </div>
               </button>
             ))
@@ -220,7 +220,7 @@ export default function DashboardCompanyTab() {
           </div>
           <div>
             <p className="font-oswald font-semibold text-white text-sm">{chatTitle}</p>
-            <p className="text-white/40 text-xs">{chatSubtitle}</p>
+            <p className="text-white/65 text-xs">{chatSubtitle}</p>
           </div>
         </div>
 
@@ -232,12 +232,12 @@ export default function DashboardCompanyTab() {
         >
           {loadingMsgs ? (
             <div className="flex items-center justify-center h-full">
-              <Icon name="Loader2" size={20} className="text-white/30 animate-spin" />
+              <Icon name="Loader2" size={20} className="text-white/55 animate-spin" />
             </div>
           ) : messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center">
               <Icon name="MessageCircle" size={36} className="text-white/15" />
-              <p className="text-white/40 text-sm">
+              <p className="text-white/65 text-sm">
                 {chatMode === "group" ? "Начните общение с командой" : `Напишите ${selectedEmp?.name ?? "сотруднику"}`}
               </p>
             </div>
@@ -256,7 +256,7 @@ export default function DashboardCompanyTab() {
                   )}
                   <div className={`flex flex-col max-w-[70%] ${isMe ? "items-end" : "items-start"}`}>
                     {showName && !isMe && (
-                      <span className="text-white/40 text-[10px] mb-0.5 px-1">{msg.senderName}</span>
+                      <span className="text-white/65 text-[10px] mb-0.5 px-1">{msg.senderName}</span>
                     )}
                     <div className={`px-3.5 py-2.5 rounded-2xl ${isMe
                       ? "bg-neon-purple/30 border border-neon-purple/30 text-white"
@@ -265,7 +265,7 @@ export default function DashboardCompanyTab() {
                       <p className="text-xs leading-relaxed break-words">{msg.text}</p>
                     </div>
                     {showName && (
-                      <span className="text-[10px] text-white/30 mt-0.5 px-1">{formatTime(msg.createdAt)}</span>
+                      <span className="text-[10px] text-white/55 mt-0.5 px-1">{formatTime(msg.createdAt)}</span>
                     )}
                   </div>
                 </div>

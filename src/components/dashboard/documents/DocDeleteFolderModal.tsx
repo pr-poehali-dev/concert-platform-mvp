@@ -15,10 +15,10 @@ export default function DocDeleteFolderModal({ folderName, onConfirm, onCancel }
           <Icon name="FolderX" size={22} className="text-neon-pink" />
         </div>
         <h3 className="font-oswald font-bold text-lg text-white text-center mb-1">Удалить папку?</h3>
-        <p className="text-white/50 text-sm text-center mb-1">
+        <p className="text-white/70 text-sm text-center mb-1">
           Папка <span className="text-white font-medium">«{folderName}»</span> будет удалена.
         </p>
-        <p className="text-white/30 text-xs text-center mb-6">
+        <p className="text-white/55 text-xs text-center mb-6">
           Документы останутся, но будут перемещены в «Без папки»
         </p>
         <div className="flex gap-3">

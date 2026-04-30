@@ -21,14 +21,14 @@ interface VenueTask {
 }
 
 const STATUS_CONFIG = {
-  todo:        { label: "К выполнению", cls: "text-white/50 bg-white/5 border-white/10",           icon: "Circle" },
+  todo:        { label: "К выполнению", cls: "text-white/70 bg-white/5 border-white/10",           icon: "Circle" },
   in_progress: { label: "В работе",     cls: "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20", icon: "Clock" },
   review:      { label: "На проверке",  cls: "text-neon-purple bg-neon-purple/10 border-neon-purple/20", icon: "Eye" },
   done:        { label: "Готово",       cls: "text-neon-green bg-neon-green/10 border-neon-green/20", icon: "CheckCircle2" },
 } as const;
 
 const PRIORITY_CONFIG = {
-  low:    { label: "Низкий",   cls: "text-white/40",           dot: "bg-white/30" },
+  low:    { label: "Низкий",   cls: "text-white/65",           dot: "bg-white/30" },
   medium: { label: "Средний",  cls: "text-neon-cyan",          dot: "bg-neon-cyan" },
   high:   { label: "Высокий",  cls: "text-neon-purple",        dot: "bg-neon-purple" },
   urgent: { label: "Срочно!",  cls: "text-neon-pink font-bold",dot: "bg-neon-pink" },
@@ -160,7 +160,7 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
         <div className="flex-1">
           <div className="flex items-center gap-3 mb-1.5">
             <h3 className="font-oswald font-bold text-white text-lg">Задачи мероприятия</h3>
-            <span className="text-white/40 text-sm">{totalDone}/{tasks.length}</span>
+            <span className="text-white/65 text-sm">{totalDone}/{tasks.length}</span>
           </div>
           {tasks.length > 0 && (
             <div className="flex items-center gap-2">
@@ -168,7 +168,7 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
                 <div className={`h-full rounded-full transition-all ${progress === 100 ? "bg-neon-green" : "bg-gradient-to-r from-neon-purple to-neon-cyan"}`}
                   style={{ width: `${progress}%` }} />
               </div>
-              <span className={`text-xs ${progress === 100 ? "text-neon-green" : "text-white/40"}`}>{progress}%</span>
+              <span className={`text-xs ${progress === 100 ? "text-neon-green" : "text-white/65"}`}>{progress}%</span>
             </div>
           )}
         </div>
@@ -210,13 +210,13 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
             <div className="space-y-3">
               <input value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                 placeholder="Название задачи *"
-                className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/30 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
+                className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/55 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
               <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Описание (необязательно)" rows={2}
-                className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/30 outline-none border border-white/10 focus:border-neon-purple/50 text-sm resize-none" />
+                className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/55 outline-none border border-white/10 focus:border-neon-purple/50 text-sm resize-none" />
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-white/40 mb-1 block">Назначить</label>
+                  <label className="text-xs text-white/65 mb-1 block">Назначить</label>
                   <select value={form.assignedTo} onChange={e => setForm(f => ({ ...f, assignedTo: e.target.value }))}
                     className="w-full glass rounded-xl px-3 py-2 text-white text-sm border border-white/10 outline-none appearance-none bg-transparent">
                     <option value="" className="bg-gray-900">Не назначено</option>
@@ -224,21 +224,21 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs text-white/40 mb-1 block">Приоритет</label>
+                  <label className="text-xs text-white/65 mb-1 block">Приоритет</label>
                   <select value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value as VenueTask["priority"] }))}
                     className="w-full glass rounded-xl px-3 py-2 text-white text-sm border border-white/10 outline-none appearance-none bg-transparent">
                     {Object.entries(PRIORITY_CONFIG).map(([v, c]) => <option key={v} value={v} className="bg-gray-900">{c.label}</option>)}
                   </select>
                 </div>
                 <div className="col-span-2">
-                  <label className="text-xs text-white/40 mb-1 block">Срок</label>
+                  <label className="text-xs text-white/65 mb-1 block">Срок</label>
                   <input type="date" value={form.dueDate} onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
                     className="w-full glass rounded-xl px-3 py-2 text-white text-sm border border-white/10 outline-none bg-transparent" />
                 </div>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => { setShowForm(false); setEditingId(null); setForm(emptyForm); }}
-                  className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
+                  className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
                   Отмена
                 </button>
                 <button onClick={editingId ? saveEdit : createTask} disabled={saving || !form.title.trim()}
@@ -256,7 +256,7 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
       {tasks.length === 0 && (
         <div className="glass rounded-2xl p-10 text-center">
           <Icon name="ClipboardList" size={36} className="text-white/15 mx-auto mb-3" />
-          <p className="text-white/40 text-sm">Нет задач</p>
+          <p className="text-white/65 text-sm">Нет задач</p>
           <p className="text-white/25 text-xs mt-1 mb-4">Создайте задачи для своих сотрудников по этому мероприятию</p>
           <button onClick={() => setShowForm(true)}
             className="px-5 py-2.5 bg-neon-purple/20 text-neon-purple border border-neon-purple/30 rounded-xl text-sm hover:bg-neon-purple/30 transition-colors">
@@ -276,7 +276,7 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
                 <div className={`px-4 py-3 border-b border-white/8 flex items-center gap-2`}>
                   <Icon name={col.icon} size={14} className={col.cls.split(" ")[0]} />
                   <span className="font-oswald font-semibold text-white text-sm">{col.label}</span>
-                  <span className="ml-auto text-xs text-white/30">{colTasks.length}</span>
+                  <span className="ml-auto text-xs text-white/55">{colTasks.length}</span>
                 </div>
                 <div className="p-2 space-y-2 min-h-[80px]">
                   {colTasks.map(task => {
@@ -290,21 +290,21 @@ export default function VenueBookingCrmTab({ bookingId }: { bookingId: string })
                             <span className="text-white text-xs font-medium leading-tight line-clamp-2">{task.title}</span>
                           </div>
                           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                            <button onClick={() => startEdit(task)} className="text-white/30 hover:text-neon-purple transition-colors">
+                            <button onClick={() => startEdit(task)} className="text-white/55 hover:text-neon-purple transition-colors">
                               <Icon name="Edit3" size={12} />
                             </button>
-                            <button onClick={() => deleteTask(task.id)} className="text-white/30 hover:text-neon-pink transition-colors">
+                            <button onClick={() => deleteTask(task.id)} className="text-white/55 hover:text-neon-pink transition-colors">
                               <Icon name="Trash2" size={12} />
                             </button>
                           </div>
                         </div>
                         {task.description && (
-                          <p className="text-white/35 text-[10px] leading-relaxed line-clamp-2">{task.description}</p>
+                          <p className="text-white/60 text-[10px] leading-relaxed line-clamp-2">{task.description}</p>
                         )}
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-white/30 text-[10px] truncate">{task.assigneeName}</span>
+                          <span className="text-white/55 text-[10px] truncate">{task.assigneeName}</span>
                           {task.dueDate && (
-                            <span className={`text-[10px] shrink-0 ${overdue ? "text-neon-pink" : "text-white/30"}`}>
+                            <span className={`text-[10px] shrink-0 ${overdue ? "text-neon-pink" : "text-white/55"}`}>
                               {overdue && <Icon name="AlertCircle" size={9} className="inline mr-0.5" />}
                               {task.dueDate}
                             </span>

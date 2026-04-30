@@ -143,7 +143,7 @@ export default function DashboardAITab() {
           </div>
           <div>
             <p className="text-white/60 text-base font-semibold mb-1">ИИ-ассистент отключён</p>
-            <p className="text-white/30 text-sm">Администратор платформы временно отключил ИИ-ассистента. Обратитесь в поддержку напрямую.</p>
+            <p className="text-white/55 text-sm">Администратор платформы временно отключил ИИ-ассистента. Обратитесь в поддержку напрямую.</p>
           </div>
         </div>
       )}
@@ -154,7 +154,7 @@ export default function DashboardAITab() {
         </div>
         <div>
           <p className="text-white font-semibold text-sm">ИИ-ассистент</p>
-          <p className="text-white/40 text-xs">Знает всё о платформе GLOBAL LINK</p>
+          <p className="text-white/65 text-xs">Знает всё о платформе GLOBAL LINK</p>
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <span className="w-2 h-2 rounded-full bg-neon-green animate-pulse" />
@@ -199,13 +199,13 @@ export default function DashboardAITab() {
               {/* Rating */}
               {msg.role === "assistant" && !msg.loading && msg.requestId && (
                 <div className="flex items-center gap-1 ml-1">
-                  <span className="text-white/30 text-xs mr-1">Помогло?</span>
+                  <span className="text-white/55 text-xs mr-1">Помогло?</span>
                   <button
                     onClick={() => !msg.rated && rate(msg.id, msg.requestId!, true)}
                     className={`p-1 rounded-lg transition-colors ${
                       msg.rated === "up"
                         ? "text-neon-green"
-                        : "text-white/30 hover:text-neon-green"
+                        : "text-white/55 hover:text-neon-green"
                     }`}
                   >
                     <Icon name="ThumbsUp" size={13} />
@@ -215,7 +215,7 @@ export default function DashboardAITab() {
                     className={`p-1 rounded-lg transition-colors ${
                       msg.rated === "down"
                         ? "text-neon-pink"
-                        : "text-white/30 hover:text-neon-pink"
+                        : "text-white/55 hover:text-neon-pink"
                     }`}
                   >
                     <Icon name="ThumbsDown" size={13} />

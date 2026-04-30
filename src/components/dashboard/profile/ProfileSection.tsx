@@ -79,9 +79,9 @@ export default function ProfileSection({
             )}
             <div>
               <p className="text-white font-medium">{user.name}</p>
-              <p className="text-white/40 text-sm">{user.email}</p>
+              <p className="text-white/65 text-sm">{user.email}</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-white/30 text-xs">{COMPANY_LABELS[user.companyType] || "—"}</p>
+                <p className="text-white/55 text-xs">{COMPANY_LABELS[user.companyType] || "—"}</p>
                 {user.displayId && (
                   <span className="flex items-center gap-1 text-[11px] font-mono bg-neon-cyan/10 border border-neon-cyan/20 text-neon-cyan px-1.5 py-0.5 rounded-md select-all">
                     ID {user.displayId}
@@ -96,7 +96,7 @@ export default function ProfileSection({
             </button>
           ) : (
             <div className="flex gap-2">
-              <button onClick={onCancelEdit} className="px-4 py-2 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">Отмена</button>
+              <button onClick={onCancelEdit} className="px-4 py-2 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">Отмена</button>
               <button onClick={onSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-neon-purple text-white rounded-xl text-sm hover:opacity-90 disabled:opacity-50">
                 {saving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Check" size={14} />}Сохранить
               </button>
@@ -108,14 +108,14 @@ export default function ProfileSection({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">{isVenue ? "Название площадки" : "Имя"}</label>
+            <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">{isVenue ? "Название площадки" : "Имя"}</label>
             {editMode ? (
               <input value={editForm.name} onChange={e => onEditFormChange({ ...editForm, name: e.target.value })}
                 className="w-full glass rounded-xl px-4 py-3 text-white outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
             ) : <p className="text-white text-sm py-3 px-4 glass rounded-xl border border-white/5">{user.name}</p>}
           </div>
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Город</label>
+            <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">Город</label>
             {editMode ? (
               <select value={editForm.city} onChange={e => onEditFormChange({ ...editForm, city: e.target.value })}
                 className="w-full glass rounded-xl px-4 py-3 text-white outline-none border border-white/10 focus:border-neon-purple/50 text-sm appearance-none bg-transparent">
@@ -126,12 +126,12 @@ export default function ProfileSection({
         </div>
 
         <div>
-          <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Email</label>
-          <p className="text-white/50 text-sm py-3 px-4 glass rounded-xl border border-white/5">{user.email}</p>
+          <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">Email</label>
+          <p className="text-white/70 text-sm py-3 px-4 glass rounded-xl border border-white/5">{user.email}</p>
         </div>
 
         <div>
-          <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Роль</label>
+          <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">Роль</label>
           <div className="flex items-center gap-2 py-3 px-4 glass rounded-xl border border-white/5">
             <Icon name={isVenue ? "Building2" : "Route"} size={15} className={isVenue ? "text-neon-cyan" : "text-neon-purple"} />
             <span className="text-white text-sm">{isVenue ? "Концертная площадка" : "Организатор туров"}</span>
@@ -140,7 +140,7 @@ export default function ProfileSection({
 
         <div className="h-px bg-white/10" />
         <div>
-          <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Смена пароля</label>
+          <label className="text-xs text-white/65 uppercase tracking-wider mb-2 block">Смена пароля</label>
           <button onClick={() => setPwModal(true)} className="flex items-center gap-2 px-4 py-2.5 glass text-white/60 hover:text-white rounded-xl border border-white/10 hover:border-white/20 transition-all text-sm">
             <Icon name="Lock" size={14} />Изменить пароль
           </button>
@@ -149,11 +149,11 @@ export default function ProfileSection({
 
         {/* Email-уведомления */}
         <div>
-          <label className="text-xs text-white/40 uppercase tracking-wider mb-3 block">Уведомления на почту</label>
+          <label className="text-xs text-white/65 uppercase tracking-wider mb-3 block">Уведомления на почту</label>
           <div className="glass rounded-xl px-4 py-3 border border-white/8 flex items-center justify-between gap-4">
             <div>
               <p className="text-white text-sm font-medium">Письма о бронированиях</p>
-              <p className="text-white/35 text-xs mt-0.5">
+              <p className="text-white/60 text-xs mt-0.5">
                 {emailNotif
                   ? "Новые заявки и ответы дублируются на email"
                   : "Письма на почту отключены, только уведомления в приложении"}
@@ -189,7 +189,7 @@ export default function ProfileSection({
               <h3 className="font-oswald font-bold text-white text-lg flex items-center gap-2">
                 <Icon name="Lock" size={18} className="text-neon-purple" />Смена пароля
               </h3>
-              <button onClick={closePwModal} className="text-white/30 hover:text-white transition-colors">
+              <button onClick={closePwModal} className="text-white/55 hover:text-white transition-colors">
                 <Icon name="X" size={16} />
               </button>
             </div>
@@ -208,7 +208,7 @@ export default function ProfileSection({
                   { label: "Повторите новый пароль", key: "confirm" },
                 ].map(f => (
                   <div key={f.key}>
-                    <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">{f.label}</label>
+                    <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">{f.label}</label>
                     <input type="password" value={pwForm[f.key as keyof typeof pwForm]}
                       onChange={e => setPwForm(p => ({ ...p, [f.key]: e.target.value }))}
                       className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
@@ -221,7 +221,7 @@ export default function ProfileSection({
                 )}
                 <div className="flex gap-2 pt-1">
                   <button onClick={closePwModal}
-                    className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
+                    className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
                     Отмена
                   </button>
                   <button onClick={handleChangePassword} disabled={pwSaving}

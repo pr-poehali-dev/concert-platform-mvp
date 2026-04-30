@@ -66,7 +66,7 @@ export default function UserSearch({ label, placeholder, email, name, onEmailCha
   return (
     <div className="space-y-3">
       <div ref={wrapRef} className="relative">
-        <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+        <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
           <Icon name="Mail" size={10} />{label}
         </label>
         <div className="relative">
@@ -80,7 +80,7 @@ export default function UserSearch({ label, placeholder, email, name, onEmailCha
             autoComplete="off"
           />
           {searching && (
-            <Icon name="Loader2" size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 animate-spin" />
+            <Icon name="Loader2" size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-white/55 animate-spin" />
           )}
         </div>
         {open && suggestions.length > 0 && (
@@ -99,7 +99,7 @@ export default function UserSearch({ label, placeholder, email, name, onEmailCha
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white text-sm font-medium truncate">{u.displayName || u.name}</p>
-                  <p className="text-white/35 text-xs truncate">{u.email}</p>
+                  <p className="text-white/60 text-xs truncate">{u.email}</p>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-full border shrink-0 ${
                   u.role === "venue"
@@ -114,7 +114,7 @@ export default function UserSearch({ label, placeholder, email, name, onEmailCha
         )}
       </div>
       <div>
-        <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+        <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
           <Icon name="User" size={10} />Имя получателя (необязательно)
         </label>
         <input

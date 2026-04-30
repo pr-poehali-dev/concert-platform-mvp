@@ -210,7 +210,7 @@ export default function DashboardProfileTab({
       <div className="flex flex-wrap gap-1 mb-6 glass rounded-xl p-1 w-fit">
         {SECTIONS.map(s => (
           <button key={s.id} onClick={() => setSection(s.id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${section === s.id ? "bg-neon-purple text-white" : "text-white/50 hover:text-white"}`}>
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-oswald font-medium transition-all ${section === s.id ? "bg-neon-purple text-white" : "text-white/70 hover:text-white"}`}>
             <Icon name={s.icon} size={14} />{s.label}
           </button>
         ))}
@@ -252,16 +252,16 @@ export default function DashboardProfileTab({
                     : <span className="flex items-center gap-1 text-amber-400 text-xs bg-amber-400/10 border border-amber-400/20 px-2 py-0.5 rounded-full"><Icon name="Clock" size={10} />Не подтверждён</span>
                   }
                 </div>
-                <p className="text-white/40 text-sm mb-1">{user.email}</p>
+                <p className="text-white/65 text-sm mb-1">{user.email}</p>
 
                 {emailConfirmed ? (
-                  <p className="text-white/30 text-xs mt-2 flex items-center gap-1.5">
+                  <p className="text-white/55 text-xs mt-2 flex items-center gap-1.5">
                     <Icon name="ShieldCheck" size={12} className="text-neon-cyan/50" />
                     Почта подтверждена — аккаунт защищён
                   </p>
                 ) : (
                   <>
-                    <p className="text-white/35 text-xs mt-2 mb-4 leading-relaxed">
+                    <p className="text-white/60 text-xs mt-2 mb-4 leading-relaxed">
                       Подтвердите почту чтобы защитить аккаунт, получать уведомления и включить двухфакторную аутентификацию.
                     </p>
 
@@ -289,7 +289,7 @@ export default function DashboardProfileTab({
                       <p className="text-white/25 text-xs mt-2 flex items-center gap-1.5">
                         <Icon name="Info" size={11} />
                         Не пришло? Проверьте папку «Спам» или{" "}
-                        <button onClick={() => { setEmailSent(false); setEmailMsg(null); }} className="underline hover:text-white/50 transition-colors">
+                        <button onClick={() => { setEmailSent(false); setEmailMsg(null); }} className="underline hover:text-white/70 transition-colors">
                           отправьте снова
                         </button>
                       </p>
@@ -304,13 +304,13 @@ export default function DashboardProfileTab({
           <div className="glass rounded-2xl border border-white/10 p-6">
             <div className="flex items-start gap-4">
               <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${tfaEnabled ? "bg-neon-cyan/15 border border-neon-cyan/25" : "bg-white/5 border border-white/10"}`}>
-                <Icon name="ShieldCheck" size={20} className={tfaEnabled ? "text-neon-cyan" : "text-white/30"} />
+                <Icon name="ShieldCheck" size={20} className={tfaEnabled ? "text-neon-cyan" : "text-white/55"} />
               </div>
               <div className="flex-1">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h3 className="font-oswald font-semibold text-white text-base">Двухфакторная аутентификация</h3>
-                    <p className="text-white/40 text-sm mt-0.5">
+                    <p className="text-white/65 text-sm mt-0.5">
                       {tfaEnabled
                         ? "При входе будет отправлен код на вашу почту"
                         : "Дополнительная защита аккаунта через код на почте"}
@@ -343,7 +343,7 @@ export default function DashboardProfileTab({
                   </div>
                 )}
 
-                <div className="mt-4 space-y-1.5 text-white/30 text-xs">
+                <div className="mt-4 space-y-1.5 text-white/55 text-xs">
                   <p className="flex items-center gap-2"><Icon name="Check" size={11} className="text-neon-cyan/50" />Код приходит на вашу верифицированную почту</p>
                   <p className="flex items-center gap-2"><Icon name="Check" size={11} className="text-neon-cyan/50" />Код действует 10 минут</p>
                   <p className="flex items-center gap-2"><Icon name="Check" size={11} className="text-neon-cyan/50" />Защищает от несанкционированного входа</p>

@@ -15,12 +15,12 @@ export default function DocDeleteModal({ deleting, onConfirm, onCancel }: Props)
           <Icon name="Trash2" size={24} className="text-neon-pink" />
         </div>
         <h3 className="font-oswald font-bold text-lg text-white mb-2">Удалить документ?</h3>
-        <p className="text-white/40 text-sm mb-6">Это действие необратимо</p>
+        <p className="text-white/65 text-sm mb-6">Это действие необратимо</p>
         <div className="flex gap-3">
           <button
             onClick={onCancel}
             disabled={deleting}
-            className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/50 hover:text-white text-sm transition-all disabled:opacity-40"
+            className="flex-1 py-2.5 rounded-xl border border-white/10 text-white/70 hover:text-white text-sm transition-all disabled:opacity-40"
           >
             Отмена
           </button>

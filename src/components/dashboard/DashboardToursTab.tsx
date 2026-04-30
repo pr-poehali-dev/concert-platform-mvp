@@ -51,7 +51,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
         ) : tours.length === 0 ? (
           <div className="text-center py-16 glass rounded-2xl">
             <Icon name="Clock" size={40} className="text-white/20 mx-auto mb-3" />
-            <p className="text-white/40 font-oswald text-lg">Нет завершённых туров</p>
+            <p className="text-white/65 font-oswald text-lg">Нет завершённых туров</p>
           </div>
         ) : (
           <div className="glass rounded-2xl overflow-hidden">
@@ -59,7 +59,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
               <thead>
                 <tr className="border-b border-white/10">
                   {["Тур", "Артист", "Даты", "Статус", "Бюджет"].map(h => (
-                    <th key={h} className="text-left px-5 py-3 text-xs text-white/40 uppercase tracking-wider font-medium">{h}</th>
+                    <th key={h} className="text-left px-5 py-3 text-xs text-white/65 uppercase tracking-wider font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -70,7 +70,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
                     onClick={() => setOpenTourId(tour.id)}>
                     <td className="px-5 py-4"><span className="font-medium text-white text-sm">{tour.title}</span></td>
                     <td className="px-5 py-4 text-neon-cyan text-sm">{tour.artist || "—"}</td>
-                    <td className="px-5 py-4 text-white/50 text-sm">
+                    <td className="px-5 py-4 text-white/70 text-sm">
                       {tour.dateStart ? new Date(tour.dateStart).toLocaleDateString("ru", { day: "numeric", month: "short" }) : "—"}
                     </td>
                     <td className="px-5 py-4">
@@ -124,7 +124,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
             <div key={i} className="glass rounded-2xl p-4 text-center">
               <Icon name={s.icon} size={18} className={`${s.color} mx-auto mb-1.5`} />
               <div className={`font-oswald font-bold text-xl ${s.color}`}>{s.value}</div>
-              <div className="text-white/35 text-xs mt-0.5">{s.label}</div>
+              <div className="text-white/60 text-xs mt-0.5">{s.label}</div>
             </div>
           ))}
         </div>
@@ -135,7 +135,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
       ) : tours.length === 0 ? (
         <div className="text-center py-16 glass rounded-2xl">
           <Icon name="Route" size={48} className="text-white/20 mx-auto mb-4" />
-          <p className="text-white/40 text-lg font-oswald">Туров пока нет</p>
+          <p className="text-white/65 text-lg font-oswald">Туров пока нет</p>
           <p className="text-white/25 text-sm mt-1 mb-5">Создайте первый тур — это работает как проект с площадками и бюджетом</p>
           <button onClick={() => setShowCreate(true)}
             className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90">
@@ -161,7 +161,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
                       </Badge>
                     </div>
                     {tour.artist && <p className="text-neon-cyan text-sm">{tour.artist}</p>}
-                    <p className="text-white/35 text-xs mt-0.5">
+                    <p className="text-white/60 text-xs mt-0.5">
                       {tour.dateStart ? new Date(tour.dateStart).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" }) : "Дата не указана"}
                       {tour.city && ` · ${tour.city}`}
                     </p>
@@ -171,7 +171,7 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
                   {tour.totalIncomePlan > 0 && (
                     <>
                       <p className="font-oswald font-bold text-xl gradient-text">{fmt(tour.totalIncomePlan)} ₽</p>
-                      <p className="text-white/30 text-xs">доход (план)</p>
+                      <p className="text-white/55 text-xs">доход (план)</p>
                     </>
                   )}
                 </div>

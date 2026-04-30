@@ -19,7 +19,7 @@ export default function LogoSection({
   return (
     <div className="glass rounded-2xl p-6 space-y-5">
       <h3 className="font-oswald font-semibold text-white text-lg mb-1">Логотип компании</h3>
-      <p className="text-white/40 text-sm">Логотип отображается в личном кабинете, экспортируемых отчётах и карточке площадки.</p>
+      <p className="text-white/65 text-sm">Логотип отображается в личном кабинете, экспортируемых отчётах и карточке площадки.</p>
 
       <div className="flex items-start gap-6">
         <div className="shrink-0">
@@ -33,9 +33,9 @@ export default function LogoSection({
         </div>
         <div className="flex-1 space-y-3">
           <label className="flex items-center gap-3 p-4 rounded-xl border-2 border-dashed border-white/15 hover:border-white/30 cursor-pointer transition-colors">
-            <Icon name="ImagePlus" size={20} className="text-white/30" />
+            <Icon name="ImagePlus" size={20} className="text-white/55" />
             <div>
-              <p className="text-white/50 text-sm">Загрузить логотип</p>
+              <p className="text-white/70 text-sm">Загрузить логотип</p>
               <p className="text-white/25 text-xs">PNG, JPG, SVG · рекомендуем 400×400</p>
             </div>
             <input type="file" accept="image/*" className="hidden" onChange={onLogoChange} />

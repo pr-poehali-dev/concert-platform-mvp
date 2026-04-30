@@ -50,27 +50,27 @@ function VenueRespondModal({ booking, onClose, onSubmit }: VenueRespondModalProp
           <h3 className="font-oswald font-bold text-white text-lg flex items-center gap-2">
             <Icon name="CalendarCheck" size={18} className="text-neon-purple"/>Запрос бронирования
           </h3>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors"><Icon name="X" size={16}/></button>
+          <button onClick={onClose} className="text-white/55 hover:text-white transition-colors"><Icon name="X" size={16}/></button>
         </div>
 
         {/* Детали */}
         <div className="glass rounded-xl p-4 space-y-2 mb-4 text-sm">
-          <div className="flex justify-between"><span className="text-white/50">Проект</span><span className="text-white font-medium">{booking.projectTitle}</span></div>
-          {booking.organizerName && <div className="flex justify-between"><span className="text-white/50">Организатор</span><span className="text-white">{booking.organizerName}</span></div>}
-          <div className="flex justify-between"><span className="text-white/50">Дата</span><span className="text-neon-cyan font-medium">{booking.eventDate}{booking.eventTime ? ` ${booking.eventTime}` : ""}</span></div>
-          {booking.artist && <div className="flex justify-between"><span className="text-white/50">Артист</span><span className="text-white">{booking.artist}</span></div>}
-          {booking.ageLimit && <div className="flex justify-between"><span className="text-white/50">Возраст</span><span className="text-white">{booking.ageLimit}+</span></div>}
-          {booking.expectedGuests > 0 && <div className="flex justify-between"><span className="text-white/50">Гостей</span><span className="text-white">{booking.expectedGuests.toLocaleString()}</span></div>}
+          <div className="flex justify-between"><span className="text-white/70">Проект</span><span className="text-white font-medium">{booking.projectTitle}</span></div>
+          {booking.organizerName && <div className="flex justify-between"><span className="text-white/70">Организатор</span><span className="text-white">{booking.organizerName}</span></div>}
+          <div className="flex justify-between"><span className="text-white/70">Дата</span><span className="text-neon-cyan font-medium">{booking.eventDate}{booking.eventTime ? ` ${booking.eventTime}` : ""}</span></div>
+          {booking.artist && <div className="flex justify-between"><span className="text-white/70">Артист</span><span className="text-white">{booking.artist}</span></div>}
+          {booking.ageLimit && <div className="flex justify-between"><span className="text-white/70">Возраст</span><span className="text-white">{booking.ageLimit}+</span></div>}
+          {booking.expectedGuests > 0 && <div className="flex justify-between"><span className="text-white/70">Гостей</span><span className="text-white">{booking.expectedGuests.toLocaleString()}</span></div>}
         </div>
 
         <div className="space-y-3 mb-4">
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Сумма аренды (₽)</label>
+            <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">Сумма аренды (₽)</label>
             <input type="number" value={rentalAmount} onChange={e=>setRentalAmount(e.target.value)} placeholder="Укажите стоимость аренды"
               className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm"/>
           </div>
           <div>
-            <label className="text-xs text-white/40 uppercase tracking-wider mb-1.5 block">Условия и комментарий</label>
+            <label className="text-xs text-white/65 uppercase tracking-wider mb-1.5 block">Условия и комментарий</label>
             <textarea value={conditions} onChange={e=>setConditions(e.target.value)} rows={3}
               placeholder="Технический райдер, требования, особые условия..."
               className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm resize-none"/>
@@ -118,17 +118,17 @@ function OrganizerRespondModal({ booking, onClose, onSubmit }: OrganizerRespondM
           <h3 className="font-oswald font-bold text-white text-lg flex items-center gap-2">
             <Icon name="CalendarCheck" size={18} className="text-neon-green"/>Площадка подтвердила дату
           </h3>
-          <button onClick={onClose} className="text-white/30 hover:text-white transition-colors"><Icon name="X" size={16}/></button>
+          <button onClick={onClose} className="text-white/55 hover:text-white transition-colors"><Icon name="X" size={16}/></button>
         </div>
 
         <div className="glass rounded-xl p-4 space-y-2 mb-4 text-sm">
-          <div className="flex justify-between"><span className="text-white/50">Площадка</span><span className="text-white font-medium">{booking.venueName}</span></div>
-          <div className="flex justify-between"><span className="text-white/50">Дата</span><span className="text-neon-cyan font-medium">{booking.eventDate}{booking.eventTime ? ` ${booking.eventTime}` : ""}</span></div>
+          <div className="flex justify-between"><span className="text-white/70">Площадка</span><span className="text-white font-medium">{booking.venueName}</span></div>
+          <div className="flex justify-between"><span className="text-white/70">Дата</span><span className="text-neon-cyan font-medium">{booking.eventDate}{booking.eventTime ? ` ${booking.eventTime}` : ""}</span></div>
           {booking.rentalAmount !== null && (
-            <div className="flex justify-between"><span className="text-white/50">Сумма аренды</span><span className="text-neon-green font-oswald font-bold text-base">{booking.rentalAmount.toLocaleString("ru-RU")} ₽</span></div>
+            <div className="flex justify-between"><span className="text-white/70">Сумма аренды</span><span className="text-neon-green font-oswald font-bold text-base">{booking.rentalAmount.toLocaleString("ru-RU")} ₽</span></div>
           )}
           {booking.venueConditions && (
-            <div><span className="text-white/50 block mb-1">Условия</span><span className="text-white/80">{booking.venueConditions}</span></div>
+            <div><span className="text-white/70 block mb-1">Условия</span><span className="text-white/80">{booking.venueConditions}</span></div>
           )}
         </div>
 
@@ -216,7 +216,7 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
     confirmed: { label: "Площадка подтвердила — ожидает организатора", cls: "text-neon-green bg-neon-green/10 border-neon-green/20" },
     accepted:  { label: "Бронирование подтверждено", cls: "text-neon-green bg-neon-green/10 border-neon-green/20" },
     rejected:  { label: "Отклонено площадкой", cls: "text-neon-pink bg-neon-pink/10 border-neon-pink/20" },
-    cancelled: { label: "Отменено организатором", cls: "text-white/40 bg-white/5 border-white/10" },
+    cancelled: { label: "Отменено организатором", cls: "text-white/65 bg-white/5 border-white/10" },
   };
 
   if (loading) return (
@@ -226,19 +226,19 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
   if (bookings.length === 0) return null;
 
   const BookingCard = ({ b, action }: { b: Booking; action?: boolean }) => {
-    const st = STATUS_LABEL[b.status] || { label: b.status, cls: "text-white/40 bg-white/5 border-white/10" };
+    const st = STATUS_LABEL[b.status] || { label: b.status, cls: "text-white/65 bg-white/5 border-white/10" };
     return (
       <div className={`glass rounded-2xl p-4 border ${action ? "border-neon-purple/30" : "border-white/5"}`}>
         <div className="flex items-start justify-between gap-3 mb-2">
           <div>
             <p className="text-white font-medium text-sm">{isVenue ? b.projectTitle : b.venueName}</p>
-            <p className="text-white/40 text-xs mt-0.5">
+            <p className="text-white/65 text-xs mt-0.5">
               {b.eventDate}{b.eventTime ? ` ${b.eventTime}` : ""}
               {b.artist ? ` · ${b.artist}` : ""}
               {b.ageLimit ? ` · ${b.ageLimit}+` : ""}
               {b.expectedGuests > 0 ? ` · ${b.expectedGuests.toLocaleString()} гостей` : ""}
             </p>
-            {b.organizerName && <p className="text-white/30 text-xs">Организатор: {b.organizerName}</p>}
+            {b.organizerName && <p className="text-white/55 text-xs">Организатор: {b.organizerName}</p>}
           </div>
           <span className={`text-xs px-2 py-0.5 rounded-lg border shrink-0 ${st.cls}`}>{st.label}</span>
         </div>

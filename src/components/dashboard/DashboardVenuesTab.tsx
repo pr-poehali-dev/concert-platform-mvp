@@ -84,7 +84,7 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue, onRelo
       ) : venues.length === 0 ? (
         <div className="text-center py-20 glass rounded-2xl">
           <Icon name="Building2" size={48} className="text-white/20 mx-auto mb-4" />
-          <p className="text-white/40 text-lg font-oswald">У вас пока нет площадок</p>
+          <p className="text-white/65 text-lg font-oswald">У вас пока нет площадок</p>
           <p className="text-white/25 text-sm mt-1 mb-6">Добавьте первую площадку — она появится в поиске</p>
           <button onClick={onAddVenue}
             className="px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity">
@@ -104,7 +104,7 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue, onRelo
                 </div>
                 <div className="p-4">
                   <h3 className="font-oswald font-bold text-lg text-white mb-1">{v.name}</h3>
-                  <div className="flex items-center gap-3 text-white/50 text-xs mb-3">
+                  <div className="flex items-center gap-3 text-white/70 text-xs mb-3">
                     <span className="flex items-center gap-1"><Icon name="MapPin" size={11} />{v.city}</span>
                     <span className="flex items-center gap-1"><Icon name="Users" size={11} />{v.capacity.toLocaleString()} чел.</span>
                   </div>
@@ -115,7 +115,7 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue, onRelo
                     className={`flex items-center gap-1.5 text-xs mb-3 transition-colors ${
                       busyDates.length > 0
                         ? "text-neon-pink hover:text-neon-pink/80"
-                        : "text-white/25 hover:text-white/50"
+                        : "text-white/25 hover:text-white/70"
                     }`}
                   >
                     <Icon name="Calendar" size={11} />

@@ -49,7 +49,7 @@ export default function DashboardSidebar({ activeTab, onTabChange }: Props) {
   const tabs = isVenue ? VENUE_TABS : ORG_TABS;
 
   return (
-    <aside className="hidden lg:flex flex-col w-56 shrink-0 gap-1 sticky top-24 self-start">
+    <aside className="hidden lg:flex flex-col w-56 shrink-0 gap-1 sticky top-4 self-start">
       {/* Логотип / имя */}
       <div className="glass rounded-2xl border border-white/10 px-4 py-3 mb-2">
         <div className="flex items-center gap-3">
@@ -57,8 +57,8 @@ export default function DashboardSidebar({ activeTab, onTabChange }: Props) {
             {user?.avatar || "?"}
           </div>
           <div className="min-w-0">
-            <p className="text-white text-sm font-semibold truncate">{user?.name}</p>
-            <p className={`text-[11px] font-medium ${isVenue ? "text-neon-cyan" : "text-neon-purple"}`}>
+            <p className="text-white text-sm font-bold truncate">{user?.name}</p>
+            <p className={`text-xs font-semibold ${isVenue ? "text-neon-cyan" : "text-neon-purple"}`}>
               {isVenue ? "Площадка" : "Организатор"}
             </p>
           </div>
@@ -74,13 +74,13 @@ export default function DashboardSidebar({ activeTab, onTabChange }: Props) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
                 isActive
                   ? "bg-neon-purple text-white shadow-lg shadow-neon-purple/20"
-                  : "text-white/50 hover:text-white hover:bg-white/5"
+                  : "text-white/75 hover:text-white hover:bg-white/8"
               }`}
             >
-              <Icon name={tab.icon as never} size={16} className={isActive ? "text-white" : "text-white/40"} />
+              <Icon name={tab.icon as never} size={16} className={isActive ? "text-white" : "text-white/60"} />
               <span className="flex-1">{tab.label}</span>
               {badge > 0 && (
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
@@ -102,22 +102,22 @@ export default function DashboardSidebar({ activeTab, onTabChange }: Props) {
             <button
               key={tab.id}
               onClick={() => onTabChange(tab.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all text-left ${
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
                 isActive
                   ? "bg-neon-purple text-white shadow-lg shadow-neon-purple/20"
-                  : "text-white/50 hover:text-white hover:bg-white/5"
+                  : "text-white/75 hover:text-white hover:bg-white/8"
               }`}
             >
-              <Icon name={tab.icon as never} size={16} className={isActive ? "text-white" : "text-white/40"} />
+              <Icon name={tab.icon as never} size={16} className={isActive ? "text-white" : "text-white/60"} />
               <span className="flex-1">{tab.label}</span>
             </button>
           );
         })}
         <button
           onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-neon-pink/70 hover:text-neon-pink hover:bg-neon-pink/10 transition-all text-left"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold text-neon-pink/85 hover:text-neon-pink hover:bg-neon-pink/10 transition-all text-left"
         >
-          <Icon name="LogOut" size={16} className="text-neon-pink/50" />
+          <Icon name="LogOut" size={16} className="text-neon-pink/70" />
           <span>Выйти</span>
         </button>
       </nav>

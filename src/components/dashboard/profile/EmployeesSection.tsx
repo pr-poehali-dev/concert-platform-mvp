@@ -28,7 +28,7 @@ function PermToggle({ label, description, value, onChange, icon, color }: PermTo
         <Icon name={icon} size={14} className={value ? color : "text-white/25"} />
         <div>
           <p className="text-white/80 text-xs font-medium">{label}</p>
-          <p className="text-white/35 text-[10px]">{description}</p>
+          <p className="text-white/60 text-[10px]">{description}</p>
         </div>
       </div>
       <button
@@ -171,7 +171,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
       <div className="flex items-center justify-between">
         <div>
           <h3 className="font-oswald font-semibold text-white text-lg">Сотрудники компании</h3>
-          <p className="text-white/40 text-xs mt-0.5">Сотрудники могут входить в личный кабинет и работать от имени компании</p>
+          <p className="text-white/65 text-xs mt-0.5">Сотрудники могут входить в личный кабинет и работать от имени компании</p>
         </div>
         <button onClick={() => setShowAddEmp(true)}
           className="flex items-center gap-2 px-4 py-2 bg-neon-purple text-white rounded-xl text-sm hover:opacity-90 transition-opacity font-oswald font-medium">
@@ -185,22 +185,22 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
           <h4 className="font-oswald font-semibold text-white text-sm">Новый сотрудник</h4>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-white/40 mb-1 block">Имя</label>
+              <label className="text-xs text-white/65 mb-1 block">Имя</label>
               <input value={empForm.name} onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))} placeholder="Иван Иванов"
                 className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-white/40 mb-1 block">Email</label>
+              <label className="text-xs text-white/65 mb-1 block">Email</label>
               <input type="email" value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} placeholder="emp@company.ru"
                 className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-white/40 mb-1 block">Пароль</label>
+              <label className="text-xs text-white/65 mb-1 block">Пароль</label>
               <input type="password" value={empForm.password} onChange={e => setEmpForm(f => ({ ...f, password: e.target.value }))} placeholder="Минимум 6 символов"
                 className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
             </div>
             <div>
-              <label className="text-xs text-white/40 mb-1 block">Роль</label>
+              <label className="text-xs text-white/65 mb-1 block">Роль</label>
               <select value={empForm.roleInCompany} onChange={e => setEmpForm(f => ({ ...f, roleInCompany: e.target.value }))}
                 className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 text-sm appearance-none bg-transparent">
                 {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-gray-900">{l}</option>)}
@@ -210,7 +210,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
 
           {/* Настройка доступа */}
           <div>
-            <p className="text-xs text-white/40 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+            <p className="text-xs text-white/65 uppercase tracking-wider mb-2 flex items-center gap-1.5">
               <Icon name="ShieldCheck" size={12} className="text-neon-purple" />
               Доступ к финансовой информации
             </p>
@@ -232,7 +232,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
           {empError && <p className="text-neon-pink text-xs flex items-center gap-1"><Icon name="AlertCircle" size={12} />{empError}</p>}
           <div className="flex gap-2">
             <button onClick={() => { setShowAddEmp(false); setEmpError(""); setPerms({ ...DEFAULT_ACCESS_PERMISSIONS }); }}
-              className="flex-1 py-2 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white">Отмена</button>
+              className="flex-1 py-2 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white">Отмена</button>
             <button onClick={addEmployee} disabled={empSaving}
               className="flex-1 flex items-center justify-center gap-2 py-2 bg-neon-purple text-white rounded-xl text-sm hover:opacity-90 disabled:opacity-50">
               {empSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="UserPlus" size={14} />}Добавить
@@ -251,11 +251,11 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                 <Icon name="ShieldCheck" size={16} className="text-neon-purple" />
                 Права доступа
               </h4>
-              <button onClick={() => setEditPermId(null)} className="text-white/30 hover:text-white transition-colors">
+              <button onClick={() => setEditPermId(null)} className="text-white/55 hover:text-white transition-colors">
                 <Icon name="X" size={16} />
               </button>
             </div>
-            <p className="text-white/40 text-xs mb-4">
+            <p className="text-white/65 text-xs mb-4">
               Сотрудник: <span className="text-white/70">{employees.find(e => e.id === editPermId)?.name}</span>
             </p>
             <div className="space-y-1.5 mb-5">
@@ -273,7 +273,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
             </div>
             <div className="flex gap-2">
               <button onClick={() => setEditPermId(null)}
-                className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
+                className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
                 Отмена
               </button>
               <button onClick={savePermissions} disabled={savingPerms}
@@ -291,7 +291,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
       ) : employees.length === 0 ? (
         <div className="text-center py-12 glass rounded-2xl">
           <Icon name="Users" size={36} className="text-white/20 mx-auto mb-3" />
-          <p className="text-white/40 text-sm">Нет сотрудников</p>
+          <p className="text-white/65 text-sm">Нет сотрудников</p>
           <p className="text-white/25 text-xs mt-1">Добавьте первого сотрудника</p>
         </div>
       ) : (
@@ -307,7 +307,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-white font-medium text-sm">{emp.name}</span>
-                    <Badge className="text-xs bg-white/5 text-white/40 border-white/10">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</Badge>
+                    <Badge className="text-xs bg-white/5 text-white/65 border-white/10">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</Badge>
                     {!emp.isActive && <Badge className="text-xs bg-neon-pink/10 text-neon-pink border-neon-pink/20">Заблокирован</Badge>}
                     {deniedCount > 0 && (
                       <Badge className="text-xs bg-neon-pink/10 text-neon-pink border-neon-pink/20">
@@ -315,24 +315,24 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                       </Badge>
                     )}
                   </div>
-                  <p className="text-white/40 text-xs">{emp.email}</p>
+                  <p className="text-white/65 text-xs">{emp.email}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => openEditProfile(emp)} title="Редактировать"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-colors">
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-colors">
                     <Icon name="Pencil" size={15} />
                   </button>
                   <button onClick={() => openEditPerms(emp)} title="Настроить доступ"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-colors">
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-purple hover:bg-neon-purple/10 transition-colors">
                     <Icon name="ShieldCheck" size={15} />
                   </button>
                   <button onClick={() => toggleEmployee(emp)}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${emp.isActive ? "text-white/30 hover:text-neon-pink hover:bg-neon-pink/10" : "text-neon-green hover:bg-neon-green/10"}`}
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${emp.isActive ? "text-white/55 hover:text-neon-pink hover:bg-neon-pink/10" : "text-neon-green hover:bg-neon-green/10"}`}
                     title={emp.isActive ? "Заблокировать" : "Восстановить"}>
                     <Icon name={emp.isActive ? "UserX" : "UserCheck"} size={15} />
                   </button>
                   <button onClick={() => setDeleteId(emp.id)} title="Удалить из БД"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-neon-pink hover:bg-neon-pink/10 transition-colors">
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-pink hover:bg-neon-pink/10 transition-colors">
                     <Icon name="Trash2" size={15} />
                   </button>
                 </div>
@@ -352,23 +352,23 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                 <Icon name="Pencil" size={16} className="text-neon-cyan" />
                 Редактировать сотрудника
               </h4>
-              <button onClick={() => setEditProfileId(null)} className="text-white/30 hover:text-white transition-colors">
+              <button onClick={() => setEditProfileId(null)} className="text-white/55 hover:text-white transition-colors">
                 <Icon name="X" size={16} />
               </button>
             </div>
             <div className="space-y-3 mb-4">
               <div>
-                <label className="text-xs text-white/40 mb-1 block">Имя</label>
+                <label className="text-xs text-white/65 mb-1 block">Имя</label>
                 <input value={editProfile.name} onChange={e => setEditProfile(f => ({ ...f, name: e.target.value }))}
                   className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-white/40 mb-1 block">Email</label>
+                <label className="text-xs text-white/65 mb-1 block">Email</label>
                 <input type="email" value={editProfile.email} onChange={e => setEditProfile(f => ({ ...f, email: e.target.value }))}
                   className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
               </div>
               <div>
-                <label className="text-xs text-white/40 mb-1 block">Роль</label>
+                <label className="text-xs text-white/65 mb-1 block">Роль</label>
                 <select value={editProfile.roleInCompany} onChange={e => setEditProfile(f => ({ ...f, roleInCompany: e.target.value }))}
                   className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 text-sm appearance-none bg-transparent">
                   {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-gray-900">{l}</option>)}
@@ -378,7 +378,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
             {profileError && <p className="text-neon-pink text-xs flex items-center gap-1 mb-3"><Icon name="AlertCircle" size={12} />{profileError}</p>}
             <div className="flex gap-2">
               <button onClick={() => setEditProfileId(null)}
-                className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
+                className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
                 Отмена
               </button>
               <button onClick={saveProfile} disabled={savingProfile}
@@ -404,12 +404,12 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
             <p className="text-white/60 text-sm mb-2">
               <span className="text-white">{employees.find(e => e.id === deleteId)?.name}</span> будет полностью удалён из базы данных.
             </p>
-            <p className="text-white/40 text-xs mb-5">
+            <p className="text-white/65 text-xs mb-5">
               Это действие нельзя отменить. Будут также удалены все его сообщения в чате компании и личной переписке.
             </p>
             <div className="flex gap-2">
               <button onClick={() => setDeleteId(null)} disabled={deleting}
-                className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors disabled:opacity-50">
+                className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors disabled:opacity-50">
                 Отмена
               </button>
               <button onClick={confirmDelete} disabled={deleting}

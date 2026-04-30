@@ -73,7 +73,7 @@ export default function DocCard({
               {doc.categoryLabel}
             </span>
           </div>
-          <div className="flex items-center gap-3 mt-1 text-white/30 text-xs flex-wrap">
+          <div className="flex items-center gap-3 mt-1 text-white/55 text-xs flex-wrap">
             <span>{doc.fileSizeHuman}</span>
             <span>•</span>
             <span>{formatDate(doc.createdAt)}</span>
@@ -108,14 +108,14 @@ export default function DocCard({
               </button>
               <button
                 onClick={onCancelNote}
-                className="text-white/30 hover:text-white/60 text-xs px-2 py-1.5"
+                className="text-white/55 hover:text-white/60 text-xs px-2 py-1.5"
               >
                 Отмена
               </button>
             </div>
           ) : doc.note ? (
             <div
-              className="mt-1.5 flex items-center gap-1.5 text-white/40 text-xs cursor-pointer hover:text-white/60 transition-colors w-fit"
+              className="mt-1.5 flex items-center gap-1.5 text-white/65 text-xs cursor-pointer hover:text-white/60 transition-colors w-fit"
               onClick={() => onEditNote(doc.id, doc.note)}
             >
               <Icon name="MessageSquare" size={11} />
@@ -125,7 +125,7 @@ export default function DocCard({
           ) : (
             <button
               onClick={() => onEditNote(doc.id, "")}
-              className="mt-1.5 flex items-center gap-1 text-white/20 hover:text-white/40 text-xs transition-colors opacity-0 group-hover:opacity-100"
+              className="mt-1.5 flex items-center gap-1 text-white/20 hover:text-white/65 text-xs transition-colors opacity-0 group-hover:opacity-100"
             >
               <Icon name="Plus" size={11} />добавить заметку
             </button>
@@ -141,7 +141,7 @@ export default function DocCard({
           ) : (
             <button
               onClick={() => setShowSign(true)}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
               title="Подписать / ЭДО"
             >
               <Icon name="PenLine" size={16} />
@@ -149,7 +149,7 @@ export default function DocCard({
           )}
           <button
             onClick={() => onSendToChat({ url: doc.fileUrl, name: doc.name, size: doc.fileSize, mime: doc.mimeType })}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
             title="Отправить в чат"
           >
             <Icon name="Send" size={16} />
@@ -158,7 +158,7 @@ export default function DocCard({
             href={doc.fileUrl}
             target="_blank"
             rel="noreferrer"
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
             title="Открыть"
           >
             <Icon name="ExternalLink" size={16} />
@@ -166,7 +166,7 @@ export default function DocCard({
           <a
             href={doc.fileUrl}
             download={doc.name}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
+            className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-neon-purple hover:bg-neon-purple/10 transition-all"
             title="Скачать"
           >
             <Icon name="Download" size={16} />
@@ -182,7 +182,7 @@ export default function DocCard({
                 }
                 setShowFolderMenu(v => !v);
               }}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-white/55 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-all"
               title="Переместить в папку"
             >
               <Icon name="FolderInput" size={16} />
@@ -218,7 +218,7 @@ export default function DocCard({
         style={{ top: menuPos.top, right: menuPos.right }}
         onMouseDown={e => e.stopPropagation()}
       >
-        <p className="text-white/30 text-[10px] px-2 py-1 uppercase tracking-wider">Переместить в папку</p>
+        <p className="text-white/55 text-[10px] px-2 py-1 uppercase tracking-wider">Переместить в папку</p>
         {folders.map(f => (
           <button key={f} onClick={() => { onMoveToFolder(doc.id, f); setShowFolderMenu(false); }}
             className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/60 hover:text-white hover:bg-white/5 rounded-lg transition-all">
@@ -249,7 +249,7 @@ export default function DocCard({
         </div>
         {doc.folder && (
           <button onClick={() => { onMoveToFolder(doc.id, ""); setShowFolderMenu(false); }}
-            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/30 hover:text-neon-pink hover:bg-neon-pink/5 rounded-lg mt-1 transition-all">
+            className="w-full flex items-center gap-2 px-2 py-1.5 text-xs text-white/55 hover:text-neon-pink hover:bg-neon-pink/5 rounded-lg mt-1 transition-all">
             <Icon name="FolderX" size={11} />Убрать из папки
           </button>
         )}

@@ -25,7 +25,7 @@ export default function DocHeader({ docs, search, isVenue, onSearchChange, onFil
       <div>
         <h2 className="font-oswald font-bold text-xl text-white">Мои документы</h2>
         <div className="flex items-center gap-3 mt-0.5">
-          <p className="text-white/40 text-sm">
+          <p className="text-white/65 text-sm">
             {isVenue
               ? "Технические райдеры, договоры и другие файлы"
               : "Райдеры, договоры с артистами и другие файлы"}
@@ -39,7 +39,7 @@ export default function DocHeader({ docs, search, isVenue, onSearchChange, onFil
       </div>
       <div className="flex items-center gap-2">
         <div className="relative">
-          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30 pointer-events-none" />
+          <Icon name="Search" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/55 pointer-events-none" />
           <input
             value={search}
             onChange={e => onSearchChange(e.target.value)}
