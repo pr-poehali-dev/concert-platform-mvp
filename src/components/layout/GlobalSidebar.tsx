@@ -53,7 +53,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
   const { user, logout } = useAuth();
   const { unreadCount } = useNotifications();
   const { theme, toggleTheme } = useTheme();
-  const { isHidden } = useHiddenSections();
+  const { isHidden, sortedIds } = useHiddenSections();
 
   if (!user) return null;
 
@@ -72,17 +72,26 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     return !isHidden(sectionId);
   };
 
+  // Применяет пользовательский порядок к массиву NavItem (только для владельца)
+  const applyOrder = (items: NavItem[], group: string): NavItem[] => {
+    if (user.isEmployee) return items;
+    const defaultIds = items.map(i => i.id);
+    const ordered = sortedIds(group, defaultIds);
+    return ordered.map(id => items.find(i => i.id === id)!).filter(Boolean);
+  };
+
   // ── Главные страницы ───────────────────────────────────────────────────
-  const mainItems: NavItem[] = [
-    { id: "search",    label: "Площадки",    icon: "Search",        page: "search",                                 color: "cyan"   },
-    ...(!isVenue && canSee("tours") ? [{ id: "tours", label: "Туры", icon: "Route", page: "tours", color: "purple" as const }] : []),
-    ...(isOrg && canSee("projects") ? [{ id: "projects", label: "Проекты", icon: "FolderOpen", page: "projects", color: "purple" as const }] : []),
-    ...(canSee("chat") ? [{ id: "chat", label: "Чат", icon: "MessageCircle", page: "chat", color: "green" as const }] : []),
-    ...(canSee("mail") ? [{ id: "mail", label: "Почта", icon: "Mail", page: "mail", color: "cyan" as const }] : []),
+  const mainItemsAll: NavItem[] = [
+    { id: "search",    label: "Площадки",    icon: "Search",        page: "search",   color: "cyan"   },
+    ...(!isVenue ? [{ id: "tours",    label: "Туры",     icon: "Route",      page: "tours",    color: "purple" as const }] : []),
+    ...(isOrg   ? [{ id: "projects", label: "Проекты",  icon: "FolderOpen", page: "projects", color: "purple" as const }] : []),
+    { id: "chat",      label: "Чат",         icon: "MessageCircle", page: "chat",     color: "green"  },
+    { id: "mail",      label: "Почта",       icon: "Mail",          page: "mail",     color: "cyan"   },
   ];
+  const mainItems = applyOrder(mainItemsAll, "Главное").filter(i => canSee(i.id));
 
   // ── Личный кабинет ──────────────────────────────────────────────────────
-  const dashOrgItems: NavItem[] = [
+  const dashOrgAll: NavItem[] = [
     { id: "tours",         label: "Мои туры",     icon: "Route",        page: "dashboard", dashTab: "tours",         color: "purple" },
     { id: "history",       label: "История",      icon: "Clock",        page: "dashboard", dashTab: "history",       color: "cyan"   },
     { id: "documents",     label: "Документы",    icon: "FileArchive",  page: "dashboard", dashTab: "documents",     color: "cyan"   },
@@ -92,9 +101,10 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "crm",           label: "CRM",          icon: "Kanban",       page: "crm",                                  color: "purple" },
     { id: "ai_help",       label: "Помощь",       icon: "Sparkles",     page: "dashboard", dashTab: "ai_help",       color: "pink"   },
     { id: "ai_lawyer",     label: "ИИ-юрист",     icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer",     color: "cyan"   },
-  ].filter(item => canSee(item.id));
+  ];
+  const dashOrgItems = applyOrder(dashOrgAll, "Личный кабинет").filter(i => canSee(i.id));
 
-  const dashVenueItems: NavItem[] = [
+  const dashVenueAll: NavItem[] = [
     { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues",        color: "cyan"   },
     { id: "vprojects",     label: "Проекты",       icon: "FolderOpen",   page: "dashboard", dashTab: "projects",      color: "purple" },
     { id: "concerts",      label: "Мои концерты",  icon: "Music",        page: "dashboard", dashTab: "concerts",      color: "pink"   },
@@ -105,7 +115,8 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "company",       label: "Компания",      icon: "Users",        page: "dashboard", dashTab: "company",       color: "green"  },
     { id: "ai_help",       label: "Помощь",        icon: "Sparkles",     page: "dashboard", dashTab: "ai_help",       color: "pink"   },
     { id: "ai_lawyer",     label: "ИИ-юрист",      icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer",     color: "cyan"   },
-  ].filter(item => canSee(item.id));
+  ];
+  const dashVenueItems = applyOrder(dashVenueAll, "Личный кабинет").filter(i => canSee(i.id));
 
   const dashItems = isVenue ? dashVenueItems : dashOrgItems;
 
