@@ -87,27 +87,26 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
       loadMessages(convId, true);
       tick++;
       if (tick % 3 === 0) loadConversations(true);
-      // Обновляем presence (онлайн + read) каждые 10с
-      if (tick % 2 === 0 && user) {
-        fetch(`${CHAT_URL}?action=presence&conversation_id=${convId}&user_id=${user.id}`)
-          .then(r => r.ok ? r.json() : null)
-          .then(d => d && setPresence({ lastSeen: d.lastSeen || "", otherLastReadAt: d.otherLastReadAt || "" }))
-          .catch(() => { /* silent */ });
-      }
     }, 5000);
     return () => { stopPolling(pollingRef.current); pollingRef.current = null; };
   }, [activeConvId, user, loadMessages]);
 
-  // ── Presence: подгружаем онлайн-статус собеседника + last_read раз в 15с ──
+  // ── Presence: онлайн-статус собеседника + last_read.
+  //    Опрос 10с — ТОЛЬКО если пользователь авторизован и вкладка активна.
   useEffect(() => {
-    if (presencePollRef.current) {
-      clearInterval(presencePollRef.current);
-      presencePollRef.current = null;
-    }
+    const stop = () => {
+      if (presencePollRef.current) {
+        clearInterval(presencePollRef.current);
+        presencePollRef.current = null;
+      }
+    };
+
     if (!activeConvId || !user) {
       setPresence({ lastSeen: "", otherLastReadAt: "" });
+      stop();
       return;
     }
+
     const fetchPresence = async () => {
       try {
         const res = await fetch(`${CHAT_URL}?action=presence&conversation_id=${activeConvId}&user_id=${user.id}`);
@@ -119,9 +118,27 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
         });
       } catch { /* silent */ }
     };
-    fetchPresence();
-    presencePollRef.current = setInterval(fetchPresence, 15_000);
-    return () => { if (presencePollRef.current) clearInterval(presencePollRef.current); };
+
+    const start = () => {
+      stop();
+      // Опрашиваем только при видимой вкладке
+      if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      fetchPresence();
+      presencePollRef.current = setInterval(fetchPresence, 10_000);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") start();
+      else stop();
+    };
+
+    start();
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, [activeConvId, user]);
 
   // ── Upload file to S3 via chat backend ──────────────────────────────────
