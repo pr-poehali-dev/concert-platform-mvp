@@ -170,20 +170,20 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
   return (
     <div className="min-h-screen pt-2">
       <div className="relative py-4 overflow-hidden">
-        <div className="absolute inset-0 gradient-bg-purple opacity-25" />
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
+        <div className="absolute inset-0 bg-neon-cyan/5" />
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan to-transparent" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between flex-wrap gap-3">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-xl bg-neon-purple/15 border border-neon-purple/25 flex items-center justify-center shrink-0">
-                <Icon name="MapPin" size={20} className="text-neon-purple" />
+              <div className="w-11 h-11 rounded-xl bg-neon-cyan/15 border border-neon-cyan/25 flex items-center justify-center shrink-0">
+                <Icon name="MapPin" size={20} className="text-neon-cyan" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="font-oswald font-bold text-2xl text-white uppercase leading-none">
                     Найдите <span className="gradient-text">площадку</span>
                   </h1>
-                  <Badge className="bg-neon-purple/15 text-neon-purple border-neon-purple/30 text-[10px] py-0 px-2">Каталог</Badge>
+                  <Badge className="bg-neon-cyan/15 text-neon-cyan border-neon-cyan/30 text-[10px] py-0 px-2">Каталог</Badge>
                 </div>
                 <p className="text-white/45 text-xs mt-0.5">Концертные залы, клубы и арены по всей стране</p>
               </div>
