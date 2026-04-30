@@ -348,6 +348,8 @@ def handler(event: dict, context) -> dict:
         account_id = params.get("account_id", "")
         folder     = params.get("folder", "INBOX")
         limit      = int(params.get("limit", 30))
+        offset     = int(params.get("offset", 0))
+        search_q   = (params.get("q") or "").strip()
         if not account_id:
             return err("account_id обязателен")
         conn = get_conn()
@@ -363,10 +365,34 @@ def handler(event: dict, context) -> dict:
                 imap.select(f'"{folder}"', readonly=True)
             except Exception:
                 imap.select(folder, readonly=True)
-            status, data = imap.uid("search", None, "ALL")
-            uids = (data[0] or b"").split()
-            uids = uids[-limit:] if limit > 0 else uids
-            uids = list(reversed(uids))
+            # Поиск через IMAP SEARCH (по теме / отправителю / тексту)
+            if search_q:
+                try:
+                    encoded = search_q.encode("utf-8")
+                    # SEARCH CHARSET UTF-8 OR OR SUBJECT FROM BODY
+                    typ, data = imap.uid(
+                        "search", "CHARSET", "UTF-8",
+                        "OR", "OR",
+                        "SUBJECT", encoded,
+                        "FROM", encoded,
+                        "BODY", encoded,
+                    )
+                except Exception:
+                    # fallback без CHARSET — некоторые серверы не поддерживают
+                    safe = search_q.replace('"', "")
+                    typ, data = imap.uid(
+                        "search", None,
+                        f'OR OR SUBJECT "{safe}" FROM "{safe}" BODY "{safe}"',
+                    )
+            else:
+                typ, data = imap.uid("search", None, "ALL")
+            all_uids = (data[0] or b"").split()
+            total = len(all_uids)
+            # Берём срез (новые сначала): offset считается от конца
+            end = total - offset
+            start = max(0, end - limit)
+            page_uids = all_uids[start:end]
+            uids = list(reversed(page_uids))
             messages = []
             for u in uids:
                 try:
@@ -401,7 +427,14 @@ def handler(event: dict, context) -> dict:
             imap.logout()
         except Exception as e:
             return err(f"IMAP error: {str(e)[:200]}", 500)
-        return ok({"messages": messages, "folder": folder})
+        return ok({
+            "messages": messages,
+            "folder":   folder,
+            "total":    total,
+            "offset":   offset,
+            "limit":    limit,
+            "hasMore":  (offset + limit) < total,
+        })
 
     # ── GET read ───────────────────────────────────────────────────────────
     if method == "GET" and action == "read":

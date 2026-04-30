@@ -37,10 +37,16 @@ export default function MailPage() {
   const [openMail, setOpenMail] = useState<MailFull | null>(null);
   const [loadingAccounts, setLoadingAccounts] = useState(true);
   const [loadingList, setLoadingList] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [loadingMail, setLoadingMail] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [showCompose, setShowCompose] = useState(false);
   const [composeInitial, setComposeInitial] = useState<{ to?: string; subject?: string; text?: string }>();
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(0);
+  const PAGE_SIZE = 40;
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
 
@@ -70,19 +76,43 @@ export default function MailPage() {
     } catch { /* silent */ }
   }, [activeFolder]);
 
-  const loadList = useCallback(async (accId: string, folder: string) => {
+  const loadList = useCallback(async (accId: string, folder: string, q: string = "") => {
     setLoadingList(true);
     setMessages([]);
+    setHasMore(false);
+    setTotalCount(0);
     try {
-      const res = await fetch(`${MAIL_URL}?action=list&account_id=${accId}&folder=${encodeURIComponent(folder)}&limit=40`);
+      const url = `${MAIL_URL}?action=list&account_id=${accId}&folder=${encodeURIComponent(folder)}&limit=${PAGE_SIZE}&offset=0${q ? `&q=${encodeURIComponent(q)}` : ""}`;
+      const res = await fetch(url);
       const data = await res.json();
       setMessages(data.messages || []);
+      setHasMore(!!data.hasMore);
+      setTotalCount(data.total || 0);
     } catch {
       setMessages([]);
     } finally {
       setLoadingList(false);
     }
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (!activeAccountId || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = messages.length;
+      const url = `${MAIL_URL}?action=list&account_id=${activeAccountId}&folder=${encodeURIComponent(activeFolder)}&limit=${PAGE_SIZE}&offset=${offset}${searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : ""}`;
+      const res = await fetch(url);
+      const data = await res.json();
+      const next: MailListItem[] = data.messages || [];
+      // Дедупликация по uid (на случай прихода нового письма во время пагинации)
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.uid));
+        return [...prev, ...next.filter(m => !seen.has(m.uid))];
+      });
+      setHasMore(!!data.hasMore);
+    } catch { /* silent */ }
+    finally { setLoadingMore(false); }
+  }, [activeAccountId, activeFolder, messages.length, hasMore, loadingMore, searchQuery]);
 
   const openMessage = async (uid: string) => {
     if (!activeAccountId) return;
@@ -119,12 +149,20 @@ export default function MailPage() {
   useEffect(() => {
     if (activeAccountId) {
       loadFolders(activeAccountId);
-      loadList(activeAccountId, activeFolder);
+      loadList(activeAccountId, activeFolder, searchQuery);
     }
   }, [activeAccountId]);
   useEffect(() => {
-    if (activeAccountId && activeFolder) loadList(activeAccountId, activeFolder);
-  }, [activeFolder]);
+    if (activeAccountId && activeFolder) loadList(activeAccountId, activeFolder, searchQuery);
+  }, [activeFolder, searchQuery]);
+
+  // Debounce поискового ввода
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setSearchQuery(searchInput.trim());
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // ─── Состояние: нет аккаунтов ───
   if (loadingAccounts) {
@@ -233,7 +271,42 @@ export default function MailPage() {
           </aside>
 
           {/* Список писем */}
-          <section className="col-span-12 sm:col-span-9 lg:col-span-4 glass rounded-xl border border-white/10 overflow-y-auto scrollbar-thin">
+          <section
+            className="col-span-12 sm:col-span-9 lg:col-span-4 glass rounded-xl border border-white/10 overflow-y-auto scrollbar-thin flex flex-col"
+            onScroll={(e) => {
+              const el = e.currentTarget;
+              if (hasMore && !loadingMore && (el.scrollHeight - el.scrollTop - el.clientHeight < 200)) {
+                loadMore();
+              }
+            }}
+          >
+            {/* Поиск */}
+            <div className="sticky top-0 bg-[var(--glass-strong-bg,#13131f)]/80 backdrop-blur-md border-b border-white/8 px-2 py-2 z-10">
+              <div className="flex items-center gap-2 px-2 py-1.5 bg-white/5 rounded-lg border border-white/10">
+                <Icon name="Search" size={14} className="text-white/45 shrink-0" />
+                <input
+                  type="text"
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  placeholder={`Поиск ${searchQuery ? "..." : "по теме, отправителю, тексту"}`}
+                  className="flex-1 bg-transparent text-white text-xs outline-none placeholder:text-white/30 min-w-0"
+                />
+                {searchInput && (
+                  <button
+                    onClick={() => { setSearchInput(""); setSearchQuery(""); }}
+                    className="text-white/45 hover:text-white shrink-0"
+                  >
+                    <Icon name="X" size={12} />
+                  </button>
+                )}
+              </div>
+              {searchQuery && (
+                <p className="text-white/40 text-[10px] mt-1.5 px-1">
+                  Найдено: {totalCount} {totalCount === 1 ? "письмо" : totalCount < 5 ? "письма" : "писем"}
+                </p>
+              )}
+            </div>
+
             {loadingList ? (
               <div className="flex justify-center py-10">
                 <Icon name="Loader2" size={20} className="text-white/40 animate-spin" />
@@ -241,7 +314,7 @@ export default function MailPage() {
             ) : messages.length === 0 ? (
               <div className="text-center py-16 text-white/40 text-sm">
                 <Icon name="MailX" size={28} className="mx-auto mb-2 text-white/25" />
-                Нет писем
+                {searchQuery ? "Ничего не найдено" : "Нет писем"}
               </div>
             ) : (
               <div className="divide-y divide-white/5">
@@ -264,6 +337,25 @@ export default function MailPage() {
                     </p>
                   </button>
                 ))}
+                {/* Подгрузка следующей страницы */}
+                {hasMore && (
+                  <div className="px-3 py-3 text-center">
+                    <button
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="text-neon-purple hover:text-white text-xs font-semibold flex items-center gap-1.5 mx-auto disabled:opacity-50"
+                    >
+                      {loadingMore ? (
+                        <><Icon name="Loader2" size={12} className="animate-spin" /> Загрузка...</>
+                      ) : (
+                        <><Icon name="ChevronDown" size={12} /> Показать ещё</>
+                      )}
+                    </button>
+                  </div>
+                )}
+                {!hasMore && messages.length >= PAGE_SIZE && (
+                  <p className="text-center text-white/30 text-[10px] py-3">Это все письма ({totalCount})</p>
+                )}
               </div>
             )}
           </section>
