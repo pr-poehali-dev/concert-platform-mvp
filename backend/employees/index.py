@@ -8,8 +8,9 @@ POST ?action=deactivate               — деактивировать
 POST ?action=activate                 — восстановить
 POST ?action=delete                   — полностью удалить сотрудника из БД
 """
-import json, os, hashlib, random, secrets, urllib.request
+import json, os, hashlib, random, secrets, urllib.request, base64, mimetypes
 import psycopg2
+import boto3
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 PBKDF2_ITERATIONS = 120_000
@@ -703,5 +704,210 @@ def handler(event: dict, context) -> dict:
              "status": r[6], "paidAt": str(r[7]) if r[7] else None}
             for r in rows
         ]})
+
+    # ── POST upload_document — загрузить файл документа сотрудника ───────
+    if method == "POST" and action == "upload_document":
+        b = json.loads(event.get("body") or "{}")
+        company_user_id = b.get("companyUserId", "")
+        employee_id     = b.get("employeeId", "")
+        doc_type        = b.get("docType", "other")
+        file_name       = (b.get("fileName") or "").strip()
+        file_b64        = b.get("fileData", "")  # base64
+
+        if not company_user_id or not employee_id: return err("companyUserId и employeeId обязательны")
+        if not file_b64: return err("fileData обязателен")
+        if doc_type not in ("passport", "inn", "snils", "contract", "other"):
+            doc_type = "other"
+
+        try:
+            file_bytes = base64.b64decode(file_b64)
+        except Exception:
+            return err("Некорректный base64")
+
+        ext = file_name.rsplit(".", 1)[-1].lower() if "." in file_name else "bin"
+        safe_name = f"employees/{employee_id}/{doc_type}_{secrets.token_hex(6)}.{ext}"
+        content_type = mimetypes.guess_type(file_name)[0] or "application/octet-stream"
+
+        s3 = boto3.client(
+            "s3",
+            endpoint_url="https://bucket.poehali.dev",
+            aws_access_key_id=os.environ["AWS_ACCESS_KEY_ID"],
+            aws_secret_access_key=os.environ["AWS_SECRET_ACCESS_KEY"],
+        )
+        s3.put_object(Bucket="files", Key=safe_name, Body=file_bytes, ContentType=content_type)
+        file_url = f"https://cdn.poehali.dev/projects/{os.environ['AWS_ACCESS_KEY_ID']}/bucket/{safe_name}"
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.employee_documents
+                    (company_user_id, employee_id, doc_type, file_name, file_url, file_size)
+                    VALUES (%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (company_user_id, employee_id, doc_type, file_name, file_url, len(file_bytes))
+            )
+            doc_id = str(cur.fetchone()[0])
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"id": doc_id, "url": file_url, "fileName": file_name, "docType": doc_type}, 201)
+
+    # ── GET documents — список документов сотрудника ──────────────────────
+    if method == "GET" and action == "documents":
+        employee_id     = params.get("employee_id", "")
+        company_user_id = params.get("company_user_id", "")
+        if not employee_id or not company_user_id:
+            return err("employee_id и company_user_id обязательны")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id, doc_type, file_name, file_url, file_size, uploaded_at
+                    FROM {SCHEMA}.employee_documents
+                    WHERE employee_id = %s AND company_user_id = %s
+                    ORDER BY uploaded_at DESC""",
+                (employee_id, company_user_id)
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return ok({"documents": [
+            {"id": str(r[0]), "docType": r[1], "fileName": r[2],
+             "url": r[3], "fileSize": r[4], "uploadedAt": str(r[5])}
+            for r in rows
+        ]})
+
+    # ── POST delete_document — удалить документ ───────────────────────────
+    if method == "POST" and action == "delete_document":
+        b = json.loads(event.get("body") or "{}")
+        doc_id = b.get("id", "")
+        if not doc_id: return err("id обязателен")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.employee_documents SET file_url = '' WHERE id = %s RETURNING id",
+                (doc_id,)
+            )
+            if not cur.fetchone():
+                conn.close(); return err("Документ не найден", 404)
+            cur.execute(f"DELETE FROM {SCHEMA}.employee_documents WHERE id = %s", (doc_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True})
+
+    # ── POST send_payslip — расчётный листок на email ────────────────────
+    if method == "POST" and action == "send_payslip":
+        b = json.loads(event.get("body") or "{}")
+        company_user_id = b.get("companyUserId", "")
+        employee_id     = b.get("employeeId", "")
+        period          = b.get("period", "")
+        email_to        = (b.get("emailTo") or "").strip()
+
+        if not company_user_id or not employee_id or not period:
+            return err("companyUserId, employeeId, period обязательны")
+        if not email_to or "@" not in email_to:
+            return err("Некорректный email")
+
+        api_key = os.environ.get("RESEND_API_KEY", "")
+        app_url = os.environ.get("APP_URL", "")
+        if not api_key: return err("RESEND_API_KEY не настроен", 500)
+
+        # Данные сотрудника и зарплаты
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(f"SELECT name, role_in_company FROM {SCHEMA}.employees WHERE id = %s", (employee_id,))
+            emp_row = cur.fetchone()
+            if not emp_row: conn.close(); return err("Сотрудник не найден", 404)
+            emp_name, emp_role = emp_row
+
+            cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id = %s", (company_user_id,))
+            company_row = cur.fetchone()
+            company_name = company_row[0] if company_row else "Компания"
+
+            cur.execute(
+                f"""SELECT base_salary, bonus, deduction, note, status, paid_at
+                    FROM {SCHEMA}.salary_records
+                    WHERE employee_id = %s AND company_user_id = %s AND period = %s""",
+                (employee_id, company_user_id, period)
+            )
+            sal = cur.fetchone()
+        finally:
+            conn.close()
+
+        if not sal:
+            return err("Запись зарплаты за этот период не найдена", 404)
+
+        base, bonus, ded, note, status, paid_at = float(sal[0]), float(sal[1]), float(sal[2]), sal[3] or "", sal[4], sal[5]
+        total = base + bonus - ded
+
+        months = ["Январь","Февраль","Март","Апрель","Май","Июнь",
+                  "Июль","Август","Сентябрь","Октябрь","Ноябрь","Декабрь"]
+        y, m_str = period.split("-")
+        period_label = f"{months[int(m_str)-1]} {y}"
+        status_label = "✅ Выплачено" if status == "paid" else "⏳ К выплате"
+        paid_label = new_paid_at.strftime("%d.%m.%Y") if (new_paid_at := (paid_at if isinstance(paid_at, type(paid_at)) else None)) and paid_at else "—"
+
+        ROLE_MAP = {"employee":"Сотрудник","manager":"Менеджер","accountant":"Бухгалтер","admin":"Администратор"}
+        role_label = ROLE_MAP.get(emp_role, emp_role)
+
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#0d0d1a;padding:32px 16px;">
+<tr><td align="center"><table width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;">
+  <tr><td style="padding-bottom:20px;text-align:center;">
+    <span style="font-size:20px;font-weight:bold;color:#fff;letter-spacing:2px;">GLOBAL LINK</span>
+  </td></tr>
+  <tr><td style="background:#15152a;border-radius:16px;border:1px solid rgba(255,255,255,0.1);padding:28px;">
+    <h2 style="color:#fff;font-size:18px;margin:0 0 4px;">Расчётный листок</h2>
+    <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:0 0 24px;">{period_label} · {company_name}</p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:rgba(168,85,247,0.08);border:1px solid rgba(168,85,247,0.2);border-radius:12px;padding:16px;margin-bottom:20px;">
+      <tr><td style="padding:4px 8px;color:rgba(255,255,255,0.4);font-size:12px;">Сотрудник</td>
+          <td style="padding:4px 8px;color:#fff;font-size:13px;font-weight:bold;text-align:right;">{emp_name}</td></tr>
+      <tr><td style="padding:4px 8px;color:rgba(255,255,255,0.4);font-size:12px;">Должность</td>
+          <td style="padding:4px 8px;color:rgba(255,255,255,0.7);font-size:12px;text-align:right;">{role_label}</td></tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px;">
+      <tr><td style="padding:6px 0;color:rgba(255,255,255,0.5);font-size:13px;border-bottom:1px solid rgba(255,255,255,0.06);">Оклад</td>
+          <td style="padding:6px 0;color:#fff;font-size:13px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.06);">{base:,.0f} ₽</td></tr>
+      <tr><td style="padding:6px 0;color:#22c55e;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.06);">Премия</td>
+          <td style="padding:6px 0;color:#22c55e;font-size:13px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.06);">+{bonus:,.0f} ₽</td></tr>
+      <tr><td style="padding:6px 0;color:#f43f5e;font-size:13px;border-bottom:1px solid rgba(255,255,255,0.06);">Вычеты</td>
+          <td style="padding:6px 0;color:#f43f5e;font-size:13px;text-align:right;border-bottom:1px solid rgba(255,255,255,0.06);">−{ded:,.0f} ₽</td></tr>
+      <tr><td style="padding:10px 0 4px;color:#fff;font-size:15px;font-weight:bold;">Итого к выплате</td>
+          <td style="padding:10px 0 4px;color:#22d3ee;font-size:18px;font-weight:bold;text-align:right;">{total:,.0f} ₽</td></tr>
+    </table>
+
+    <p style="color:rgba(255,255,255,0.4);font-size:12px;margin:0 0 4px;">Статус: <span style="color:#{'22c55e' if status=='paid' else 'fbbf24'}">{status_label}</span></p>
+    {"<p style='color:rgba(255,255,255,0.35);font-size:11px;margin:4px 0;'>Заметка: " + note + "</p>" if note else ""}
+    {"<a href='" + app_url + "' style='display:inline-block;background:linear-gradient(135deg,#a855f7,#22d3ee);color:#fff;text-decoration:none;padding:10px 24px;border-radius:10px;font-weight:bold;font-size:13px;margin-top:20px;'>Открыть кабинет</a>" if app_url else ""}
+  </td></tr>
+</table></td></tr>
+</table>
+</body></html>"""
+
+        payload = json.dumps({
+            "from": "GLOBAL LINK <noreply@globallink.art>",
+            "to": [email_to],
+            "subject": f"Расчётный листок за {period_label} — {company_name}",
+            "html": html,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails", data=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                sent = resp.status == 200
+        except urllib.error.HTTPError as he:
+            return err(f"Ошибка отправки: {he.code}", 502)
+        except Exception as ex:
+            return err(f"Ошибка: {str(ex)[:100]}", 502)
+        return ok({"sent": sent, "to": email_to})
 
     return err("Not found", 404)

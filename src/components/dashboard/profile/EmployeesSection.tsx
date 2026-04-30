@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL, formatEmployeeLastSeen, type SectionId } from "./types";
+import EmployeeDocuments from "@/components/dashboard/company/EmployeeDocuments";
 
 // Разделы, которыми можно управлять через интерфейс
 const SECTION_ITEMS: { id: SectionId; label: string; icon: string; color: string }[] = [
@@ -102,6 +103,9 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
   // Удаление сотрудника
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+
+  // Документы сотрудника
+  const [docsEmpId, setDocsEmpId] = useState<string | null>(null);
 
   const openEditPerms = (emp: Employee) => {
     setEditPermId(emp.id);
@@ -404,7 +408,8 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
             const deniedSections = SECTION_ITEMS.length - (p.allowedSections?.length ?? SECTION_ITEMS.length);
             const deniedCount = deniedFinance + (deniedSections > 0 ? 1 : 0);
             return (
-              <div key={emp.id} className={`glass rounded-2xl p-4 flex items-center gap-4 ${!emp.isActive ? "opacity-50" : ""}`}>
+              <div key={emp.id} className="space-y-0">
+              <div className={`glass rounded-2xl p-4 flex items-center gap-4 ${!emp.isActive ? "opacity-50" : ""}`}>
                 <div className="relative shrink-0">
                   <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${emp.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm`}>
                     {emp.avatar}
@@ -452,6 +457,10 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-purple hover:bg-neon-purple/10 transition-colors">
                     <Icon name="ShieldCheck" size={15} />
                   </button>
+                  <button onClick={() => setDocsEmpId(emp.id)} title="Документы"
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${docsEmpId === emp.id ? "text-neon-cyan bg-neon-cyan/10" : "text-white/55 hover:text-neon-cyan hover:bg-neon-cyan/10"}`}>
+                    <Icon name="FolderOpen" size={15} />
+                  </button>
                   <button onClick={() => toggleEmployee(emp)}
                     className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${emp.isActive ? "text-white/55 hover:text-neon-pink hover:bg-neon-pink/10" : "text-neon-green hover:bg-neon-green/10"}`}
                     title={emp.isActive ? "Заблокировать" : "Восстановить"}>
@@ -462,6 +471,18 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                     <Icon name="Trash2" size={15} />
                   </button>
                 </div>
+              </div>
+              {/* Блок документов — раскрывается под карточкой */}
+              {docsEmpId === emp.id && (
+                <div className="mt-2 glass rounded-2xl border border-neon-cyan/15 p-4 animate-fade-in">
+                  <EmployeeDocuments
+                    employeeId={emp.id}
+                    employeeName={emp.name}
+                    employeeEmail={emp.email}
+                    companyId={userId}
+                  />
+                </div>
+              )}
               </div>
             );
           })}
