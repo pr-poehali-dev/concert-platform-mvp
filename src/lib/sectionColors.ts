@@ -11,6 +11,7 @@ export const SECTION_COLORS: Record<string, SectionColor> = {
   tours:         "purple",
   projects:      "purple",
   chat:          "green",
+  mail:          "cyan",
 
   // Личный кабинет — организатор
   history:       "cyan",

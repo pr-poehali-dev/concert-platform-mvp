@@ -1,0 +1,62 @@
+{
+  "tests": [
+    {
+      "name": "Accounts no user_id",
+      "method": "GET",
+      "path": "/?action=accounts",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Accounts empty list",
+      "method": "GET",
+      "path": "/?action=accounts&user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 200,
+      "expectedBody": { "accounts": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Add account missing fields",
+      "method": "POST",
+      "path": "/?action=add_account",
+      "body": { "userId": "00000000-0000-0000-0000-000000000001" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Folders no account_id",
+      "method": "GET",
+      "path": "/?action=folders",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Folders not found",
+      "method": "GET",
+      "path": "/?action=folders&account_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Send missing params",
+      "method": "POST",
+      "path": "/?action=send",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Unknown action",
+      "method": "GET",
+      "path": "/?action=foo",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

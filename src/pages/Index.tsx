@@ -6,6 +6,7 @@ import HomePage from "@/components/HomePage";
 import SearchPage from "@/components/SearchPage";
 import ToursPage from "@/components/ToursPage";
 import ChatPage from "@/components/ChatPage";
+import MailPage from "@/components/MailPage";
 import DashboardPage from "@/components/DashboardPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
 import NewCrmPage from "@/pages/CrmPage";
@@ -15,8 +16,8 @@ import PushPermissionBanner from "@/components/PushPermissionBanner";
 import { useAuth } from "@/context/AuthContext";
 import EmailVerifyBanner from "@/components/EmailVerifyBanner";
 
-type Page = "home" | "search" | "tours" | "chat" | "dashboard" | "projects" | "crm";
-const PROTECTED: Page[] = ["chat", "dashboard", "projects", "crm"];
+type Page = "home" | "search" | "tours" | "chat" | "mail" | "dashboard" | "projects" | "crm";
+const PROTECTED: Page[] = ["chat", "mail", "dashboard", "projects", "crm"];
 const PAGE_KEY = "gl_active_page";
 const CONV_KEY = "gl_chat_conv";
 
@@ -120,6 +121,7 @@ function IndexInner() {
           {activePage === "search" && <SearchPage onNavigate={handleNavigate} />}
           {activePage === "tours" && <ToursPage onNavigate={handleNavigate} />}
           {activePage === "chat" && <ChatPage initialConversationId={openChatConvId} />}
+          {activePage === "mail" && <MailPage />}
           {activePage === "dashboard" && (
             <DashboardPage onNavigate={handleNavigate} initialTab={dashboardTab || undefined} />
           )}

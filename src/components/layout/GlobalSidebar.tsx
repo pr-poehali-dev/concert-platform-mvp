@@ -66,6 +66,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     ...(!isVenue ? [{ id: "tours",    label: "Туры",     icon: "Route",         page: "tours",    color: "purple" as const }] : []),
     ...(isOrg ? [{ id: "projects", label: "Проекты",  icon: "FolderOpen",    page: "projects", color: "purple" as const }] : []),
     { id: "chat",      label: "Чат",         icon: "MessageCircle", page: "chat",                                   color: "green"  },
+    { id: "mail",      label: "Почта",       icon: "Mail",          page: "mail",                                   color: "cyan"   },
   ];
 
   // ── Личный кабинет ──────────────────────────────────────────────────────
