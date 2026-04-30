@@ -416,7 +416,7 @@ export default function AdminPage({ externalToken, onExternalLogout }: AdminPage
         )}
 
         {tab === "settings" && (
-          <AdminSettingsTab />
+          <AdminSettingsTab token={token} />
         )}
       </div>
     </div>

@@ -3,13 +3,14 @@
 POST ?action=login                  — вход по ADMIN_SECRET
 GET  ?action=stats                  — общая статистика + кол-во pending
 GET  ?action=pending                — список заявок на верификацию
-GET  ?action=users&page=1&search=X  — список всех пользователей
+GET  ?action=users&page=1&search=X  — список всех пользователей (включая lastSeen)
 GET  ?action=venues&page=1&search=X — список площадок
 POST ?action=approve                — одобрить аккаунт
 POST ?action=reject                 — отклонить аккаунт
 POST ?action=verify_user            — переключить verified флаг
 POST ?action=verify_venue           — переключить verified флаг площадки
 POST ?action=toggle_admin           — выдать/снять права администратора
+POST ?action=test_email             — отправить тестовое письмо через Resend
 """
 import json
 import os
@@ -113,6 +114,77 @@ def handler(event: dict, context) -> dict:
     elif not check_token(headers):
         # ── Все остальные требуют токена ──────────────────────────────────
         return err("Нет доступа", 403)
+
+    # ── POST test_email — отправить тестовое письмо ─────────────────────────
+    if method == "POST" and action == "test_email":
+        body = json.loads(event.get("body") or "{}")
+        to_email = (body.get("email") or "").strip().lower()
+        if "@" not in to_email:
+            return err("Введите корректный email")
+        api_key = os.environ.get("RESEND_API_KEY", "")
+        if not api_key:
+            return err("RESEND_API_KEY не настроен в секретах", 500)
+        from_address = os.environ.get(
+            "EMAIL_FROM", "GLOBAL LINK <noreply@globallink.art>"
+        )
+        html = (
+            "<div style=\"font-family:Arial,sans-serif;background:#0d0d1a;color:#fff;"
+            "padding:32px;border-radius:16px;max-width:480px;margin:auto;\">"
+            "<h2 style=\"margin:0 0 12px;\">GLOBAL LINK</h2>"
+            "<p style=\"color:rgba(255,255,255,0.7);font-size:14px;\">"
+            "Это тестовое письмо. Если ты его видишь — отправка email работает.</p>"
+            "</div>"
+        )
+
+        def _send(from_addr: str):
+            payload = json.dumps({
+                "from": from_addr, "to": [to_email],
+                "subject": "GLOBAL LINK — тест отправки писем",
+                "html": html,
+            }).encode("utf-8")
+            req = urllib.request.Request(
+                "https://api.resend.com/emails", data=payload,
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    return resp.status, resp.read().decode("utf-8", errors="ignore")
+            except urllib.error.HTTPError as he:
+                return he.code, he.read().decode("utf-8", errors="ignore")
+            except Exception as ex:
+                return 0, str(ex)
+
+        status, resp_body = _send(from_address)
+        if status == 200:
+            return ok({
+                "success": True, "from": from_address,
+                "message": f"Письмо отправлено на {to_email}",
+            })
+        # Фоллбек на проверенный домен Resend если основной отклонён
+        if status in (401, 403, 422) and "resend.dev" not in from_address:
+            fallback = "GLOBAL LINK <onboarding@resend.dev>"
+            s2, b2 = _send(fallback)
+            if s2 == 200:
+                return ok({
+                    "success": True, "from": fallback, "fallback": True,
+                    "message": (
+                        f"Письмо отправлено через {fallback}. "
+                        f"Основной домен ({from_address}) не верифицирован в Resend "
+                        f"({status}: {resp_body[:120]})"
+                    ),
+                })
+            return err(
+                f"Resend отклонил письмо. Основной: {status} {resp_body[:200]}. "
+                f"Фоллбек: {s2} {b2[:200]}",
+                502,
+            )
+        return err(
+            f"Resend ответил {status}: {resp_body[:300]}", 502 if status else 500
+        )
 
     # ── GET stats ─────────────────────────────────────────────────────────
     if method == "GET" and action == "stats":
@@ -261,6 +333,7 @@ def handler(event: dict, context) -> dict:
 
         user_ids = [str(r[0]) for r in rows]
         venue_counts = {}
+        last_seen_map = {}
         if user_ids:
             placeholders = ",".join(["%s"] * len(user_ids))
             cur.execute(
@@ -269,6 +342,14 @@ def handler(event: dict, context) -> dict:
             )
             for vc in cur.fetchall():
                 venue_counts[str(vc[0])] = vc[1]
+            # Последний онлайн — максимум по сессиям пользователя
+            cur.execute(
+                f"SELECT user_id, MAX(last_seen) FROM {SCHEMA}.sessions "
+                f"WHERE user_id IN ({placeholders}) GROUP BY user_id",
+                user_ids,
+            )
+            for ls in cur.fetchall():
+                last_seen_map[str(ls[0])] = str(ls[1]) if ls[1] else ""
         conn.close()
 
         users = []
@@ -280,6 +361,7 @@ def handler(event: dict, context) -> dict:
                 "avatar": r[7], "avatarColor": r[8], "createdAt": str(r[9]),
                 "status": r[10] or "approved",
                 "venuesCount": venue_counts.get(uid, 0),
+                "lastSeen": last_seen_map.get(uid, ""),
             })
 
         return ok({"users": users, "total": total, "page": page,

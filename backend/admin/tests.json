@@ -66,6 +66,15 @@
       "expectedStatus": 403,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test email without token",
+      "method": "POST",
+      "path": "/?action=test_email",
+      "body": { "email": "test@example.com" },
+      "expectedStatus": 403,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

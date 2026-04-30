@@ -27,6 +27,7 @@ export interface AdminUser {
   createdAt: string;
   venuesCount: number;
   status: string;
+  lastSeen?: string;
 }
 
 export interface PendingUser {
@@ -57,4 +58,23 @@ export interface AdminVenue {
 
 export function formatDate(str: string) {
   return new Date(str).toLocaleDateString("ru", { day: "numeric", month: "short", year: "numeric" });
+}
+
+export function formatLastSeen(str?: string): { text: string; isOnline: boolean; color: string } {
+  if (!str) return { text: "никогда", isOnline: false, color: "text-white/30" };
+  const date = new Date(str);
+  if (isNaN(date.getTime())) return { text: "никогда", isOnline: false, color: "text-white/30" };
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffMin < 5) return { text: "онлайн", isOnline: true, color: "text-neon-green" };
+  if (diffMin < 60) return { text: `${diffMin} мин назад`, isOnline: false, color: "text-white/70" };
+  if (diffHr < 24) return { text: `${diffHr} ч назад`, isOnline: false, color: "text-white/60" };
+  if (diffDay < 7) return { text: `${diffDay} дн назад`, isOnline: false, color: "text-white/50" };
+  return {
+    text: date.toLocaleDateString("ru", { day: "numeric", month: "short" }),
+    isOnline: false,
+    color: "text-white/40",
+  };
 }

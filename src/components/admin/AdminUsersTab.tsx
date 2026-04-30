@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-import { type AdminUser, formatDate } from "./types";
+import { type AdminUser, formatDate, formatLastSeen } from "./types";
 import UserDetailsModal from "./UserDetailsModal";
 
 interface Props {
@@ -60,7 +60,7 @@ export default function AdminUsersTab({
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/10">
-              {["Пользователь","Роль","Город","Площадок","Дата рег.","Статус","Действия"].map(h => (
+              {["Пользователь","Роль","Город","Площадок","Был в сети","Дата рег.","Статус","Действия"].map(h => (
                 <th key={h} className="text-left px-4 py-3 text-xs text-white/40 uppercase tracking-wider font-medium whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -68,10 +68,10 @@ export default function AdminUsersTab({
           <tbody>
             {usersLoading ? (
               [...Array(5)].map((_, i) => (
-                <tr key={i}><td colSpan={7} className="px-4 py-3"><div className="h-8 bg-white/5 rounded animate-pulse" /></td></tr>
+                <tr key={i}><td colSpan={8} className="px-4 py-3"><div className="h-8 bg-white/5 rounded animate-pulse" /></td></tr>
               ))
             ) : users.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-12 text-white/30">Пользователи не найдены</td></tr>
+              <tr><td colSpan={8} className="text-center py-12 text-white/30">Пользователи не найдены</td></tr>
             ) : users.map((u, i) => (
               <tr key={u.id}
                 onClick={() => setDetailsUser(u)}
@@ -100,6 +100,17 @@ export default function AdminUsersTab({
                   {u.role === "venue" ? (
                     <span className="text-white/70 text-sm font-medium">{u.venuesCount}</span>
                   ) : <span className="text-white/20">—</span>}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  {(() => {
+                    const ls = formatLastSeen(u.lastSeen);
+                    return (
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${ls.isOnline ? "bg-neon-green animate-pulse" : "bg-white/20"}`} />
+                        <span className={`text-xs ${ls.color}`}>{ls.text}</span>
+                      </div>
+                    );
+                  })()}
                 </td>
                 <td className="px-4 py-3 text-white/40 text-xs whitespace-nowrap">{formatDate(u.createdAt)}</td>
                 <td className="px-4 py-3">

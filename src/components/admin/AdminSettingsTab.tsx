@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
+import { ADMIN_URL } from "./types";
 
 const SETTINGS_KEY = "gl_admin_settings";
 
@@ -54,9 +55,44 @@ function Toggle({ value, onChange, label, description, color = "neon-purple" }: 
   );
 }
 
-export default function AdminSettingsTab() {
+interface Props {
+  token?: string;
+}
+
+export default function AdminSettingsTab({ token = "" }: Props) {
   const [settings, setSettings] = useState<Settings>(loadSettings);
   const [saved, setSaved] = useState(false);
+
+  // Тестовое письмо
+  const [testEmail, setTestEmail] = useState("");
+  const [testSending, setTestSending] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const sendTestEmail = async () => {
+    if (!testEmail.includes("@")) {
+      setTestResult({ ok: false, message: "Введите корректный email" });
+      return;
+    }
+    setTestSending(true);
+    setTestResult(null);
+    try {
+      const res = await fetch(`${ADMIN_URL}?action=test_email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Admin-Token": token },
+        body: JSON.stringify({ email: testEmail.trim().toLowerCase() }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTestResult({ ok: true, message: data.message || "Письмо отправлено" });
+      } else {
+        setTestResult({ ok: false, message: data.error || "Ошибка отправки" });
+      }
+    } catch {
+      setTestResult({ ok: false, message: "Сеть недоступна" });
+    } finally {
+      setTestSending(false);
+    }
+  };
 
   const update = (patch: Partial<Settings>) => {
     setSettings(prev => {
@@ -161,6 +197,46 @@ export default function AdminSettingsTab() {
             : "Пользователям показывается сообщение об отключении — запросы не расходуются"}
           color="neon-pink"
         />
+      </div>
+
+      {/* Секция: Тест отправки писем */}
+      <div className="glass rounded-2xl border border-white/8 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Icon name="Mail" size={16} className="text-neon-cyan" />
+          <h3 className="font-oswald font-bold text-neon-cyan text-sm uppercase tracking-wider">Тест отправки писем</h3>
+        </div>
+        <p className="text-white/30 text-xs mb-4">
+          Проверь, доходят ли письма с продакшна. Если основной домен не верифицирован в Resend — письмо уйдёт через onboarding@resend.dev и ты увидишь это в ответе.
+        </p>
+        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+          <input
+            type="email"
+            value={testEmail}
+            onChange={e => setTestEmail(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && !testSending && sendTestEmail()}
+            placeholder="email@example.com"
+            disabled={testSending}
+            className="flex-1 min-w-0 glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm disabled:opacity-50"
+          />
+          <button
+            onClick={sendTestEmail}
+            disabled={testSending || !testEmail}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-neon-cyan text-black font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity whitespace-nowrap text-sm"
+          >
+            {testSending ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Send" size={14} />}
+            Отправить
+          </button>
+        </div>
+        {testResult && (
+          <div className={`mt-3 flex items-start gap-2 px-3 py-2.5 rounded-xl border text-sm ${
+            testResult.ok
+              ? "bg-neon-green/10 border-neon-green/25 text-neon-green"
+              : "bg-neon-pink/10 border-neon-pink/25 text-neon-pink"
+          }`}>
+            <Icon name={testResult.ok ? "CheckCircle2" : "AlertCircle"} size={14} className="shrink-0 mt-0.5" />
+            <span className="text-xs leading-relaxed break-words">{testResult.message}</span>
+          </div>
+        )}
       </div>
 
       {/* Секция: Состояние */}
