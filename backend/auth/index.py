@@ -468,7 +468,18 @@ def handler(event: dict, context) -> dict:
         if not emp:
             return err("Неверный email или пароль", 401)
 
-        # Парсим access_permissions
+        # Парсим access_permissions и нормализуем (добавляем allowedSections если нет)
+        ALL_SECTIONS_DEFAULT = [
+            "tours", "history", "documents", "signing", "notifications",
+            "company", "crm", "ai_help", "ai_lawyer",
+            "venues", "projects", "concerts", "venue_crm",
+            "search", "chat", "mail",
+        ]
+        DEFAULT_PERMS_FULL = {
+            "canViewExpenses": True, "canViewIncome": True, "canViewSummary": True,
+            "canEditExpenses": True, "canEditIncome": True,
+            "allowedSections": ALL_SECTIONS_DEFAULT,
+        }
         raw_perms = emp[24]
         if isinstance(raw_perms, dict):
             access_permissions = raw_perms
@@ -476,9 +487,15 @@ def handler(event: dict, context) -> dict:
             try:
                 access_permissions = json.loads(raw_perms)
             except Exception:
-                access_permissions = {"canViewExpenses": True, "canViewIncome": True, "canViewSummary": True, "canEditExpenses": True, "canEditIncome": True}
+                access_permissions = DEFAULT_PERMS_FULL.copy()
         else:
-            access_permissions = {"canViewExpenses": True, "canViewIncome": True, "canViewSummary": True, "canEditExpenses": True, "canEditIncome": True}
+            access_permissions = DEFAULT_PERMS_FULL.copy()
+        # Дополняем отсутствующие ключи дефолтами
+        for k, v in DEFAULT_PERMS_FULL.items():
+            if k not in access_permissions:
+                access_permissions[k] = v
+        if not isinstance(access_permissions.get("allowedSections"), list):
+            access_permissions["allowedSections"] = ALL_SECTIONS_DEFAULT[:]
 
         user = {
             "id": str(emp[4]),  # company_user_id — работаем от имени компании
@@ -595,15 +612,51 @@ def handler(event: dict, context) -> dict:
         conn = get_conn(); cur = conn.cursor()
         cur.execute(USER_SELECT + " WHERE id = %s", (user["id"],))
         row = cur.fetchone()
-        conn.close()
         if row:
             fresh = build_user(row)
             # Сохраняем employee-флаги если они были
-            for k in ("employeeId","roleInCompany","companyName","isEmployee","accessPermissions"):
+            for k in ("employeeId","roleInCompany","companyName","isEmployee"):
                 if k in user:
                     fresh[k] = user[k]
+            # Для сотрудника — всегда читаем свежие права из БД
+            if user.get("isEmployee") and user.get("employeeId"):
+                cur.execute(
+                    f"SELECT access_permissions FROM {SCHEMA}.employees WHERE id = %s AND is_active = TRUE",
+                    (user["employeeId"],)
+                )
+                emp_row = cur.fetchone()
+                if emp_row:
+                    ALL_SECTIONS_ME = [
+                        "tours", "history", "documents", "signing", "notifications",
+                        "company", "crm", "ai_help", "ai_lawyer",
+                        "venues", "projects", "concerts", "venue_crm",
+                        "search", "chat", "mail",
+                    ]
+                    raw = emp_row[0]
+                    if isinstance(raw, dict):
+                        perms = raw
+                    elif isinstance(raw, str):
+                        try: perms = json.loads(raw)
+                        except Exception: perms = {}
+                    else:
+                        perms = {}
+                    # нормализация
+                    for dk, dv in {"canViewExpenses":True,"canViewIncome":True,"canViewSummary":True,"canEditExpenses":True,"canEditIncome":True,"allowedSections":ALL_SECTIONS_ME}.items():
+                        if dk not in perms:
+                            perms[dk] = dv
+                    if not isinstance(perms.get("allowedSections"), list):
+                        perms["allowedSections"] = ALL_SECTIONS_ME[:]
+                    fresh["accessPermissions"] = perms
+                else:
+                    # Сотрудник деактивирован — разлогиниваем
+                    conn.close()
+                    return err("Не авторизован", 401)
+            elif "accessPermissions" in user:
+                fresh["accessPermissions"] = user["accessPermissions"]
+            conn.close()
             _sessions[session_id] = fresh
             return ok({"user": fresh})
+        conn.close()
         return ok({"user": user})
 
     # ── POST upload_logo ──────────────────────────────────────────────────

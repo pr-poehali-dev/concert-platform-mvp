@@ -82,7 +82,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(() => {
     try {
       const cached = localStorage.getItem(USER_CACHE_KEY);
-      return cached ? (JSON.parse(cached) as User) : null;
+      if (!cached) return null;
+      const u = JSON.parse(cached) as User;
+      // Если сотрудник и в кэше нет allowedSections — сбрасываем кэш, чтобы подтянуть свежие данные с сервера
+      if (u?.isEmployee && u?.accessPermissions && !Array.isArray(u.accessPermissions.allowedSections)) {
+        localStorage.removeItem(USER_CACHE_KEY);
+        return null;
+      }
+      return u;
     } catch { return null; }
   });
   const [isLoading, setIsLoading] = useState(true);
