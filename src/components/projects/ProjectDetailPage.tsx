@@ -246,6 +246,8 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
             projectCity={project.city}
             projectDateStart={project.dateStart || ""}
             projectArtist={project.artist || ""}
+            projectVenue={project.venueName || ""}
+            projectDateEnd={project.dateEnd || ""}
           />
         )}
 

@@ -92,9 +92,18 @@ interface Props {
   projectCity?: string;
   projectDateStart?: string;
   projectArtist?: string;
+  projectVenue?: string;
+  projectDateEnd?: string;
 }
 
-export default function ProjectLogisticsTab({ projectId, projectCity = "", projectDateStart = "", projectArtist = "" }: Props) {
+export default function ProjectLogisticsTab({
+  projectId,
+  projectCity = "",
+  projectDateStart = "",
+  projectArtist = "",
+  projectVenue = "",
+  projectDateEnd = "",
+}: Props) {
   const { user } = useAuth();
   const [items, setItems] = useState<LogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +115,10 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
   const [filterStatus, setFilterStatus] = useState<LogStatus | "all">("all");
   const [aiAdvice, setAiAdvice] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggest, setAiSuggest] = useState<string | null>(null);
+  const [aiSuggestLoading, setAiSuggestLoading] = useState(false);
   const aiRef = useRef<HTMLDivElement>(null);
+  const suggestRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (mounted?: { current: boolean }) => {
     if (mounted && !mounted.current) return;
@@ -154,9 +166,39 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
     }
   };
 
+  const suggestFromProject = async () => {
+    if (!projectCity && !projectDateStart) return;
+    setAiSuggestLoading(true);
+    setAiSuggest(null);
+    try {
+      const sessionId = localStorage.getItem("session_id") || "";
+      const res = await fetch(`${AI_URL}?action=logistics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+        body: JSON.stringify({
+          type: "plan",
+          routeTo: projectCity,
+          dateDepart: projectDateStart,
+          dateReturn: projectDateEnd,
+          personRole: projectArtist ? `Артист: ${projectArtist}` : "Команда тура",
+          venue: projectVenue,
+          notes: `Планирование логистики для концерта${projectArtist ? ` ${projectArtist}` : ""}${projectVenue ? ` в ${projectVenue}` : ""} в городе ${projectCity}`,
+        }),
+      });
+      const data = await res.json();
+      setAiSuggest(data.answer || "Не удалось получить предложения.");
+      setTimeout(() => suggestRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
+    } catch {
+      setAiSuggest("Ошибка соединения. Попробуйте ещё раз.");
+    } finally {
+      setAiSuggestLoading(false);
+    }
+  };
+
   const openCreate = () => {
     setEditId(null);
     setAiAdvice(null);
+    setAiSuggest(null);
     setForm({
       ...EMPTY,
       personName: projectArtist || "",
@@ -240,13 +282,69 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
           <h3 className="font-oswald font-bold text-white text-xl">Логистика</h3>
           <p className="text-white/40 text-xs mt-0.5">Билеты и отели для участников тура</p>
         </div>
-        <button
-          onClick={openCreate}
-          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl text-sm font-oswald font-semibold hover:opacity-90 transition-opacity"
-        >
-          <Icon name="Plus" size={15} />Добавить
-        </button>
+        <div className="flex items-center gap-2">
+          {(projectCity || projectDateStart) && (
+            <button
+              onClick={suggestFromProject}
+              disabled={aiSuggestLoading}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border border-neon-cyan/30 bg-neon-cyan/10 text-neon-cyan hover:bg-neon-cyan/20 disabled:opacity-50 transition-all"
+            >
+              {aiSuggestLoading
+                ? <Icon name="Loader2" size={15} className="animate-spin" />
+                : <Icon name="Sparkles" size={15} />
+              }
+              {aiSuggestLoading ? "Анализирую..." : "Спланировать ИИ"}
+            </button>
+          )}
+          <button
+            onClick={openCreate}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white rounded-xl text-sm font-oswald font-semibold hover:opacity-90 transition-opacity"
+          >
+            <Icon name="Plus" size={15} />Добавить
+          </button>
+        </div>
       </div>
+
+      {/* AI-план логистики всего концерта */}
+      {(aiSuggest || aiSuggestLoading) && (
+        <div ref={suggestRef} className="rounded-2xl border border-neon-cyan/25 bg-gradient-to-br from-neon-cyan/5 to-neon-purple/5 overflow-hidden animate-fade-in">
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-white/5">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center shrink-0">
+              <Icon name="Sparkles" size={15} className="text-white" />
+            </div>
+            <div className="flex-1">
+              <p className="text-white text-sm font-semibold">План логистики от ИИ</p>
+              <p className="text-white/40 text-xs">
+                {projectArtist && `${projectArtist} · `}{projectCity}{projectDateStart && ` · ${new Date(projectDateStart).toLocaleDateString("ru", { day: "numeric", month: "long" })}`}
+              </p>
+            </div>
+            <button onClick={() => setAiSuggest(null)} className="text-white/20 hover:text-white/50 transition-colors">
+              <Icon name="X" size={14} />
+            </button>
+          </div>
+          <div className="px-4 py-4">
+            {aiSuggestLoading ? (
+              <div className="flex items-center gap-3 text-white/40 text-sm">
+                <div className="w-4 h-4 border-2 border-neon-cyan/30 border-t-neon-cyan rounded-full animate-spin" />
+                ИИ анализирует маршрут и составляет план...
+              </div>
+            ) : (
+              <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{aiSuggest}</p>
+            )}
+          </div>
+          {aiSuggest && (
+            <div className="px-4 pb-4">
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-neon-purple/20 border border-neon-purple/30 text-neon-purple hover:bg-neon-purple/30 transition-all"
+              >
+                <Icon name="Plus" size={14} />
+                Добавить позицию логистики
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Сводка */}
       {items.length > 0 && (
