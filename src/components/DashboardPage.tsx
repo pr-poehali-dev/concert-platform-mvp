@@ -137,62 +137,12 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         </div>
       )}
 
-      {/* Hero — компактный, только на мобильных и планшетах (до lg) */}
-      <div className="lg:hidden relative py-8 overflow-hidden">
-        <div className="absolute inset-0 gradient-bg-purple opacity-30" />
-        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
-        <div className="relative max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center gap-4 flex-wrap">
-            <div className={`w-14 h-14 rounded-xl bg-gradient-to-br ${user.avatarColor} flex items-center justify-center font-oswald font-bold text-2xl text-white border-2 border-white/10 shadow-xl shrink-0`}>
-              {user.avatar}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="font-oswald font-bold text-2xl text-white truncate">{user.name}</h1>
-                {user.verified && (
-                  <Badge className="bg-neon-green/20 text-neon-green border-neon-green/40 flex items-center gap-1 shrink-0">
-                    <Icon name="BadgeCheck" size={11} />Верифицирован
-                  </Badge>
-                )}
-              </div>
-              <p className="text-white/50 text-xs mt-0.5">{user.email}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* Основной layout: контент */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24 lg:pt-6">
         <div className="flex gap-6 items-start">
 
           {/* Контент */}
           <div className="flex-1 min-w-0">
-            {/* Заголовок страницы — только на десктопе */}
-            <div className="hidden lg:block mb-6">
-              <div className="flex items-center gap-4">
-                <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${user.avatarColor} flex items-center justify-center font-oswald font-bold text-2xl text-white border-2 border-white/10 shadow-xl animate-glow-pulse shrink-0`}>
-                  {user.avatar}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h1 className="font-oswald font-bold text-2xl text-white">{user.name}</h1>
-                    {user.verified && (
-                      <Badge className="bg-neon-green/20 text-neon-green border-neon-green/40 flex items-center gap-1">
-                        <Icon name="BadgeCheck" size={12} />Верифицирован
-                      </Badge>
-                    )}
-                    <Badge className={isVenue ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40" : "bg-neon-purple/20 text-neon-purple border-neon-purple/40"}>
-                      {isVenue ? "Площадка" : "Организатор"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center gap-3 mt-1 text-white/50 text-sm">
-                    <span className="flex items-center gap-1"><Icon name="Mail" size={13} />{user.email}</span>
-                    {user.city && <span className="flex items-center gap-1"><Icon name="MapPin" size={13} />{user.city}</span>}
-                  </div>
-                </div>
-              </div>
-            </div>
-
             {/* Мобильный горизонтальный таб-бар (до lg) */}
             <div className="lg:hidden flex gap-1 mb-6 glass rounded-xl p-1 overflow-x-auto scrollbar-thin">
               {mobileTabs.map(t => (
