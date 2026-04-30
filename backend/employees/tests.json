@@ -41,6 +41,42 @@
       "expectedStatus": 400,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update without id",
+      "method": "POST",
+      "path": "/?action=update",
+      "body": { "name": "Test" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update with empty fields",
+      "method": "POST",
+      "path": "/?action=update",
+      "body": { "id": "00000000-0000-0000-0000-000000000001" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Delete without id",
+      "method": "POST",
+      "path": "/?action=delete",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Delete non-existing employee",
+      "method": "POST",
+      "path": "/?action=delete",
+      "body": { "id": "00000000-0000-0000-0000-000000000099" },
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

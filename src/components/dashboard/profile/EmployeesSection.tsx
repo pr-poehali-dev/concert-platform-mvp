@@ -3,6 +3,8 @@ import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL } from "./types";
 
+interface EditForm { name: string; email: string; roleInCompany: string }
+
 interface Props {
   userId: string;
   employees: Employee[];
@@ -52,9 +54,67 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
   const [editPerms, setEditPerms] = useState<AccessPermissions>({ ...DEFAULT_ACCESS_PERMISSIONS });
   const [savingPerms, setSavingPerms] = useState(false);
 
+  // Редактирование профиля сотрудника (имя, email, роль)
+  const [editProfileId, setEditProfileId] = useState<string | null>(null);
+  const [editProfile, setEditProfile] = useState<EditForm>({ name: "", email: "", roleInCompany: "employee" });
+  const [profileError, setProfileError] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
+
+  // Удаление сотрудника
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const openEditPerms = (emp: Employee) => {
     setEditPermId(emp.id);
     setEditPerms({ ...emp.accessPermissions });
+  };
+
+  const openEditProfile = (emp: Employee) => {
+    setEditProfileId(emp.id);
+    setEditProfile({ name: emp.name, email: emp.email, roleInCompany: emp.roleInCompany });
+    setProfileError("");
+  };
+
+  const saveProfile = async () => {
+    if (!editProfileId) return;
+    setProfileError("");
+    if (!editProfile.name.trim()) { setProfileError("Введите имя"); return; }
+    if (!editProfile.email.includes("@")) { setProfileError("Некорректный email"); return; }
+    setSavingProfile(true);
+    try {
+      const res = await fetch(`${EMPLOYEES_URL}?action=update`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: editProfileId,
+          name: editProfile.name.trim(),
+          email: editProfile.email.trim().toLowerCase(),
+          roleInCompany: editProfile.roleInCompany,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setProfileError(data.error || "Ошибка"); return; }
+      setEditProfileId(null);
+      onReload();
+    } catch (e) {
+      setProfileError("Сеть недоступна");
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteId) return;
+    setDeleting(true);
+    try {
+      await fetch(`${EMPLOYEES_URL}?action=delete`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: deleteId }),
+      });
+      setDeleteId(null);
+      onReload();
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const savePermissions = async () => {
@@ -258,6 +318,10 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                   <p className="text-white/40 text-xs">{emp.email}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
+                  <button onClick={() => openEditProfile(emp)} title="Редактировать"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-colors">
+                    <Icon name="Pencil" size={15} />
+                  </button>
                   <button onClick={() => openEditPerms(emp)} title="Настроить доступ"
                     className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-neon-purple hover:bg-neon-purple/10 transition-colors">
                     <Icon name="ShieldCheck" size={15} />
@@ -267,10 +331,93 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                     title={emp.isActive ? "Заблокировать" : "Восстановить"}>
                     <Icon name={emp.isActive ? "UserX" : "UserCheck"} size={15} />
                   </button>
+                  <button onClick={() => setDeleteId(emp.id)} title="Удалить из БД"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/30 hover:text-neon-pink hover:bg-neon-pink/10 transition-colors">
+                    <Icon name="Trash2" size={15} />
+                  </button>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Модалка редактирования профиля сотрудника */}
+      {editProfileId && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditProfileId(null)} />
+          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-cyan/20 animate-scale-in">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="font-oswald font-bold text-white flex items-center gap-2">
+                <Icon name="Pencil" size={16} className="text-neon-cyan" />
+                Редактировать сотрудника
+              </h4>
+              <button onClick={() => setEditProfileId(null)} className="text-white/30 hover:text-white transition-colors">
+                <Icon name="X" size={16} />
+              </button>
+            </div>
+            <div className="space-y-3 mb-4">
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">Имя</label>
+                <input value={editProfile.name} onChange={e => setEditProfile(f => ({ ...f, name: e.target.value }))}
+                  className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">Email</label>
+                <input type="email" value={editProfile.email} onChange={e => setEditProfile(f => ({ ...f, email: e.target.value }))}
+                  className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-white/40 mb-1 block">Роль</label>
+                <select value={editProfile.roleInCompany} onChange={e => setEditProfile(f => ({ ...f, roleInCompany: e.target.value }))}
+                  className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 text-sm appearance-none bg-transparent">
+                  {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-gray-900">{l}</option>)}
+                </select>
+              </div>
+            </div>
+            {profileError && <p className="text-neon-pink text-xs flex items-center gap-1 mb-3"><Icon name="AlertCircle" size={12} />{profileError}</p>}
+            <div className="flex gap-2">
+              <button onClick={() => setEditProfileId(null)}
+                className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
+                Отмена
+              </button>
+              <button onClick={saveProfile} disabled={savingProfile}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-cyan text-black rounded-xl text-sm font-oswald font-semibold hover:opacity-90 disabled:opacity-50">
+                {savingProfile ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Check" size={14} />}Сохранить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Модалка подтверждения удаления */}
+      {deleteId && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !deleting && setDeleteId(null)} />
+          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-pink/30 animate-scale-in">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-neon-pink/15 flex items-center justify-center shrink-0">
+                <Icon name="AlertTriangle" size={18} className="text-neon-pink" />
+              </div>
+              <h4 className="font-oswald font-bold text-white">Удалить сотрудника?</h4>
+            </div>
+            <p className="text-white/60 text-sm mb-2">
+              <span className="text-white">{employees.find(e => e.id === deleteId)?.name}</span> будет полностью удалён из базы данных.
+            </p>
+            <p className="text-white/40 text-xs mb-5">
+              Это действие нельзя отменить. Будут также удалены все его сообщения в чате компании и личной переписке.
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteId(null)} disabled={deleting}
+                className="flex-1 py-2.5 glass text-white/50 rounded-xl border border-white/10 text-sm hover:text-white transition-colors disabled:opacity-50">
+                Отмена
+              </button>
+              <button onClick={confirmDelete} disabled={deleting}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-pink text-white rounded-xl text-sm font-oswald font-semibold hover:opacity-90 disabled:opacity-50">
+                {deleting ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}Удалить
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

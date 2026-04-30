@@ -2,10 +2,11 @@
 Управление сотрудниками компании GLOBAL LINK.
 GET  ?action=list&company_user_id=X   — список сотрудников
 POST ?action=add                      — добавить сотрудника (+ accessPermissions)
-POST ?action=update                   — обновить роль/имя/accessPermissions
+POST ?action=update                   — обновить роль/имя/email/accessPermissions
 POST ?action=update_permissions       — обновить только права доступа
 POST ?action=deactivate               — деактивировать
 POST ?action=activate                 — восстановить
+POST ?action=delete                   — полностью удалить сотрудника из БД
 """
 import json, os, hashlib, random, secrets, urllib.request
 import psycopg2
@@ -78,10 +79,17 @@ def err(msg, status=400):
 
 
 def send_employee_invite(to_email: str, emp_name: str, company_name: str, password: str):
-    """Отправляет письмо-приглашение сотруднику (без пароля в открытом виде)."""
+    """Отправляет письмо-приглашение сотруднику (без пароля в открытом виде).
+    EMAIL_FROM можно переопределить в секретах. Если домен не верифицирован в Resend,
+    Resend вернёт 403 — тогда автоматически делаем повтор с onboarding@resend.dev."""
     api_key = os.environ.get("RESEND_API_KEY", "")
     app_url = os.environ.get("APP_URL", "https://globallink.ru")
-    if not api_key or not to_email:
+    from_address = os.environ.get("EMAIL_FROM", "GLOBAL LINK <noreply@globallink.art>")
+    if not api_key:
+        print("[Email invite] RESEND_API_KEY not configured")
+        return
+    if not to_email:
+        print("[Email invite] empty recipient email")
         return
     html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#0d0d1a;font-family:Arial,sans-serif;">
@@ -124,22 +132,39 @@ def send_employee_invite(to_email: str, emp_name: str, company_name: str, passwo
 </td></tr>
 </table>
 </body></html>"""
-    payload = json.dumps({
-        "from": "GLOBAL LINK <noreply@globallink.art>",
-        "to": [to_email],
-        "subject": f"Вас добавили в команду {company_name} — GLOBAL LINK",
-        "html": html,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
-    try:
-        urllib.request.urlopen(req, timeout=10)
-    except Exception as ex:
-        print(f"[Email invite] {to_email}: {ex}")
+    subject = f"Вас добавили в команду {company_name} — GLOBAL LINK"
+
+    def _send(from_addr: str) -> tuple[int, str]:
+        payload = json.dumps({
+            "from": from_addr, "to": [to_email],
+            "subject": subject, "html": html,
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            "https://api.resend.com/emails", data=payload,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                return resp.status, resp.read().decode("utf-8", errors="ignore")
+        except urllib.error.HTTPError as he:
+            return he.code, he.read().decode("utf-8", errors="ignore")
+        except Exception as ex:
+            return 0, str(ex)
+
+    status, body = _send(from_address)
+    if status == 200:
+        print(f"[Email invite] OK -> {to_email} via {from_address}")
+        return
+    print(f"[Email invite] FAIL {status} from={from_address} body={body[:200]}")
+    # Если домен не верифицирован — пробуем дефолтный адрес Resend (работает всегда)
+    if status in (401, 403, 422) and "resend.dev" not in from_address:
+        fallback = "GLOBAL LINK <onboarding@resend.dev>"
+        s2, b2 = _send(fallback)
+        if s2 == 200:
+            print(f"[Email invite] OK fallback -> {to_email} via {fallback}")
+        else:
+            print(f"[Email invite] FAIL fallback {s2} body={b2[:200]}")
 
 
 def row_to_emp(row) -> dict:
@@ -257,26 +282,81 @@ def handler(event: dict, context) -> dict:
         if not emp_id: return err("id required")
 
         fields = {}
-        if "name" in b:           fields["name"] = b["name"]
-        if "roleInCompany" in b:  fields["role_in_company"] = b["roleInCompany"]
+        if "name" in b:
+            new_name = (b["name"] or "").strip()
+            if not new_name:
+                return err("Имя не может быть пустым")
+            fields["name"] = new_name
+            fields["avatar"] = initials(new_name)
+        if "email" in b:
+            new_email = (b["email"] or "").strip().lower()
+            if "@" not in new_email:
+                return err("Некорректный email")
+            fields["email"] = new_email
+        if "roleInCompany" in b:
+            role = b["roleInCompany"]
+            if role not in ROLES:
+                return err("Неизвестная роль")
+            fields["role_in_company"] = role
         if "accessPermissions" in b:
             perms = b["accessPermissions"]
             for k, v in DEFAULT_PERMISSIONS.items():
                 if k not in perms:
                     perms[k] = v
             fields["access_permissions"] = json.dumps(perms)
-        if not fields:            return err("Нет данных")
+        if not fields:
+            return err("Нет данных для обновления")
 
         set_clause = ", ".join(f"{c} = %s" for c in fields)
         conn = get_conn()
         try:
             cur = conn.cursor()
+            # Проверка уникальности email при смене
+            if "email" in fields:
+                cur.execute(
+                    f"SELECT id FROM {SCHEMA}.employees WHERE email = %s AND id <> %s",
+                    (fields["email"], emp_id),
+                )
+                if cur.fetchone():
+                    return err("Сотрудник с таким email уже существует", 409)
             cur.execute(f"UPDATE {SCHEMA}.employees SET {set_clause} WHERE id = %s",
                         list(fields.values()) + [emp_id])
             conn.commit()
         finally:
             conn.close()
         return ok({"success": True})
+
+    # ── POST delete — полное удаление сотрудника из БД ─────────────────────
+    if method == "POST" and action == "delete":
+        b = json.loads(event.get("body") or "{}")
+        emp_id = b.get("id", "")
+        if not emp_id:
+            return err("id required")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            # Чистим связанные сообщения чтобы не оставалось мусора
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.direct_messages "
+                f"WHERE sender_id = %s OR recipient_id = %s",
+                (emp_id, emp_id),
+            )
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.company_messages "
+                f"WHERE sender_id = %s AND sender_type = 'employee'",
+                (emp_id,),
+            )
+            cur.execute(
+                f"DELETE FROM {SCHEMA}.employees WHERE id = %s RETURNING id",
+                (emp_id,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+        if not row:
+            return err("Сотрудник не найден", 404)
+        return ok({"success": True, "deletedId": emp_id})
 
     # ── POST update_permissions ───────────────────────────────────────────
     if method == "POST" and action == "update_permissions":
