@@ -34,6 +34,7 @@ const VENUE_SECTIONS: SectionDef[] = [
   { id: "venues",        label: "Площадки",       icon: "Building2",      color: "text-neon-cyan",    group: "Личный кабинет" },
   { id: "vprojects",     label: "Проекты",        icon: "FolderOpen",     color: "text-neon-purple",  group: "Личный кабинет" },
   { id: "concerts",      label: "Мои концерты",   icon: "Music",          color: "text-neon-pink",    group: "Личный кабинет" },
+  { id: "bar",           label: "Бар",            icon: "Wine",           color: "text-neon-cyan",    group: "Личный кабинет" },
   { id: "documents",     label: "Документы",      icon: "FileArchive",    color: "text-neon-cyan",    group: "Личный кабинет" },
   { id: "signing",       label: "Подписание",     icon: "PenLine",        color: "text-neon-purple",  group: "Личный кабинет" },
   { id: "venue_crm",     label: "CRM",            icon: "Kanban",         color: "text-neon-purple",  group: "Личный кабинет" },

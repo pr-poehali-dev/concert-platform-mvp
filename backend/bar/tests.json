@@ -1,0 +1,78 @@
+{
+  "tests": [
+    {
+      "name": "Integrations empty list (warm-up + DB)",
+      "method": "GET",
+      "path": "/?action=integrations&venue_user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 200,
+      "expectedBody": { "integrations": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Integrations no venue_user_id",
+      "method": "GET",
+      "path": "/?action=integrations",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Add integration missing type",
+      "method": "POST",
+      "path": "/?action=add_integration",
+      "body": { "venueUserId": "00000000-0000-0000-0000-000000000099" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Test connection missing type",
+      "method": "POST",
+      "path": "/?action=test_connection",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Report no integration_id",
+      "method": "GET",
+      "path": "/?action=report",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Report invalid type",
+      "method": "GET",
+      "path": "/?action=report&integration_id=00000000-0000-0000-0000-000000000001&type=unknown",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Report not found",
+      "method": "GET",
+      "path": "/?action=report&integration_id=00000000-0000-0000-0000-000000000099&type=sales",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Events no venue_user_id",
+      "method": "GET",
+      "path": "/?action=events",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Unknown action",
+      "method": "GET",
+      "path": "/?action=foo",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

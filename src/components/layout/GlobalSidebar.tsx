@@ -108,6 +108,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
     { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues",        color: "cyan"   },
     { id: "vprojects",     label: "Проекты",       icon: "FolderOpen",   page: "dashboard", dashTab: "projects",      color: "purple" },
     { id: "concerts",      label: "Мои концерты",  icon: "Music",        page: "dashboard", dashTab: "concerts",      color: "pink"   },
+    { id: "bar",           label: "Бар",           icon: "Wine",         page: "dashboard", dashTab: "bar",           color: "cyan"   },
     { id: "documents",     label: "Документы",     icon: "FileArchive",  page: "dashboard", dashTab: "documents",     color: "cyan"   },
     { id: "signing",       label: "Подписание",    icon: "PenLine",      page: "dashboard", dashTab: "signing",       color: "purple" },
     { id: "venue_crm",     label: "CRM",           icon: "Kanban",       page: "dashboard", dashTab: "venue_crm",     color: "purple" },

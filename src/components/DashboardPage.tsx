@@ -14,6 +14,7 @@ import DashboardDocumentsTab from "@/components/dashboard/DashboardDocumentsTab"
 import DashboardSigningTab from "@/components/dashboard/DashboardSigningTab";
 import DashboardAITab from "@/components/dashboard/DashboardAITab";
 import DashboardAILawyerTab from "@/components/dashboard/DashboardAILawyerTab";
+import DashboardBarTab from "@/components/dashboard/DashboardBarTab";
 import CrmPage from "@/pages/CrmPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
 import { useEmployeePing } from "@/hooks/useEmployeePing";
@@ -93,6 +94,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
         { id: "venues",        icon: "Building2" },
         { id: "projects",      icon: "FolderOpen" },
         { id: "concerts",      icon: "Music" },
+        { id: "bar",           icon: "Wine" },
         { id: "documents",     icon: "FileArchive" },
         { id: "signing",       icon: "PenLine" },
         { id: "venue_crm",     icon: "Kanban" },
@@ -228,6 +230,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
 
             {tab === "ai_help" && <DashboardAITab />}
             {tab === "ai_lawyer" && <DashboardAILawyerTab />}
+            {tab === "bar" && isVenue && <DashboardBarTab />}
           </div>
         </div>
       </div>
