@@ -527,6 +527,39 @@ export default function ProjectLogisticsTab({
                   </button>
                 </div>
                 <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{aiAdvice}</p>
+                {(form.routeFrom || form.routeTo) && (
+                  <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-2">
+                    <p className="text-white/30 text-xs w-full mb-1">Найти и купить:</p>
+                    <a
+                      href={TYPE_CONFIG[form.type].search({ ...form, id: "", projectId, createdAt: "" } as LogItem)}
+                      target="_blank" rel="noreferrer"
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border transition-all ${TYPE_CONFIG[form.type].color} bg-white/5 border-white/10 hover:bg-white/10`}
+                    >
+                      <Icon name="ExternalLink" size={12} />
+                      {form.type === "flight" ? "Авиасейлс" : form.type === "train" ? "РЖД" : "Островок"}
+                    </a>
+                    {form.type === "flight" && (
+                      <a
+                        href={`https://www.ozon.ru/travel/flights/?fromCity=${encodeURIComponent(form.routeFrom)}&toCity=${encodeURIComponent(form.routeTo)}&date=${form.dateDepart || ""}`}
+                        target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border text-white/50 bg-white/5 border-white/10 hover:bg-white/10 transition-all"
+                      >
+                        <Icon name="ExternalLink" size={12} />
+                        Ozon Travel
+                      </a>
+                    )}
+                    {form.type === "hotel" && (
+                      <a
+                        href={`https://travel.yandex.ru/hotels/?adults=1&checkinDate=${form.dateDepart || ""}&checkoutDate=${form.dateReturn || ""}&geoId=${encodeURIComponent(form.routeTo || form.routeFrom)}`}
+                        target="_blank" rel="noreferrer"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs border text-white/50 bg-white/5 border-white/10 hover:bg-white/10 transition-all"
+                      >
+                        <Icon name="ExternalLink" size={12} />
+                        Яндекс Отели
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
