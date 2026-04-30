@@ -40,12 +40,7 @@ const fmt = {
   num: (n: number) => new Intl.NumberFormat("ru-RU").format(n),
 };
 
-// ─── Storage (no mock data — starts empty for each company) ──────────────────
-const MOCK_COMPANIES: Company[] = [];
-const MOCK_DEALS: Deal[] = [];
-const MOCK_TASKS: Task[] = [];
-const MOCK_GOALS: Goal[] = [];
-
+// ─── Storage ──────────────────────────────────────────────────────────────────
 const api = {
   get: async (action: string, userId: string) => {
     const r = await fetch(`${CRM_URL}?action=${action}&user_id=${userId}`);
@@ -126,20 +121,20 @@ function useData(userId: string) {
 
 // ─── UI primitives ────────────────────────────────────────────────────────────
 const css = {
-  card: { background: "#161b22", border: "1px solid #21262d", borderRadius: 10, padding: 16 } as React.CSSProperties,
-  input: { background: "#1c2333", border: "1px solid #21262d", color: "#f0f6fc", borderRadius: 6, padding: "8px 12px", fontSize: 14, width: "100%", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const },
-  btn: { display: "inline-flex" as const, alignItems: "center", gap: 6, padding: "8px 16px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 14, fontWeight: 500, fontFamily: "inherit" } as React.CSSProperties,
-  g2: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 12 } as React.CSSProperties,
-  g4: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 12 } as React.CSSProperties,
+  card: { background: "linear-gradient(180deg,#161b22 0%,#13181f 100%)", border: "1px solid #2a3140", borderRadius: 14, padding: 18, boxShadow: "0 4px 14px rgba(0,0,0,0.25)" } as React.CSSProperties,
+  input: { background: "#1c2333", border: "1px solid #2a3140", color: "#f0f6fc", borderRadius: 10, padding: "11px 14px", fontSize: 15, fontWeight: 500, width: "100%", fontFamily: "inherit", outline: "none", boxSizing: "border-box" as const, transition: "border-color .2s, box-shadow .2s" },
+  btn: { display: "inline-flex" as const, alignItems: "center", gap: 8, padding: "11px 20px", borderRadius: 10, border: "none", cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: "inherit", letterSpacing: 0.2, boxShadow: "0 4px 12px rgba(168,85,247,0.25)", transition: "transform .15s, box-shadow .2s, opacity .2s" } as React.CSSProperties,
+  g2: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))", gap: 14 } as React.CSSProperties,
+  g4: { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 14 } as React.CSSProperties,
 };
 
 function KPI({ label, value, accent, sub }: { label: string; value: string; accent: string; sub?: string }) {
   return (
     <div style={{ ...css.card, position: "relative", overflow: "hidden" }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: accent }} />
-      <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 22, fontWeight: 700 }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: "#8b949e", marginTop: 2 }}>{sub}</div>}
+      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 4, background: `linear-gradient(90deg, ${accent}, ${accent}aa)` }} />
+      <div style={{ fontSize: 12, color: "#c9d1d9", marginBottom: 6, fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.6 }}>{label}</div>
+      <div style={{ fontSize: 26, fontWeight: 800, color: "#fff", letterSpacing: -0.3 }}>{value}</div>
+      {sub && <div style={{ fontSize: 12, color: "#8b949e", marginTop: 4, fontWeight: 500 }}>{sub}</div>}
     </div>
   );
 }
@@ -149,36 +144,36 @@ function Bar({ pct, color = "#a855f7", h = 6 }: { pct: number; color?: string; h
 }
 
 function Bdg({ label, color }: { label: string; color: string }) {
-  return <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: color + "22", color }}>{label}</span>;
+  return <span style={{ display: "inline-flex", alignItems: "center", padding: "4px 10px", borderRadius: 20, fontSize: 12, fontWeight: 700, background: color + "26", color, border: `1px solid ${color}44`, letterSpacing: 0.2 }}>{label}</span>;
 }
 
 function Modal({ title, children, onClose, footer }: { title: string; children: React.ReactNode; onClose: () => void; footer?: React.ReactNode }) {
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
-      <div style={{ background: "#161b22", borderRadius: "16px 16px 0 0", width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column" }} onClick={e => e.stopPropagation()}>
-        <div style={{ padding: "16px 20px", borderBottom: "1px solid #21262d", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-          <span style={{ fontWeight: 700, fontSize: 16 }}>{title}</span>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#8b949e", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>✕</button>
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.78)", backdropFilter: "blur(6px)", zIndex: 1000, display: "flex", alignItems: "flex-end", justifyContent: "center" }} onClick={onClose}>
+      <div style={{ background: "linear-gradient(180deg,#1a2030 0%,#161b22 100%)", borderRadius: "20px 20px 0 0", width: "100%", maxWidth: 560, maxHeight: "90vh", display: "flex", flexDirection: "column", border: "1px solid #2a3140", borderBottom: "none", boxShadow: "0 -10px 40px rgba(168,85,247,0.15)" }} onClick={e => e.stopPropagation()}>
+        <div style={{ padding: "18px 22px", borderBottom: "1px solid #2a3140", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+          <span style={{ fontWeight: 800, fontSize: 18, color: "#fff", letterSpacing: -0.2 }}>{title}</span>
+          <button onClick={onClose} style={{ background: "rgba(139,148,158,0.1)", border: "none", color: "#c9d1d9", cursor: "pointer", fontSize: 16, lineHeight: 1, width: 32, height: 32, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
-        <div style={{ padding: 20, overflowY: "auto", flex: 1 }}>{children}</div>
-        {footer && <div style={{ padding: "12px 20px", borderTop: "1px solid #21262d", display: "flex", gap: 8, justifyContent: "flex-end", flexShrink: 0 }}>{footer}</div>}
+        <div style={{ padding: 22, overflowY: "auto", flex: 1 }}>{children}</div>
+        {footer && <div style={{ padding: "14px 22px", borderTop: "1px solid #2a3140", display: "flex", gap: 10, justifyContent: "flex-end", flexShrink: 0 }}>{footer}</div>}
       </div>
     </div>
   );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div style={{ marginBottom: 12 }}><label style={{ fontSize: 12, color: "#8b949e", display: "block", marginBottom: 4 }}>{label}</label>{children}</div>;
+  return <div style={{ marginBottom: 14 }}><label style={{ fontSize: 12, color: "#c9d1d9", display: "block", marginBottom: 6, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</label>{children}</div>;
 }
 
 function Empty({ icon, title, hint, action, onAction }: { icon: string; title: string; hint: string; action?: string; onAction?: () => void }) {
   return (
-    <div style={{ textAlign: "center", padding: "48px 24px", borderRadius: 12, border: "2px dashed #21262d", background: "#161b22" }}>
-      <div style={{ fontSize: 48, marginBottom: 12 }}>{icon}</div>
-      <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 6 }}>{title}</div>
-      <div style={{ fontSize: 13, color: "#8b949e", marginBottom: 20, maxWidth: 320, margin: "0 auto 20px" }}>{hint}</div>
+    <div style={{ textAlign: "center", padding: "56px 24px", borderRadius: 16, border: "2px dashed #2a3140", background: "linear-gradient(180deg,#161b22 0%,#13181f 100%)" }}>
+      <div style={{ fontSize: 56, marginBottom: 14, filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.3))" }}>{icon}</div>
+      <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8, color: "#fff", letterSpacing: -0.2 }}>{title}</div>
+      <div style={{ fontSize: 14, color: "#c9d1d9", marginBottom: 22, maxWidth: 360, margin: "0 auto 22px", lineHeight: 1.5 }}>{hint}</div>
       {action && onAction && (
-        <button onClick={onAction} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 20px", background: "#a855f7", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 600, fontFamily: "inherit" }}>
+        <button onClick={onAction} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "12px 24px", background: "linear-gradient(135deg,#a855f7 0%,#6366f1 100%)", color: "#fff", border: "none", borderRadius: 12, cursor: "pointer", fontSize: 15, fontWeight: 700, fontFamily: "inherit", boxShadow: "0 8px 20px rgba(168,85,247,0.4)", letterSpacing: 0.2 }}>
           + {action}
         </button>
       )}
@@ -199,8 +194,8 @@ function Dashboard({ deals, tasks, goals, companies, onTab }: { deals: Deal[]; t
   if (isEmpty) {
     return (
       <div style={{ padding: 16, maxWidth: 700, margin: "0 auto" }}>
-        <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 8 }}>Дашборд</div>
-        <div style={{ fontSize: 13, color: "#8b949e", marginBottom: 32 }}>Добро пожаловать в CRM — управляйте клиентами, сделками и задачами в одном месте</div>
+        <div style={{ fontSize: 30, fontWeight: 800, marginBottom: 10, color: "#fff", letterSpacing: -0.5 }}>Дашборд</div>
+        <div style={{ fontSize: 15, color: "#c9d1d9", marginBottom: 32, lineHeight: 1.5 }}>Добро пожаловать в CRM — управляйте клиентами, сделками и задачами в одном месте</div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 12, marginBottom: 32 }}>
           {[
@@ -244,7 +239,7 @@ function Dashboard({ deals, tasks, goals, companies, onTab }: { deals: Deal[]; t
 
   return (
     <div style={{ padding: 16, maxWidth: 1100, margin: "0 auto" }}>
-      <div style={{ fontSize: 22, fontWeight: 700, marginBottom: 16 }}>Дашборд</div>
+      <div style={{ fontSize: 28, fontWeight: 800, marginBottom: 18, color: "#fff", letterSpacing: -0.5, background: "linear-gradient(90deg,#fff,#c9d1d9)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>Дашборд</div>
       <div style={{ ...css.g4, marginBottom: 16 }}>
         <KPI label="Выручка" value={fmt.money(revenue)} accent="#a855f7" sub={`${deals.filter(d=>d.stage==="won").length} сделок`} />
         <KPI label="Pipeline" value={fmt.money(pipeline)} accent="#22d3ee" sub={`${deals.filter(d=>!["won","lost"].includes(d.stage)).length} активных`} />
@@ -331,8 +326,8 @@ function Deals({ deals, companies, saveDeal, deleteDeal }: { deals: Deal[]; comp
   return (
     <div style={{ padding:16, maxWidth:1100, margin:"0 auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ fontSize:22, fontWeight:700 }}>Воронка продаж</div>
-        <button style={{ ...css.btn, background:"#a855f7", color:"#fff" }} onClick={() => open("new")}>+ Сделка</button>
+        <div style={{ fontSize:28, fontWeight:800, color:"#fff", letterSpacing:-0.5 }}>Воронка продаж</div>
+        <button style={{ ...css.btn, background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)", color:"#fff", padding:"12px 22px", fontSize:15 }} onClick={() => open("new")}>+ Сделка</button>
       </div>
       <div style={{ ...css.g4, marginBottom:16 }}>
         <KPI label="Pipeline" value={fmt.money(pipeline)} accent="#a855f7" />
@@ -395,7 +390,7 @@ function Deals({ deals, companies, saveDeal, deleteDeal }: { deals: Deal[]; comp
 
       {modal && (
         <Modal title={modal==="new"?"Новая сделка":(modal as Deal).title} onClose={close}
-          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Deal).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"#a855f7",color:"#fff" }} onClick={save}>Сохранить</button></>}>
+          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Deal).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)",color:"#fff" }} onClick={save}>Сохранить</button></>}>
           <Field label="Название *"><input style={css.input} value={form.title||""} onChange={e=>setForm(f=>({...f,title:e.target.value}))} placeholder="Название сделки" /></Field>
           <Field label="Компания"><select style={css.input} value={form.companyId||""} onChange={e=>setForm(f=>({...f,companyId:e.target.value}))}><option value="">— Выберите —</option>{companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
           <div style={css.g2}>
@@ -431,8 +426,8 @@ function Companies({ companies, saveCompany, deleteCompany }: { companies: Compa
   return (
     <div style={{ padding:16, maxWidth:1100, margin:"0 auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ fontSize:22, fontWeight:700 }}>Компании</div>
-        <button style={{ ...css.btn, background:"#a855f7", color:"#fff" }} onClick={()=>open("new")}>+ Добавить</button>
+        <div style={{ fontSize:28, fontWeight:800, color:"#fff", letterSpacing:-0.5 }}>Компании</div>
+        <button style={{ ...css.btn, background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)", color:"#fff", padding:"12px 22px", fontSize:15 }} onClick={()=>open("new")}>+ Добавить</button>
       </div>
       <div style={{ ...css.g4, marginBottom:16 }}>
         <KPI label="Активных" value={String(companies.filter(c=>c.status==="active").length)} accent="#a855f7" />
@@ -467,7 +462,7 @@ function Companies({ companies, saveCompany, deleteCompany }: { companies: Compa
       </div>
       {modal&&(
         <Modal title={modal==="new"?"Новая компания":(modal as Company).name} onClose={close}
-          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Company).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"#a855f7",color:"#fff" }} onClick={save}>Сохранить</button></>}>
+          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Company).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)",color:"#fff" }} onClick={save}>Сохранить</button></>}>
           <Field label="Название *"><input style={css.input} value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))} /></Field>
           <div style={css.g2}>
             <Field label="Отрасль"><input style={css.input} value={form.industry||""} onChange={e=>setForm(f=>({...f,industry:e.target.value}))} /></Field>
@@ -507,8 +502,8 @@ function Tasks({ tasks, saveTask, deleteTask }: { tasks: Task[]; saveTask: (d: P
   return (
     <div style={{ padding:16, maxWidth:1100, margin:"0 auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ fontSize:22, fontWeight:700 }}>Задачи</div>
-        <button style={{ ...css.btn, background:"#a855f7", color:"#fff" }} onClick={()=>open("new")}>+ Задача</button>
+        <div style={{ fontSize:28, fontWeight:800, color:"#fff", letterSpacing:-0.5 }}>Задачи</div>
+        <button style={{ ...css.btn, background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)", color:"#fff", padding:"12px 22px", fontSize:15 }} onClick={()=>open("new")}>+ Задача</button>
       </div>
       <div style={{ ...css.g4, marginBottom:16 }}>
         <KPI label="Просрочено" value={String(tasks.filter(t=>t.status!=="done"&&new Date(t.deadline)<new Date()).length)} accent="#f43f5e" />
@@ -546,7 +541,7 @@ function Tasks({ tasks, saveTask, deleteTask }: { tasks: Task[]; saveTask: (d: P
       </div>
       {modal&&(
         <Modal title={modal==="new"?"Новая задача":(modal as Task).title} onClose={close}
-          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Task).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"#a855f7",color:"#fff" }} onClick={save}>Сохранить</button></>}>
+          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Task).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)",color:"#fff" }} onClick={save}>Сохранить</button></>}>
           <Field label="Название *"><input style={css.input} value={form.title||""} onChange={e=>setForm(f=>({...f,title:e.target.value}))} /></Field>
           <Field label="Описание"><textarea style={{ ...css.input,resize:"vertical" }} rows={2} value={form.description||""} onChange={e=>setForm(f=>({...f,description:e.target.value}))} /></Field>
           <div style={css.g2}>
@@ -586,8 +581,8 @@ function Goals({ goals, saveGoal, deleteGoal }: { goals: Goal[]; saveGoal: (d: P
   return (
     <div style={{ padding:16, maxWidth:1100, margin:"0 auto" }}>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
-        <div style={{ fontSize:22, fontWeight:700 }}>Цели и OKR</div>
-        <button style={{ ...css.btn, background:"#a855f7", color:"#fff" }} onClick={()=>open("new")}>+ Цель</button>
+        <div style={{ fontSize:28, fontWeight:800, color:"#fff", letterSpacing:-0.5 }}>Цели и OKR</div>
+        <button style={{ ...css.btn, background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)", color:"#fff", padding:"12px 22px", fontSize:15 }} onClick={()=>open("new")}>+ Цель</button>
       </div>
       <div style={{ ...css.g4, marginBottom:16 }}>
         <KPI label="Активных" value={String(active.length)} accent="#a855f7" />
@@ -619,7 +614,7 @@ function Goals({ goals, saveGoal, deleteGoal }: { goals: Goal[]; saveGoal: (d: P
       );})}
       {modal&&(
         <Modal title={modal==="new"?"Новая цель":(modal as Goal).title} onClose={close}
-          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Goal).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"#a855f7",color:"#fff" }} onClick={save}>Сохранить</button></>}>
+          footer={<>{modal!=="new"&&<button style={{ ...css.btn,background:"#f43f5e22",color:"#f43f5e" }} onClick={()=>del((modal as Goal).id)}>Удалить</button>}<button style={{ ...css.btn,background:"#21262d",color:"#f0f6fc" }} onClick={close}>Отмена</button><button style={{ ...css.btn,background:"linear-gradient(135deg,#a855f7 0%,#6366f1 100%)",color:"#fff" }} onClick={save}>Сохранить</button></>}>
           <Field label="Название *"><input style={css.input} value={form.title||""} onChange={e=>setForm(f=>({...f,title:e.target.value}))} /></Field>
           <Field label="Описание"><textarea style={{ ...css.input,resize:"vertical" }} rows={2} value={form.description||""} onChange={e=>setForm(f=>({...f,description:e.target.value}))} /></Field>
           <Field label="Категория"><select style={css.input} value={form.category||"revenue"} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>{Object.entries(CAT_LABELS).map(([v,l])=><option key={v} value={v}>{l}</option>)}</select></Field>
@@ -672,19 +667,61 @@ export default function CrmPage() {
   }
 
   return (
-    <div style={{ background:"#0d1117", minHeight:"100vh", color:"#f0f6fc", fontFamily:"inherit", paddingBottom:72 }}>
+    <div className="crm-shell" style={{ background:"#0d1117", minHeight:"100vh", color:"#f0f6fc", fontFamily:"inherit" }}>
+      <style>{`
+        .crm-shell { padding-right: 96px; }
+        .crm-side-nav { width: 80px; }
+        @media (max-width: 640px) {
+          .crm-shell { padding-right: 76px; }
+          .crm-side-nav { width: 64px; }
+          .crm-side-nav button { width: 56px !important; font-size: 10px !important; padding: 8px 2px !important; }
+          .crm-side-nav button span { font-size: 20px !important; }
+        }
+      `}</style>
       {tab==="dashboard" && <Dashboard deals={data.deals} tasks={data.tasks} goals={data.goals} companies={data.companies} onTab={go} />}
       {tab==="deals"     && <Deals deals={data.deals} companies={data.companies} saveDeal={data.saveDeal} deleteDeal={data.deleteDeal} />}
       {tab==="companies" && <Companies companies={data.companies} saveCompany={data.saveCompany} deleteCompany={data.deleteCompany} />}
       {tab==="tasks"     && <Tasks tasks={data.tasks} saveTask={data.saveTask} deleteTask={data.deleteTask} />}
       {tab==="goals"     && <Goals goals={data.goals} saveGoal={data.saveGoal} deleteGoal={data.deleteGoal} />}
 
-      <nav style={{ position:"fixed", bottom:0, left:0, right:0, background:"#161b22", borderTop:"1px solid #21262d", display:"flex", zIndex:100 }}>
-        {TABS.map(t=>(
-          <button key={t.id} onClick={()=>go(t.id)} style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", padding:"8px 4px 6px", gap:2, background:"none", border:"none", cursor:"pointer", color:tab===t.id?"#a855f7":"#8b949e", fontSize:10, fontFamily:"inherit", transition:"color .2s" }}>
-            <span style={{ fontSize:20 }}>{t.icon}</span>{t.label}
-          </button>
-        ))}
+      <nav
+        className="crm-side-nav"
+        style={{
+          position:"fixed", top:"50%", right:12, transform:"translateY(-50%)",
+          background:"rgba(22,27,34,0.85)", backdropFilter:"blur(12px)",
+          border:"1px solid #30363d", borderRadius:20,
+          display:"flex", flexDirection:"column", gap:6, padding:8,
+          boxShadow:"0 12px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(168,85,247,0.1)",
+          zIndex:100,
+        }}
+      >
+        {TABS.map(t=>{
+          const active = tab===t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={()=>go(t.id)}
+              title={t.label}
+              style={{
+                width:64, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center",
+                padding:"10px 4px", gap:4, borderRadius:14,
+                background: active ? "linear-gradient(135deg,#a855f7 0%,#6366f1 100%)" : "transparent",
+                border:"none", cursor:"pointer",
+                color: active ? "#fff" : "#c9d1d9",
+                fontSize:11, fontWeight: active ? 700 : 600, fontFamily:"inherit",
+                letterSpacing:0.2,
+                boxShadow: active ? "0 8px 20px rgba(168,85,247,0.45)" : "none",
+                transform: active ? "scale(1.05)" : "scale(1)",
+                transition:"all .25s ease",
+              }}
+              onMouseEnter={e=>{ if(!active){ e.currentTarget.style.background="rgba(168,85,247,0.12)"; e.currentTarget.style.color="#fff"; } }}
+              onMouseLeave={e=>{ if(!active){ e.currentTarget.style.background="transparent"; e.currentTarget.style.color="#c9d1d9"; } }}
+            >
+              <span style={{ fontSize:24, lineHeight:1, filter: active ? "drop-shadow(0 2px 4px rgba(0,0,0,0.4))" : "none" }}>{t.icon}</span>
+              {t.label}
+            </button>
+          );
+        })}
       </nav>
     </div>
   );
