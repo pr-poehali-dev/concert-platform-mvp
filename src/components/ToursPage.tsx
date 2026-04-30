@@ -64,19 +64,30 @@ export default function ToursPage({ onNavigate }: { onNavigate?: (page: string) 
   }
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-3 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-oswald font-bold text-2xl text-white">Мои туры</h2>
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-11 h-11 rounded-xl bg-neon-purple/15 border border-neon-purple/25 flex items-center justify-center shrink-0">
+            <Icon name="Route" size={20} className="text-neon-purple" />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-oswald font-bold text-2xl text-white uppercase leading-none">Мои <span className="gradient-text">туры</span></h2>
+              <Badge className="bg-neon-purple/15 text-neon-purple border-neon-purple/30 text-[10px] py-0 px-2">{tours.length}</Badge>
+            </div>
+            <p className="text-white/45 text-xs mt-0.5">Гастроли, площадки и финансы в одном месте</p>
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm">
             <Icon name="Plus" size={16} />Новый тур
           </button>
           {onNavigate && (
             <button
               onClick={() => onNavigate("projects")}
-              className="flex items-center gap-2 px-4 py-2.5 glass text-white/60 hover:text-white rounded-xl border border-white/10 hover:border-white/20 transition-all text-sm">
+              className="flex items-center gap-2 px-3 py-2 glass text-white/60 hover:text-white rounded-lg border border-white/10 hover:border-white/20 transition-all text-sm">
               <Icon name="FolderOpen" size={16} />Все проекты
             </button>
           )}
@@ -85,17 +96,19 @@ export default function ToursPage({ onNavigate }: { onNavigate?: (page: string) 
 
       {/* Stats */}
       {tours.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {[
             { icon: "Route",       label: "Всего туров",    value: tours.length,                                             color: "text-neon-purple" },
             { icon: "CheckCircle", label: "Завершено",      value: tours.filter(t => t.status === "completed").length,        color: "text-neon-green" },
             { icon: "TrendingUp",  label: "Доход (план)",   value: fmt(tours.reduce((s, t) => s + t.totalIncomePlan, 0)) + " ₽", color: "text-neon-cyan" },
             { icon: "BarChart3",   label: "Прибыль (план)", value: fmt(tours.reduce((s, t) => s + t.finance.profitPlan, 0)) + " ₽", color: "text-neon-pink" },
           ].map((s, i) => (
-            <div key={i} className="glass rounded-2xl p-4 text-center">
-              <Icon name={s.icon} size={18} className={`${s.color} mx-auto mb-1.5`} />
-              <div className={`font-oswald font-bold text-xl ${s.color}`}>{s.value}</div>
-              <div className="text-white/35 text-xs mt-0.5">{s.label}</div>
+            <div key={i} className="glass rounded-lg px-3 py-2">
+              <div className="flex items-center gap-1.5 mb-0.5">
+                <Icon name={s.icon} size={12} className={s.color} />
+                <span className="text-white/45 text-[11px]">{s.label}</span>
+              </div>
+              <p className={`font-oswald font-bold text-base ${s.color} leading-tight`}>{s.value}</p>
             </div>
           ))}
         </div>

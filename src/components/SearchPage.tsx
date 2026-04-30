@@ -168,42 +168,48 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
     .sort((a, b) => sortBy === "rating" ? b.rating - a.rating : b.capacity - a.capacity);
 
   return (
-    <div className="min-h-screen pt-20">
-      <div className="relative py-16 overflow-hidden">
-        <div className="absolute inset-0 gradient-bg-purple opacity-40" />
+    <div className="min-h-screen pt-2">
+      <div className="relative py-4 overflow-hidden">
+        <div className="absolute inset-0 gradient-bg-purple opacity-25" />
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
         <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-start justify-between flex-wrap gap-4">
-            <div>
-              <Badge className="bg-neon-purple/20 text-neon-purple border-neon-purple/40 mb-4">Поиск площадок</Badge>
-              <h1 className="font-oswald font-bold text-5xl sm:text-6xl text-white uppercase mb-2">
-                Найдите <span className="gradient-text">идеальную</span>
-              </h1>
-              <h1 className="font-oswald font-bold text-5xl sm:text-6xl text-white/40 uppercase mb-6">Площадку</h1>
-              <div className="flex gap-3 max-w-2xl">
-                <div className="flex-1 flex items-center gap-3 glass-strong rounded-xl px-4 py-3 border border-white/10">
-                  <Icon name="Search" size={18} className="text-white/40" />
-                  <input type="text" placeholder="Название или город..."
-                    value={search} onChange={e => setSearch(e.target.value)}
-                    className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm" />
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 rounded-xl bg-neon-purple/15 border border-neon-purple/25 flex items-center justify-center shrink-0">
+                <Icon name="MapPin" size={20} className="text-neon-purple" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="font-oswald font-bold text-2xl text-white uppercase leading-none">
+                    Найдите <span className="gradient-text">площадку</span>
+                  </h1>
+                  <Badge className="bg-neon-purple/15 text-neon-purple border-neon-purple/30 text-[10px] py-0 px-2">Каталог</Badge>
                 </div>
-                <button onClick={loadVenues} className="px-6 py-3 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity">
-                  Найти
-                </button>
+                <p className="text-white/45 text-xs mt-0.5">Концертные залы, клубы и арены по всей стране</p>
               </div>
             </div>
             {user?.role === "venue" && (
               <button onClick={() => setShowSetup(true)}
-                className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-neon-cyan to-neon-green text-background font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity mt-4">
-                <Icon name="Plus" size={18} />
-                Добавить площадку
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-cyan to-neon-green text-background font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm">
+                <Icon name="Plus" size={16} />Добавить площадку
               </button>
             )}
+          </div>
+          <div className="flex gap-2 mt-3 max-w-2xl">
+            <div className="flex-1 flex items-center gap-2 glass-strong rounded-lg px-3 py-2 border border-white/10">
+              <Icon name="Search" size={16} className="text-white/40" />
+              <input type="text" placeholder="Название или город..."
+                value={search} onChange={e => setSearch(e.target.value)}
+                className="flex-1 bg-transparent text-white placeholder:text-white/30 outline-none text-sm" />
+            </div>
+            <button onClick={loadVenues} className="px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm">
+              Найти
+            </button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-3 pb-24">
         <div className="flex flex-col lg:flex-row gap-8">
           <aside className="lg:w-64 shrink-0">
             <div className="glass rounded-2xl p-5 sticky top-24">
