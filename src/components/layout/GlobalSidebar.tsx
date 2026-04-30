@@ -16,7 +16,36 @@ interface NavItem {
   page: string;       // page to navigate
   dashTab?: string;   // if set — navigate to dashboard:dashTab
   isSection?: boolean;
+  color?: "purple" | "cyan" | "green" | "pink";
 }
+
+// Палитра цветов для активного пункта (полные классы — чтобы Tailwind их не вырезал)
+const COLOR_CLASSES: Record<string, { bg: string; shadow: string; iconActive: string; hoverIcon: string }> = {
+  purple: {
+    bg: "bg-gradient-to-r from-neon-purple to-neon-purple/80 text-white",
+    shadow: "shadow-lg shadow-neon-purple/30",
+    iconActive: "text-white",
+    hoverIcon: "group-hover:text-neon-purple",
+  },
+  cyan: {
+    bg: "bg-gradient-to-r from-neon-cyan to-neon-cyan/80 text-background",
+    shadow: "shadow-lg shadow-neon-cyan/30",
+    iconActive: "text-background",
+    hoverIcon: "group-hover:text-neon-cyan",
+  },
+  green: {
+    bg: "bg-gradient-to-r from-neon-green to-neon-green/80 text-background",
+    shadow: "shadow-lg shadow-neon-green/30",
+    iconActive: "text-background",
+    hoverIcon: "group-hover:text-neon-green",
+  },
+  pink: {
+    bg: "bg-gradient-to-r from-neon-pink to-neon-pink/80 text-white",
+    shadow: "shadow-lg shadow-neon-pink/30",
+    iconActive: "text-white",
+    hoverIcon: "group-hover:text-neon-pink",
+  },
+};
 
 export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: Props) {
   const { user, logout } = useAuth();
@@ -31,36 +60,36 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
 
   // ── Главные страницы ───────────────────────────────────────────────────
   const mainItems: NavItem[] = [
-    { id: "search",    label: "Площадки",    icon: "Search",        page: "search" },
-    ...(!isVenue ? [{ id: "tours", label: "Туры", icon: "Route", page: "tours" }] : []),
-    ...(isOrg ? [{ id: "projects", label: "Проекты", icon: "FolderOpen", page: "projects" }] : []),
-    { id: "chat",      label: "Чат",         icon: "MessageCircle", page: "chat" },
+    { id: "search",    label: "Площадки",    icon: "Search",        page: "search",                                 color: "cyan"   },
+    ...(!isVenue ? [{ id: "tours",    label: "Туры",     icon: "Route",         page: "tours",    color: "purple" as const }] : []),
+    ...(isOrg ? [{ id: "projects", label: "Проекты",  icon: "FolderOpen",    page: "projects", color: "purple" as const }] : []),
+    { id: "chat",      label: "Чат",         icon: "MessageCircle", page: "chat",                                   color: "green"  },
   ];
 
   // ── Личный кабинет ──────────────────────────────────────────────────────
   const dashOrgItems: NavItem[] = [
-    { id: "tours",         label: "Мои туры",     icon: "Route",        page: "dashboard", dashTab: "tours" },
-    { id: "history",       label: "История",       icon: "Clock",        page: "dashboard", dashTab: "history" },
-    { id: "documents",     label: "Документы",     icon: "FileArchive",  page: "dashboard", dashTab: "documents" },
-    { id: "signing",       label: "Подписание",    icon: "PenLine",      page: "dashboard", dashTab: "signing" },
-    { id: "notifications", label: "Уведомления",   icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount },
-    { id: "company",       label: "Компания",      icon: "Building2",    page: "dashboard", dashTab: "company" },
-    { id: "crm",           label: "CRM",           icon: "Kanban",       page: "crm" },
-    { id: "ai_help",       label: "Помощь",        icon: "Sparkles",     page: "dashboard", dashTab: "ai_help" },
-    { id: "ai_lawyer",     label: "ИИ-юрист",      icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer" },
+    { id: "tours",         label: "Мои туры",     icon: "Route",        page: "dashboard", dashTab: "tours",         color: "purple" },
+    { id: "history",       label: "История",      icon: "Clock",        page: "dashboard", dashTab: "history",       color: "cyan"   },
+    { id: "documents",     label: "Документы",    icon: "FileArchive",  page: "dashboard", dashTab: "documents",     color: "cyan"   },
+    { id: "signing",       label: "Подписание",   icon: "PenLine",      page: "dashboard", dashTab: "signing",       color: "purple" },
+    { id: "notifications", label: "Уведомления",  icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount, color: "pink" },
+    { id: "company",       label: "Компания",     icon: "Building2",    page: "dashboard", dashTab: "company",       color: "green"  },
+    { id: "crm",           label: "CRM",          icon: "Kanban",       page: "crm",                                  color: "purple" },
+    { id: "ai_help",       label: "Помощь",       icon: "Sparkles",     page: "dashboard", dashTab: "ai_help",       color: "pink"   },
+    { id: "ai_lawyer",     label: "ИИ-юрист",     icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer",     color: "cyan"   },
   ];
 
   const dashVenueItems: NavItem[] = [
-    { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues" },
-    { id: "vprojects",     label: "Проекты",        icon: "FolderOpen",   page: "dashboard", dashTab: "projects" },
-    { id: "concerts",      label: "Мои концерты",   icon: "Music",        page: "dashboard", dashTab: "concerts" },
-    { id: "documents",     label: "Документы",      icon: "FileArchive",  page: "dashboard", dashTab: "documents" },
-    { id: "signing",       label: "Подписание",     icon: "PenLine",      page: "dashboard", dashTab: "signing" },
-    { id: "venue_crm",     label: "CRM",            icon: "Kanban",       page: "dashboard", dashTab: "venue_crm" },
-    { id: "notifications", label: "Уведомления",    icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount },
-    { id: "company",       label: "Компания",       icon: "Users",        page: "dashboard", dashTab: "company" },
-    { id: "ai_help",       label: "Помощь",         icon: "Sparkles",     page: "dashboard", dashTab: "ai_help" },
-    { id: "ai_lawyer",     label: "ИИ-юрист",       icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer" },
+    { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues",        color: "cyan"   },
+    { id: "vprojects",     label: "Проекты",       icon: "FolderOpen",   page: "dashboard", dashTab: "projects",      color: "purple" },
+    { id: "concerts",      label: "Мои концерты",  icon: "Music",        page: "dashboard", dashTab: "concerts",      color: "pink"   },
+    { id: "documents",     label: "Документы",     icon: "FileArchive",  page: "dashboard", dashTab: "documents",     color: "cyan"   },
+    { id: "signing",       label: "Подписание",    icon: "PenLine",      page: "dashboard", dashTab: "signing",       color: "purple" },
+    { id: "venue_crm",     label: "CRM",           icon: "Kanban",       page: "dashboard", dashTab: "venue_crm",     color: "purple" },
+    { id: "notifications", label: "Уведомления",   icon: "Bell",         page: "dashboard", dashTab: "notifications", badge: () => unreadCount, color: "pink" },
+    { id: "company",       label: "Компания",      icon: "Users",        page: "dashboard", dashTab: "company",       color: "green"  },
+    { id: "ai_help",       label: "Помощь",        icon: "Sparkles",     page: "dashboard", dashTab: "ai_help",       color: "pink"   },
+    { id: "ai_lawyer",     label: "ИИ-юрист",      icon: "Scale",        page: "dashboard", dashTab: "ai_lawyer",     color: "cyan"   },
   ];
 
   const dashItems = isVenue ? dashVenueItems : dashOrgItems;
@@ -107,17 +136,18 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
         <p className="text-white/45 text-[11px] uppercase tracking-wider px-3 pt-1 pb-1 font-bold">Платформа</p>
         {mainItems.map(item => {
           const active = activePage === item.page;
+          const c = COLOR_CLASSES[item.color || "purple"];
           return (
             <button
               key={item.id}
               onClick={() => handleClick(item)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
+              className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
                 active
-                  ? "bg-gradient-to-r from-neon-purple to-neon-purple/80 text-white shadow-lg shadow-neon-purple/30"
+                  ? `${c.bg} ${c.shadow}`
                   : "text-white/80 hover:text-white hover:bg-white/8"
               }`}
             >
-              <Icon name={item.icon as never} size={18} className={active ? "text-white" : "text-white/65"} />
+              <Icon name={item.icon as never} size={18} className={active ? c.iconActive : `text-white/65 ${c.hoverIcon}`} />
               <span className="flex-1">{item.label}</span>
             </button>
           );
@@ -130,17 +160,18 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
         {dashItems.map(item => {
           const active = isItemActive(item);
           const badge = item.badge ? item.badge() : 0;
+          const c = COLOR_CLASSES[item.color || "purple"];
           return (
             <button
               key={item.id}
               onClick={() => handleClick(item)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
+              className={`group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left ${
                 active
-                  ? "bg-gradient-to-r from-neon-purple to-neon-purple/80 text-white shadow-lg shadow-neon-purple/30"
+                  ? `${c.bg} ${c.shadow}`
                   : "text-white/80 hover:text-white hover:bg-white/8"
               }`}
             >
-              <Icon name={item.icon as never} size={18} className={active ? "text-white" : "text-white/65"} />
+              <Icon name={item.icon as never} size={18} className={active ? c.iconActive : `text-white/65 ${c.hoverIcon}`} />
               <span className="flex-1">{item.label}</span>
               {badge > 0 && (
                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
