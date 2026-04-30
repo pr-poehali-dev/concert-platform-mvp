@@ -18,7 +18,7 @@ export default function LogoSection({
 }: Props) {
   return (
     <div className="glass rounded-2xl p-6 space-y-5">
-      <h3 className="font-oswald font-semibold text-white text-lg mb-1">Логотип компании</h3>
+      <h3 className="font-oswald font-bold text-white text-xl mb-1">Логотип компании</h3>
       <p className="text-white/65 text-sm">Логотип отображается в личном кабинете, экспортируемых отчётах и карточке площадки.</p>
 
       <div className="flex items-start gap-6">

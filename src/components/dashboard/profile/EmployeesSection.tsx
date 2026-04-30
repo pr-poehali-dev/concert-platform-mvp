@@ -170,7 +170,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="font-oswald font-semibold text-white text-lg">Сотрудники компании</h3>
+          <h3 className="font-oswald font-bold text-white text-xl">Сотрудники компании</h3>
           <p className="text-white/65 text-xs mt-0.5">Сотрудники могут входить в личный кабинет и работать от имени компании</p>
         </div>
         <button onClick={() => setShowAddEmp(true)}
@@ -182,7 +182,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
       {/* Форма добавления */}
       {showAddEmp && (
         <div className="glass rounded-2xl p-5 border border-neon-purple/20 space-y-4">
-          <h4 className="font-oswald font-semibold text-white text-sm">Новый сотрудник</h4>
+          <h4 className="font-oswald font-bold text-white text-base">Новый сотрудник</h4>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-white/65 mb-1 block">Имя</label>

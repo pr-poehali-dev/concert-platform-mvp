@@ -219,7 +219,7 @@ export default function DashboardCompanyTab() {
             }
           </div>
           <div>
-            <p className="font-oswald font-semibold text-white text-sm">{chatTitle}</p>
+            <p className="font-oswald font-bold text-white text-base">{chatTitle}</p>
             <p className="text-white/65 text-xs">{chatSubtitle}</p>
           </div>
         </div>

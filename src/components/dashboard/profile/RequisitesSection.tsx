@@ -31,7 +31,7 @@ export default function RequisitesSection({ reqForm, reqSaving, reqSaved, onReqF
   return (
     <div className="glass rounded-2xl p-6 space-y-4">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="font-oswald font-semibold text-white text-lg">Юридические реквизиты</h3>
+        <h3 className="font-oswald font-bold text-white text-xl">Юридические реквизиты</h3>
         <button onClick={onSave} disabled={reqSaving}
           className="flex items-center gap-2 px-4 py-2 bg-neon-purple text-white rounded-xl text-sm hover:opacity-90 disabled:opacity-50 transition-opacity">
           {reqSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : reqSaved ? <Icon name="Check" size={14} /> : <Icon name="Save" size={14} />}
