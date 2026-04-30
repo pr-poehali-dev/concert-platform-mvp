@@ -7,26 +7,11 @@ import {
 } from "./mail/mailTypes";
 import MailAccountModal from "./mail/MailAccountModal";
 import MailComposeModal from "./mail/MailComposeModal";
-import MailListItemRow from "./mail/MailListItem";
+import MailFolderSidebar from "./mail/MailFolderSidebar";
+import MailMessageList from "./mail/MailMessageList";
+import MailMessageView from "./mail/MailMessageView";
 
-const FOLDER_LABELS: Record<string, { label: string; icon: string; color: string }> = {
-  INBOX:    { label: "Входящие",   icon: "Inbox",       color: "text-neon-purple" },
-  Sent:     { label: "Отправленные", icon: "Send",     color: "text-neon-cyan" },
-  Drafts:   { label: "Черновики",  icon: "FileEdit",    color: "text-white/65" },
-  Spam:     { label: "Спам",       icon: "ShieldAlert", color: "text-neon-pink" },
-  Trash:    { label: "Корзина",    icon: "Trash2",      color: "text-white/55" },
-};
-
-function folderInfo(name: string) {
-  // Совпадение по разным регистрам и стандартным названиям
-  const upper = name.toUpperCase();
-  if (upper === "INBOX")                   return FOLDER_LABELS.INBOX;
-  if (upper.includes("SENT"))              return FOLDER_LABELS.Sent;
-  if (upper.includes("DRAFT"))             return FOLDER_LABELS.Drafts;
-  if (upper.includes("SPAM") || upper.includes("JUNK")) return FOLDER_LABELS.Spam;
-  if (upper.includes("TRASH") || upper.includes("DELETE")) return FOLDER_LABELS.Trash;
-  return { label: name, icon: "Folder", color: "text-white/65" };
-}
+const PAGE_SIZE = 40;
 
 export default function MailPage() {
   const { user } = useAuth();
@@ -53,7 +38,6 @@ export default function MailPage() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [dragUids, setDragUids] = useState<string[]>([]);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
-  const PAGE_SIZE = 40;
 
   const activeAccount = accounts.find(a => a.id === activeAccountId);
 
@@ -228,7 +212,6 @@ export default function MailPage() {
 
   const swipeArchive = async (uid: string) => {
     if (!activeAccountId) return;
-    // Ищем папку Archive / Архив / All Mail, иначе Trash
     const target = folders.find(f => /archive|архив|all.?mail/i.test(f)) || "Trash";
     await fetch(`${MAIL_URL}?action=move`, {
       method: "POST",
@@ -270,6 +253,44 @@ export default function MailPage() {
     loadAccounts();
   };
 
+  const handleDropFolder = async (targetFolder: string, uids: string[]) => {
+    if (!activeAccountId) return;
+    setBulkLoading(true);
+    try {
+      await fetch(`${MAIL_URL}?action=move`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accountId: activeAccountId,
+          folder: activeFolder,
+          target: targetFolder,
+          uids,
+        }),
+      });
+      const moved = new Set(uids);
+      setMessages(prev => prev.filter(m => !moved.has(m.uid)));
+      setSelectedUids(prev => { const n = new Set(prev); uids.forEach(u => n.delete(u)); return n; });
+      if (openMail && moved.has(openMail.uid)) setOpenMail(null);
+    } finally {
+      setBulkLoading(false);
+      setDragUids([]);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, uid: string, subject: string) => {
+    const uids = selectedUids.size > 0 && selectedUids.has(uid)
+      ? Array.from(selectedUids)
+      : [uid];
+    setDragUids(uids);
+    const ghost = document.createElement("div");
+    ghost.style.cssText = "position:fixed;top:-999px;left:-999px;padding:6px 10px;background:#6c3bff;color:#fff;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;";
+    ghost.textContent = uids.length > 1 ? `${uids.length} писем` : (subject || "(без темы)").slice(0, 32);
+    document.body.appendChild(ghost);
+    e.dataTransfer.setDragImage(ghost, 0, 0);
+    setTimeout(() => document.body.removeChild(ghost), 0);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
   useEffect(() => { loadAccounts(); }, [loadAccounts]);
   useEffect(() => {
     if (activeAccountId) {
@@ -290,7 +311,7 @@ export default function MailPage() {
     return () => clearTimeout(t);
   }, [searchInput]);
 
-  // ─── Состояние: нет аккаунтов ───
+  // ─── Состояние: загрузка ───
   if (loadingAccounts) {
     return (
       <div className="min-h-screen pt-2 flex items-center justify-center">
@@ -299,6 +320,7 @@ export default function MailPage() {
     );
   }
 
+  // ─── Состояние: нет аккаунтов ───
   if (accounts.length === 0) {
     return (
       <div className="min-h-screen pt-2 pb-20 max-w-2xl mx-auto px-4">
@@ -374,338 +396,65 @@ export default function MailPage() {
         </div>
 
         <div className="grid grid-cols-12 gap-3 h-[calc(100vh-9rem)]">
-          {/* Папки */}
-          <aside className="col-span-12 sm:col-span-3 lg:col-span-2 glass rounded-xl border border-white/10 p-2 overflow-y-auto scrollbar-thin">
-            <p className="text-white/45 text-[10px] uppercase tracking-wider px-2 py-1 font-bold">Папки</p>
-            {folders.map(f => {
-              const info = folderInfo(f);
-              const active = activeFolder === f;
-              const isOver = dragOverFolder === f && f !== activeFolder;
-              return (
-                <button
-                  key={f}
-                  onClick={() => { setActiveFolder(f); setOpenMail(null); }}
-                  onDragOver={(e) => {
-                    if (dragUids.length === 0 || f === activeFolder) return;
-                    e.preventDefault();
-                    setDragOverFolder(f);
-                  }}
-                  onDragLeave={() => setDragOverFolder(null)}
-                  onDrop={async (e) => {
-                    e.preventDefault();
-                    setDragOverFolder(null);
-                    if (dragUids.length === 0 || f === activeFolder || !activeAccountId) return;
-                    setBulkLoading(true);
-                    try {
-                      await fetch(`${MAIL_URL}?action=move`, {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          accountId: activeAccountId,
-                          folder: activeFolder,
-                          target: f,
-                          uids: dragUids,
-                        }),
-                      });
-                      const moved = new Set(dragUids);
-                      setMessages(prev => prev.filter(m => !moved.has(m.uid)));
-                      setSelectedUids(prev => { const n = new Set(prev); dragUids.forEach(u => n.delete(u)); return n; });
-                      if (openMail && moved.has(openMail.uid)) setOpenMail(null);
-                    } finally {
-                      setBulkLoading(false);
-                      setDragUids([]);
-                    }
-                  }}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs transition-all border ${
-                    isOver
-                      ? "bg-neon-cyan/20 text-white border-neon-cyan/50 scale-[1.02]"
-                      : active
-                        ? "bg-neon-purple/20 text-white border-neon-purple/30"
-                        : "text-white/65 hover:text-white hover:bg-white/5 border-transparent"
-                  }`}
-                >
-                  <Icon name={info.icon as never} size={14} className={isOver ? "text-neon-cyan" : active ? "text-neon-purple" : info.color} />
-                  <span className="flex-1 text-left truncate">{info.label}</span>
-                  {isOver && (
-                    <span className="text-[10px] text-neon-cyan font-bold shrink-0">
-                      {dragUids.length}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-            {/* Подсказка при перетаскивании */}
-            {dragUids.length > 0 && (
-              <p className="text-white/35 text-[10px] text-center mt-2 px-1">
-                Перетащи {dragUids.length > 1 ? `${dragUids.length} письма` : "письмо"} в папку
-              </p>
-            )}
-          </aside>
+          <MailFolderSidebar
+            folders={folders}
+            activeFolder={activeFolder}
+            dragUids={dragUids}
+            dragOverFolder={dragOverFolder}
+            activeAccountId={activeAccountId}
+            onSelectFolder={(f) => { setActiveFolder(f); setOpenMail(null); }}
+            onDragOverFolder={setDragOverFolder}
+            onDropFolder={handleDropFolder}
+            onDragEnd={() => setDragUids([])}
+          />
 
-          {/* Список писем */}
-          <section
-            className="col-span-12 sm:col-span-9 lg:col-span-4 glass rounded-xl border border-white/10 overflow-y-auto scrollbar-thin flex flex-col"
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              if (hasMore && !loadingMore && (el.scrollHeight - el.scrollTop - el.clientHeight < 200)) {
-                loadMore();
-              }
+          <MailMessageList
+            messages={messages}
+            openMail={openMail}
+            loadingList={loadingList}
+            loadingMore={loadingMore}
+            hasMore={hasMore}
+            totalCount={totalCount}
+            searchQuery={searchQuery}
+            searchInput={searchInput}
+            filterUnread={filterUnread}
+            filterAttach={filterAttach}
+            selectedUids={selectedUids}
+            bulkLoading={bulkLoading}
+            dragUids={dragUids}
+            activeFolder={activeFolder}
+            onScrollLoad={loadMore}
+            onLoadMore={loadMore}
+            onSearchInput={setSearchInput}
+            onClearSearch={() => { setSearchInput(""); setSearchQuery(""); }}
+            onToggleFilterUnread={() => setFilterUnread(v => !v)}
+            onToggleFilterAttach={() => setFilterAttach(v => !v)}
+            onSelectAllVisible={selectAllVisible}
+            onBulkMarkRead={bulkMarkRead}
+            onBulkMove={bulkMove}
+            onBulkDelete={bulkDelete}
+            onClearSelection={() => setSelectedUids(new Set())}
+            onOpenMessage={openMessage}
+            onToggleSelect={toggleSelect}
+            onSwipeDelete={swipeDelete}
+            onSwipeArchive={swipeArchive}
+            onDragStart={handleDragStart}
+            onDragEnd={() => setDragUids([])}
+          />
+
+          <MailMessageView
+            openMail={openMail}
+            loadingMail={loadingMail}
+            onReply={() => {
+              if (!openMail) return;
+              setComposeInitial({
+                to: openMail.fromEmail,
+                subject: openMail.subject.startsWith("Re:") ? openMail.subject : `Re: ${openMail.subject}`,
+                text: `\n\n--- Исходное письмо ---\nОт: ${openMail.fromName} <${openMail.fromEmail}>\n\n${openMail.text}`,
+              });
+              setShowCompose(true);
             }}
-          >
-            {/* Поиск + фильтры + массовые действия */}
-            <div className="sticky top-0 bg-[var(--glass-strong-bg,#13131f)]/85 backdrop-blur-md border-b border-white/8 px-2 py-2 z-10 space-y-2">
-              {selectedUids.size > 0 ? (
-                /* Панель массовых действий */
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-white/85 text-xs font-bold px-1">
-                    Выбрано: {selectedUids.size}
-                  </span>
-                  <button
-                    onClick={() => bulkMarkRead(true)}
-                    disabled={bulkLoading}
-                    title="Прочитано"
-                    className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-white/75 hover:text-white text-[11px] flex items-center gap-1 disabled:opacity-50"
-                  >
-                    <Icon name="MailCheck" size={12} /> Прочит.
-                  </button>
-                  <button
-                    onClick={() => bulkMarkRead(false)}
-                    disabled={bulkLoading}
-                    title="Непрочитано"
-                    className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-white/75 hover:text-white text-[11px] flex items-center gap-1 disabled:opacity-50"
-                  >
-                    <Icon name="Mail" size={12} /> Непрочит.
-                  </button>
-                  {activeFolder.toUpperCase() !== "TRASH" && (
-                    <button
-                      onClick={() => bulkMove("Trash")}
-                      disabled={bulkLoading}
-                      title="В корзину"
-                      className="px-2 py-1 bg-white/5 hover:bg-white/10 rounded text-white/75 hover:text-white text-[11px] flex items-center gap-1 disabled:opacity-50"
-                    >
-                      <Icon name="Archive" size={12} /> В корзину
-                    </button>
-                  )}
-                  <button
-                    onClick={bulkDelete}
-                    disabled={bulkLoading}
-                    className="px-2 py-1 bg-neon-pink/15 hover:bg-neon-pink/25 rounded text-neon-pink text-[11px] flex items-center gap-1 disabled:opacity-50"
-                  >
-                    <Icon name="Trash2" size={12} /> Удалить
-                  </button>
-                  <button
-                    onClick={() => setSelectedUids(new Set())}
-                    className="ml-auto text-white/55 hover:text-white text-[11px]"
-                  >
-                    Отмена
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 px-2 py-1.5 bg-white/5 rounded-lg border border-white/10">
-                    <Icon name="Search" size={14} className="text-white/45 shrink-0" />
-                    <input
-                      type="text"
-                      value={searchInput}
-                      onChange={e => setSearchInput(e.target.value)}
-                      placeholder={`Поиск ${searchQuery ? "..." : "по теме, отправителю, тексту"}`}
-                      className="flex-1 bg-transparent text-white text-xs outline-none placeholder:text-white/30 min-w-0"
-                    />
-                    {searchInput && (
-                      <button
-                        onClick={() => { setSearchInput(""); setSearchQuery(""); }}
-                        className="text-white/45 hover:text-white shrink-0"
-                      >
-                        <Icon name="X" size={12} />
-                      </button>
-                    )}
-                  </div>
-                  {/* Фильтры-чипы */}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <button
-                      onClick={() => setFilterUnread(v => !v)}
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
-                        filterUnread
-                          ? "bg-neon-purple/20 text-neon-purple border-neon-purple/40"
-                          : "bg-white/5 text-white/55 border-white/10 hover:text-white"
-                      }`}
-                    >
-                      <Icon name="Mail" size={10} className="inline mr-1" />
-                      Непрочитанные
-                    </button>
-                    <button
-                      onClick={() => setFilterAttach(v => !v)}
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-semibold border transition-all ${
-                        filterAttach
-                          ? "bg-neon-cyan/20 text-neon-cyan border-neon-cyan/40"
-                          : "bg-white/5 text-white/55 border-white/10 hover:text-white"
-                      }`}
-                    >
-                      <Icon name="Paperclip" size={10} className="inline mr-1" />
-                      С вложениями
-                    </button>
-                    {messages.length > 0 && (
-                      <button
-                        onClick={selectAllVisible}
-                        className="ml-auto text-white/55 hover:text-white text-[11px] flex items-center gap-1"
-                      >
-                        <Icon name="CheckSquare" size={11} /> Выбрать все
-                      </button>
-                    )}
-                  </div>
-                  {(searchQuery || filterUnread || filterAttach) && (
-                    <p className="text-white/40 text-[10px] px-1">
-                      Найдено: {totalCount} {totalCount === 1 ? "письмо" : totalCount < 5 ? "письма" : "писем"}
-                    </p>
-                  )}
-                </>
-              )}
-            </div>
-
-            {loadingList ? (
-              <div className="flex justify-center py-10">
-                <Icon name="Loader2" size={20} className="text-white/40 animate-spin" />
-              </div>
-            ) : messages.length === 0 ? (
-              <div className="text-center py-16 text-white/40 text-sm">
-                <Icon name="MailX" size={28} className="mx-auto mb-2 text-white/25" />
-                {searchQuery ? "Ничего не найдено" : "Нет писем"}
-              </div>
-            ) : (
-              <div className="divide-y divide-white/5">
-                {messages.map(m => (
-                  <MailListItemRow
-                    key={m.uid}
-                    m={m}
-                    checked={selectedUids.has(m.uid)}
-                    isDragging={dragUids.includes(m.uid) && dragUids.length > 0}
-                    isOpen={openMail?.uid === m.uid}
-                    hasSelection={selectedUids.size > 0}
-                    onOpen={() => openMessage(m.uid)}
-                    onToggleSelect={() => toggleSelect(m.uid)}
-                    onDelete={() => swipeDelete(m.uid)}
-                    onArchive={() => swipeArchive(m.uid)}
-                    onDragStart={(e) => {
-                      const uids = selectedUids.size > 0 && selectedUids.has(m.uid)
-                        ? Array.from(selectedUids)
-                        : [m.uid];
-                      setDragUids(uids);
-                      const ghost = document.createElement("div");
-                      ghost.style.cssText = "position:fixed;top:-999px;left:-999px;padding:6px 10px;background:#6c3bff;color:#fff;border-radius:8px;font-size:12px;font-weight:600;white-space:nowrap;pointer-events:none;";
-                      ghost.textContent = uids.length > 1 ? `${uids.length} писем` : (m.subject || "(без темы)").slice(0, 32);
-                      document.body.appendChild(ghost);
-                      e.dataTransfer.setDragImage(ghost, 0, 0);
-                      setTimeout(() => document.body.removeChild(ghost), 0);
-                      e.dataTransfer.effectAllowed = "move";
-                    }}
-                    onDragEnd={() => setDragUids([])}
-                  />
-                ))}
-                {/* Подгрузка следующей страницы */}
-                {hasMore && (
-                  <div className="px-3 py-3 text-center">
-                    <button
-                      onClick={loadMore}
-                      disabled={loadingMore}
-                      className="text-neon-purple hover:text-white text-xs font-semibold flex items-center gap-1.5 mx-auto disabled:opacity-50"
-                    >
-                      {loadingMore ? (
-                        <><Icon name="Loader2" size={12} className="animate-spin" /> Загрузка...</>
-                      ) : (
-                        <><Icon name="ChevronDown" size={12} /> Показать ещё</>
-                      )}
-                    </button>
-                  </div>
-                )}
-                {!hasMore && messages.length >= PAGE_SIZE && (
-                  <p className="text-center text-white/30 text-[10px] py-3">Это все письма ({totalCount})</p>
-                )}
-              </div>
-            )}
-          </section>
-
-          {/* Просмотр письма */}
-          <article className="hidden lg:flex lg:col-span-6 glass rounded-xl border border-white/10 overflow-hidden flex-col">
-            {loadingMail ? (
-              <div className="flex-1 flex items-center justify-center">
-                <Icon name="Loader2" size={20} className="text-white/40 animate-spin" />
-              </div>
-            ) : !openMail ? (
-              <div className="flex-1 flex flex-col items-center justify-center text-center text-white/40 px-6">
-                <Icon name="MailOpen" size={32} className="mb-3 text-white/25" />
-                <p className="text-sm">Выберите письмо</p>
-              </div>
-            ) : (
-              <>
-                <div className="p-4 border-b border-white/10">
-                  <h2 className="font-oswald font-bold text-xl text-white mb-2">{openMail.subject || "(без темы)"}</h2>
-                  <div className="flex items-start gap-2 text-xs">
-                    <span className="text-white/45 w-12 shrink-0">От:</span>
-                    <span className="text-white/85">
-                      {openMail.fromName ? `${openMail.fromName} ` : ""}
-                      <span className="text-white/55">&lt;{openMail.fromEmail}&gt;</span>
-                    </span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs mt-1">
-                    <span className="text-white/45 w-12 shrink-0">Кому:</span>
-                    <span className="text-white/75 truncate">{openMail.to}</span>
-                  </div>
-                  <div className="flex items-start gap-2 text-xs mt-1">
-                    <span className="text-white/45 w-12 shrink-0">Дата:</span>
-                    <span className="text-white/75">{openMail.date ? new Date(openMail.date).toLocaleString("ru") : ""}</span>
-                  </div>
-                  <div className="flex items-center gap-2 mt-3">
-                    <button
-                      onClick={() => {
-                        setComposeInitial({
-                          to: openMail.fromEmail,
-                          subject: openMail.subject.startsWith("Re:") ? openMail.subject : `Re: ${openMail.subject}`,
-                          text: `\n\n--- Исходное письмо ---\nОт: ${openMail.fromName} <${openMail.fromEmail}>\n\n${openMail.text}`,
-                        });
-                        setShowCompose(true);
-                      }}
-                      className="px-3 py-1.5 bg-neon-purple/15 hover:bg-neon-purple/25 text-neon-purple rounded-lg text-xs font-semibold flex items-center gap-1.5"
-                    >
-                      <Icon name="Reply" size={12} /> Ответить
-                    </button>
-                    {openMail.attachments.length > 0 && (
-                      <span className="text-white/55 text-xs flex items-center gap-1">
-                        <Icon name="Paperclip" size={12} />
-                        {openMail.attachments.length} вложен.
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="flex-1 overflow-y-auto scrollbar-thin p-4">
-                  {openMail.html ? (
-                    <iframe
-                      srcDoc={openMail.html}
-                      sandbox="allow-same-origin"
-                      className="w-full min-h-[400px] bg-white rounded-lg"
-                      title="email"
-                    />
-                  ) : (
-                    <pre className="whitespace-pre-wrap text-white/85 text-sm font-sans break-words">
-                      {openMail.text || "(пусто)"}
-                    </pre>
-                  )}
-
-                  {openMail.attachments.length > 0 && (
-                    <div className="mt-4 space-y-1">
-                      {openMail.attachments.map((a, i) => (
-                        <div key={i} className="flex items-center gap-2 px-3 py-2 bg-white/5 rounded-lg text-xs">
-                          <Icon name="Paperclip" size={12} className="text-white/55" />
-                          <span className="text-white/85 truncate flex-1">{a.name}</span>
-                          <span className="text-white/45">{Math.round(a.size / 1024)} КБ</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </article>
+          />
         </div>
       </div>
 
