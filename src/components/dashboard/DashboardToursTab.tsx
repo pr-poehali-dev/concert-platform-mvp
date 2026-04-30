@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL, STATUS_CONFIG, fmt, type Project } from "@/hooks/useProjects";
 import ProjectDetailPage from "@/components/projects/ProjectDetailPage";
 import CreateProjectModal from "@/components/projects/CreateProjectModal";
+import TabHeader from "@/components/dashboard/TabHeader";
 
 interface DashboardToursTabProps {
   activeTab: "tours" | "history";
@@ -45,7 +46,12 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
   if (activeTab === "history") {
     return (
       <div className="animate-fade-in">
-        <h2 className="font-oswald font-bold text-2xl text-white mb-6">История взаимодействий</h2>
+        <TabHeader
+          icon="Clock"
+          title="История взаимодействий"
+          description="Прошлые проекты и архив"
+          iconColor="neon-cyan"
+        />
         {loading ? (
           <div className="space-y-2">{[1,2,3].map(i => <div key={i} className="glass rounded-2xl h-14 animate-pulse" />)}</div>
         ) : tours.length === 0 ? (
@@ -94,23 +100,28 @@ export default function DashboardToursTab({ activeTab, onNavigate }: DashboardTo
   // ── Мои туры ──────────────────────────────────────────────────────────────
   return (
     <div className="animate-fade-in space-y-4">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="font-oswald font-bold text-2xl text-white">Мои туры</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
-            <Icon name="Plus" size={16} />Новый тур
-          </button>
-          {onNavigate && (
+      <TabHeader
+        icon="Route"
+        title="Мои туры"
+        description="Управление турами и концертами"
+        iconColor="neon-purple"
+        actions={
+          <>
             <button
-              onClick={() => onNavigate("projects")}
-              className="flex items-center gap-2 px-4 py-2.5 glass text-white/60 hover:text-white rounded-xl border border-white/10 hover:border-white/20 transition-all text-sm">
-              <Icon name="FolderOpen" size={16} />Все проекты
+              onClick={() => setShowCreate(true)}
+              className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
+              <Icon name="Plus" size={16} />Новый тур
             </button>
-          )}
-        </div>
-      </div>
+            {onNavigate && (
+              <button
+                onClick={() => onNavigate("projects")}
+                className="flex items-center gap-2 px-4 py-2.5 glass text-white/60 hover:text-white rounded-xl border border-white/10 hover:border-white/20 transition-all text-sm">
+                <Icon name="FolderOpen" size={16} />Все проекты
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Stats */}
       {tours.length > 0 && (

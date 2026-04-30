@@ -16,6 +16,7 @@ import DashboardAITab from "@/components/dashboard/DashboardAITab";
 import DashboardAILawyerTab from "@/components/dashboard/DashboardAILawyerTab";
 import CrmPage from "@/pages/CrmPage";
 import ProjectsPage from "@/components/projects/ProjectsPage";
+import { useEmployeePing } from "@/hooks/useEmployeePing";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -33,6 +34,7 @@ interface DashboardPageProps {
 
 export default function DashboardPage({ onNavigate, initialTab }: DashboardPageProps) {
   const { user, logout, updateProfile } = useAuth();
+  useEmployeePing(user?.employeeId, user?.isEmployee);
   const [tab, setTab] = useState(initialTab || (user?.role === "venue" ? "venues" : "tours"));
   const [editMode, setEditMode] = useState(false);
   const [saving, setSaving] = useState(false);

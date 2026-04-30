@@ -39,4 +39,25 @@ export interface Employee {
   roleInCompany: string; avatar: string; avatarColor: string;
   isActive: boolean; createdAt: string;
   accessPermissions: AccessPermissions;
+  lastSeen?: string;
+}
+
+export function formatEmployeeLastSeen(str?: string): { text: string; isOnline: boolean; color: string; dot: string } {
+  if (!str) return { text: "никогда не входил", isOnline: false, color: "text-white/55", dot: "bg-white/25" };
+  const date = new Date(str);
+  if (isNaN(date.getTime())) return { text: "никогда не входил", isOnline: false, color: "text-white/55", dot: "bg-white/25" };
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffMin < 5)  return { text: "в сети", isOnline: true,  color: "text-neon-green", dot: "bg-neon-green" };
+  if (diffMin < 60) return { text: `${diffMin} мин назад`, isOnline: false, color: "text-white/75", dot: "bg-white/40" };
+  if (diffHr < 24)  return { text: `${diffHr} ч назад`,    isOnline: false, color: "text-white/70", dot: "bg-white/30" };
+  if (diffDay < 7)  return { text: `${diffDay} дн назад`,  isOnline: false, color: "text-white/65", dot: "bg-white/25" };
+  return {
+    text: date.toLocaleDateString("ru", { day: "numeric", month: "short" }),
+    isOnline: false,
+    color: "text-white/55",
+    dot: "bg-white/20",
+  };
 }

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
-import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL } from "./types";
+import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL, formatEmployeeLastSeen } from "./types";
 
 interface EditForm { name: string; email: string; roleInCompany: string }
 
@@ -306,7 +306,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-white font-medium text-sm">{emp.name}</span>
+                    <span className="text-white font-bold text-sm">{emp.name}</span>
                     <Badge className="text-xs bg-white/5 text-white/65 border-white/10">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</Badge>
                     {!emp.isActive && <Badge className="text-xs bg-neon-pink/10 text-neon-pink border-neon-pink/20">Заблокирован</Badge>}
                     {deniedCount > 0 && (
@@ -315,7 +315,18 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
                       </Badge>
                     )}
                   </div>
-                  <p className="text-white/65 text-xs">{emp.email}</p>
+                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+                    <p className="text-white/65 text-xs">{emp.email}</p>
+                    {(() => {
+                      const ls = formatEmployeeLastSeen(emp.lastSeen);
+                      return (
+                        <span className="flex items-center gap-1.5 text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full ${ls.dot} ${ls.isOnline ? "animate-pulse" : ""}`} />
+                          <span className={ls.color}>{ls.text}</span>
+                        </span>
+                      );
+                    })()}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
                   <button onClick={() => openEditProfile(emp)} title="Редактировать"

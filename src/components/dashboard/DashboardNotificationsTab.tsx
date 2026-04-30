@@ -1,5 +1,6 @@
 import Icon from "@/components/ui/icon";
 import type { Notification } from "@/context/NotificationsContext";
+import TabHeader from "@/components/dashboard/TabHeader";
 
 interface DashboardNotificationsTabProps {
   notifications: Notification[];
@@ -27,22 +28,22 @@ export default function DashboardNotificationsTab({
 }: DashboardNotificationsTabProps) {
   return (
     <div className="animate-fade-in max-w-2xl">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-3">
-          <h2 className="font-oswald font-bold text-2xl text-white">Уведомления</h2>
-          {unreadCount > 0 && (
-            <span className="px-2 py-0.5 text-xs bg-neon-pink/20 text-neon-pink rounded-lg font-medium border border-neon-pink/20">
-              {unreadCount} новых
-            </span>
-          )}
-        </div>
-        {unreadCount > 0 && (
-          <button onClick={markAllRead}
-            className="flex items-center gap-2 px-4 py-2 glass text-white/70 hover:text-neon-cyan rounded-xl border border-white/10 text-sm transition-colors">
-            <Icon name="CheckCheck" size={14} />Прочитать все
-          </button>
-        )}
-      </div>
+      <TabHeader
+        icon="Bell"
+        title="Уведомления"
+        description="События и обновления по вашим проектам"
+        iconColor="neon-pink"
+        badgeText={unreadCount > 0 ? `${unreadCount} новых` : undefined}
+        badgeClassName="bg-neon-pink/20 text-neon-pink border-neon-pink/20 text-xs"
+        actions={
+          unreadCount > 0 ? (
+            <button onClick={markAllRead}
+              className="flex items-center gap-2 px-4 py-2 glass text-white/70 hover:text-neon-cyan rounded-xl border border-white/10 text-sm transition-colors">
+              <Icon name="CheckCheck" size={14} />Прочитать все
+            </button>
+          ) : undefined
+        }
+      />
 
       {notifications.length === 0 ? (
         <div className="text-center py-20 glass rounded-2xl">

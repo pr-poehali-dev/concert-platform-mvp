@@ -77,6 +77,24 @@
       "expectedStatus": 404,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Ping without id",
+      "method": "POST",
+      "path": "/?action=ping",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Ping non-existing employee",
+      "method": "POST",
+      "path": "/?action=ping",
+      "body": { "id": "00000000-0000-0000-0000-000000000099" },
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }

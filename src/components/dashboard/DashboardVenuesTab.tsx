@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import VenueEditModal, { type VenueData } from "@/components/VenueEditModal";
 import VenueCalendarModal from "@/components/VenueCalendarModal";
+import TabHeader from "@/components/dashboard/TabHeader";
 
 const FALLBACK_IMG = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/2d0113c6-c12e-42b6-9cd4-2141cf50ef4f.jpg";
 
@@ -69,13 +70,18 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue, onRelo
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="font-oswald font-bold text-2xl text-white">Мои площадки</h2>
-        <button onClick={onAddVenue}
-          className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-cyan to-neon-green text-background font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
-          <Icon name="Plus" size={16} />Добавить площадку
-        </button>
-      </div>
+      <TabHeader
+        icon="Building2"
+        title="Мои площадки"
+        description="Управление вашими концертными площадками"
+        iconColor="neon-cyan"
+        actions={
+          <button onClick={onAddVenue}
+            className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-neon-cyan to-neon-green text-background font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
+            <Icon name="Plus" size={16} />Добавить площадку
+          </button>
+        }
+      />
 
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">

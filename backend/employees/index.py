@@ -168,7 +168,7 @@ def send_employee_invite(to_email: str, emp_name: str, company_name: str, passwo
 
 
 def row_to_emp(row) -> dict:
-    # row: id, company_user_id, name, email, role_in_company, avatar, avatar_color, is_active, created_at, access_permissions
+    # row: id, company_user_id, name, email, role_in_company, avatar, avatar_color, is_active, created_at, access_permissions, last_seen
     raw_perms = row[9] if len(row) > 9 else None
     if isinstance(raw_perms, dict):
         perms = raw_perms
@@ -179,6 +179,7 @@ def row_to_emp(row) -> dict:
             perms = DEFAULT_PERMISSIONS.copy()
     else:
         perms = DEFAULT_PERMISSIONS.copy()
+    last_seen = row[10] if len(row) > 10 else None
     return {
         "id": str(row[0]),
         "companyUserId": str(row[1]),
@@ -190,6 +191,7 @@ def row_to_emp(row) -> dict:
         "isActive": row[7],
         "createdAt": str(row[8]),
         "accessPermissions": perms,
+        "lastSeen": str(last_seen) if last_seen else "",
     }
 
 
@@ -211,7 +213,8 @@ def handler(event: dict, context) -> dict:
             cur = conn.cursor()
             cur.execute(
                 f"""SELECT id, company_user_id, name, email, role_in_company,
-                           avatar, avatar_color, is_active, created_at, access_permissions
+                           avatar, avatar_color, is_active, created_at,
+                           access_permissions, last_seen
                     FROM {SCHEMA}.employees WHERE company_user_id = %s
                     ORDER BY created_at""",
                 (cid,)
@@ -220,6 +223,28 @@ def handler(event: dict, context) -> dict:
         finally:
             conn.close()
         return ok({"employees": [row_to_emp(r) for r in rows]})
+
+    # ── POST ping — сотрудник отметил активность ───────────────────────────
+    if method == "POST" and action == "ping":
+        b = json.loads(event.get("body") or "{}")
+        emp_id = b.get("id", "")
+        if not emp_id:
+            return err("id required")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.employees SET last_seen = NOW() "
+                f"WHERE id = %s RETURNING last_seen",
+                (emp_id,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
+        if not row:
+            return err("Сотрудник не найден", 404)
+        return ok({"lastSeen": str(row[0])})
 
     # ── POST add ──────────────────────────────────────────────────────────
     if method == "POST" and action == "add":

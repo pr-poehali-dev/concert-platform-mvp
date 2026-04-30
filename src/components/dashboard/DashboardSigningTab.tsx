@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 import { SIGN_URL, SESSION_KEY } from "./documents/docTypes";
 import SignatureModal from "./documents/SignatureModal";
+import TabHeader from "@/components/dashboard/TabHeader";
 
 interface SignRequest {
   id: string;
@@ -253,18 +254,17 @@ export default function DashboardSigningTab() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-neon-purple/10 border border-neon-purple/20 flex items-center justify-center">
-          <Icon name="PenLine" size={18} className="text-neon-purple" />
-        </div>
-        <div>
-          <h2 className="font-oswald font-bold text-xl text-white">Электронное подписание</h2>
-          <p className="text-white/65 text-sm">Документы сгруппированы по контрагентам</p>
-        </div>
-        <button onClick={load} className="ml-auto text-white/55 hover:text-white/60 transition-colors" title="Обновить">
-          <Icon name="RefreshCw" size={16} />
-        </button>
-      </div>
+      <TabHeader
+        icon="PenLine"
+        title="Подписание"
+        description="Документы ожидающие вашей подписи"
+        iconColor="neon-purple"
+        actions={
+          <button onClick={load} className="text-white/55 hover:text-white/60 transition-colors" title="Обновить">
+            <Icon name="RefreshCw" size={16} />
+          </button>
+        }
+      />
 
       {/* Табы: входящие / исходящие */}
       <div className="flex gap-1 glass rounded-xl p-1 w-fit">

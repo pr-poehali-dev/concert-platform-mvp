@@ -6,6 +6,7 @@ import ProfileSection from "./profile/ProfileSection";
 import RequisitesSection from "./profile/RequisitesSection";
 import LogoSection from "./profile/LogoSection";
 import EmployeesSection from "./profile/EmployeesSection";
+import TabHeader from "@/components/dashboard/TabHeader";
 
 interface DashboardProfileTabProps {
   user: User;
@@ -205,7 +206,12 @@ export default function DashboardProfileTab({
 
   return (
     <div className="animate-fade-in max-w-3xl">
-      <h2 className="font-oswald font-bold text-2xl text-white mb-6">Настройки профиля</h2>
+      <TabHeader
+        icon="User"
+        title="Профиль"
+        description="Личные данные и настройки аккаунта"
+        iconColor="neon-purple"
+      />
 
       <div className="flex flex-wrap gap-1 mb-6 glass rounded-xl p-1 w-fit">
         {SECTIONS.map(s => (
