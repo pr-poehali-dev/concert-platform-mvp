@@ -1,8 +1,10 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { PROJECTS_URL } from "@/hooks/useProjects";
 import { useAuth } from "@/context/AuthContext";
+
+const AI_URL = "https://functions.poehali.dev/8841fd93-d5cc-414b-a912-d185ca8cab48";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 type LogType   = "flight" | "train" | "hotel";
@@ -102,6 +104,9 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
   const [saving, setSaving] = useState(false);
   const [filterType, setFilterType] = useState<LogType | "all">("all");
   const [filterStatus, setFilterStatus] = useState<LogStatus | "all">("all");
+  const [aiAdvice, setAiAdvice] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const aiRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async (mounted?: { current: boolean }) => {
     if (mounted && !mounted.current) return;
@@ -120,8 +125,38 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
     return () => { mounted.current = false; };
   }, [load]);
 
+  const askAI = async () => {
+    setAiLoading(true);
+    setAiAdvice(null);
+    try {
+      const sessionId = localStorage.getItem("session_id") || "";
+      const res = await fetch(`${AI_URL}?action=logistics`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+        body: JSON.stringify({
+          type: form.type,
+          routeFrom: form.routeFrom,
+          routeTo: form.routeTo,
+          dateDepart: form.dateDepart,
+          dateReturn: form.dateReturn,
+          personRole: form.personRole,
+          personCount: 1,
+          notes: form.notes,
+        }),
+      });
+      const data = await res.json();
+      setAiAdvice(data.answer || "Не удалось получить совет.");
+      setTimeout(() => aiRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 100);
+    } catch {
+      setAiAdvice("Ошибка соединения. Попробуйте ещё раз.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const openCreate = () => {
     setEditId(null);
+    setAiAdvice(null);
     setForm({
       ...EMPTY,
       personName: projectArtist || "",
@@ -133,6 +168,7 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
 
   const openEdit = (item: LogItem) => {
     setEditId(item.id);
+    setAiAdvice(null);
     setForm({
       personName: item.personName, personRole: item.personRole,
       type: item.type, status: item.status,
@@ -343,10 +379,59 @@ export default function ProjectLogisticsTab({ projectId, projectCity = "", proje
           </div>
 
           {/* Заметки */}
-          <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+          <textarea value={form.notes} onChange={e => { setForm(f => ({ ...f, notes: e.target.value })); setAiAdvice(null); }}
             placeholder="Заметки (предпочтения, требования...)"
             rows={2}
             className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/30 text-sm border border-white/10 outline-none resize-none" />
+
+          {/* ── AI-советник ─────────────────────────────────────────────── */}
+          <div className="rounded-2xl border border-neon-cyan/20 bg-neon-cyan/5 overflow-hidden">
+            {/* Заголовок-кнопка */}
+            <button
+              type="button"
+              onClick={askAI}
+              disabled={aiLoading || (!form.routeTo && !form.routeFrom)}
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-white/5 disabled:opacity-50 transition-all group"
+            >
+              <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-neon-cyan to-neon-purple flex items-center justify-center shrink-0">
+                {aiLoading
+                  ? <Icon name="Loader2" size={16} className="text-white animate-spin" />
+                  : <Icon name="Sparkles" size={16} className="text-white" />
+                }
+              </div>
+              <div className="text-left flex-1">
+                <p className="text-white text-sm font-semibold">
+                  {aiLoading ? "ИИ подбирает варианты..." : "Спросить ИИ-ассистента"}
+                </p>
+                <p className="text-white/40 text-xs">
+                  {aiLoading
+                    ? "Анализирую маршрут и даты"
+                    : form.routeTo || form.routeFrom
+                      ? `Советы по ${TYPE_CONFIG[form.type].label.toLowerCase()} ${form.routeFrom ? `${form.routeFrom} → ` : ""}${form.routeTo}`
+                      : "Заполните маршрут для получения советов"
+                  }
+                </p>
+              </div>
+              {!aiLoading && (form.routeTo || form.routeFrom) && (
+                <Icon name="ChevronRight" size={16} className="text-neon-cyan/50 group-hover:translate-x-0.5 transition-transform" />
+              )}
+            </button>
+
+            {/* Ответ ИИ */}
+            {aiAdvice && (
+              <div ref={aiRef} className="border-t border-neon-cyan/10 px-4 py-4 animate-fade-in">
+                <div className="flex items-start gap-2 mb-2">
+                  <Icon name="Bot" size={14} className="text-neon-cyan mt-0.5 shrink-0" />
+                  <p className="text-neon-cyan text-xs font-medium">Рекомендация ИИ</p>
+                  <button onClick={() => setAiAdvice(null)}
+                    className="ml-auto text-white/20 hover:text-white/50 transition-colors">
+                    <Icon name="X" size={12} />
+                  </button>
+                </div>
+                <p className="text-white/80 text-sm leading-relaxed whitespace-pre-wrap">{aiAdvice}</p>
+              </div>
+            )}
+          </div>
 
           <div className="flex gap-3">
             <button onClick={save} disabled={saving || !form.personName.trim()}

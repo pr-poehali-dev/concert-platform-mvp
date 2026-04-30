@@ -154,6 +154,24 @@ def call_aitunnel(api_key: str, model: str, messages: list, max_tokens: int = 80
         return None
 
 
+LOGISTICS_PROMPT = """Ты — ИИ-помощник по логистике для организаторов концертов и гастрольных туров (платформа GLOBAL LINK).
+
+Пользователь планирует логистику и хочет получить практические советы. Отвечай конкретно, структурированно, на русском языке.
+
+ТВОИ ЗАДАЧИ:
+1. Для АВИАБИЛЕТОВ: рекомендуй оптимальный класс (эконом / комфорт / бизнес), время вылета, советы по покупке заранее, популярные авиакомпании на маршруте
+2. Для ЖД БИЛЕТОВ: рекомендуй класс (плацкарт / купе / СВ / люкс), время в пути, советы по бронированию
+3. Для ОТЕЛЕЙ: рекомендуй класс (3*/4*/5*), районы города, советы по трансферу до площадки, приблизительный ценовой диапазон
+
+ФОРМАТ ОТВЕТА:
+- Используй эмодзи для структуры (✈️ 🚆 🏨 💡 ⭐)
+- Давай конкретные советы, не общие слова
+- Укажи примерные цены (в рублях) если знаешь
+- Упомяни 2-3 конкретных совета "как сэкономить" или "на что обратить внимание"
+- Будь краток: максимум 200-250 слов
+"""
+
+
 def ask_ai(question: str, user_role: str) -> str:
     """Отправляет вопрос через AiTunnel (прямой HTTP, без SDK)."""
     api_key = os.environ.get("AITUNNEL_API_KEY", "")
@@ -178,6 +196,47 @@ def ask_ai(question: str, user_role: str) -> str:
             return result
 
     return "Не удалось получить ответ от ИИ. Попробуйте позже или напишите в поддержку."
+
+
+def ask_logistics(log_type: str, route_from: str, route_to: str, date_depart: str,
+                  date_return: str, person_role: str, person_count: int, notes: str) -> str:
+    """Советы ИИ по логистике тура."""
+    api_key = os.environ.get("AITUNNEL_API_KEY", "")
+    if not api_key:
+        return "ИИ-ассистент временно недоступен."
+
+    type_label = {"flight": "авиабилет", "train": "ЖД билет", "hotel": "отель"}.get(log_type, log_type)
+
+    query_parts = [f"Тип: {type_label}"]
+    if route_from and log_type != "hotel":
+        query_parts.append(f"Маршрут: {route_from} → {route_to}")
+    elif route_to:
+        query_parts.append(f"Город: {route_to}")
+    if date_depart:
+        query_parts.append(f"Дата: {date_depart}")
+    if date_return:
+        query_parts.append(f"Дата возврата/выезда: {date_return}")
+    if person_role:
+        query_parts.append(f"Для кого: {person_role}")
+    if person_count > 1:
+        query_parts.append(f"Количество человек: {person_count}")
+    if notes:
+        query_parts.append(f"Пожелания: {notes}")
+
+    question = "Помоги подобрать лучший вариант. " + ". ".join(query_parts)
+
+    messages = [
+        {"role": "system", "content": LOGISTICS_PROMPT},
+        {"role": "user", "content": question},
+    ]
+
+    for model in ["gpt-5-nano", "gpt-4o-mini", "gpt-4o"]:
+        result = call_aitunnel(api_key, model, messages, max_tokens=600)
+        if result:
+            print(f"[ai] logistics answered via {model}")
+            return result
+
+    return "Не удалось получить рекомендации. Попробуйте позже."
 
 
 def check_admin_token(token: str) -> bool:
@@ -211,6 +270,25 @@ def handler(event: dict, context) -> dict:
     headers = event.get("headers") or {}
     session_id = headers.get("X-Session-Id") or headers.get("x-session-id", "")
     admin_token = headers.get("X-Admin-Token") or headers.get("x-admin-token", "")
+
+    # ── POST logistics ────────────────────────────────────────────────────
+    if method == "POST" and action == "logistics":
+        user = get_session_user(session_id)
+        if not user:
+            return err("Не авторизован", 401)
+
+        body = json.loads(event.get("body") or "{}")
+        answer = ask_logistics(
+            log_type=body.get("type", "flight"),
+            route_from=body.get("routeFrom", ""),
+            route_to=body.get("routeTo", ""),
+            date_depart=body.get("dateDepart", ""),
+            date_return=body.get("dateReturn", ""),
+            person_role=body.get("personRole", ""),
+            person_count=int(body.get("personCount", 1)),
+            notes=body.get("notes", ""),
+        )
+        return ok({"answer": answer})
 
     # ── POST ask ──────────────────────────────────────────────────────────
     if method == "POST" and action == "ask":
