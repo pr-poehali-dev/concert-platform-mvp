@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL, fmt } from "@/hooks/useProjects";
 import VenueBookingCrmTab from "./VenueBookingCrmTab";
 import DashboardCompanyTab from "./DashboardCompanyTab";
+import BookingRequestsWidget from "./BookingRequestsWidget";
 
 const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
 
@@ -61,8 +62,9 @@ function fileSize(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
-export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?: (conversationId: string) => void }) {
+export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { onOpenChat?: (conversationId: string) => void; onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
+  const [mainTab, setMainTab] = useState<"requests" | "active">("requests");
   const [projects, setProjects] = useState<VenueBookingProject[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingItem, setUpdatingItem] = useState<string | null>(null);
@@ -77,6 +79,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
   const [uploadingStep, setUploadingStep] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [pendingUpload, setPendingUpload] = useState<{ bookingId: string; stepKey: string } | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -205,25 +208,47 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
   const archiveCount = projects.filter(p => isPast(p.eventDate)).length;
   const activeCount = projects.filter(p => !isPast(p.eventDate)).length;
 
-  if (loading) return (
-    <div className="space-y-3">
-      {[1, 2, 3].map(i => <div key={i} className="glass rounded-2xl h-24 animate-pulse" />)}
-    </div>
-  );
-
-  if (projects.length === 0) return (
-    <div className="glass rounded-2xl p-10 text-center">
-      <Icon name="FolderOpen" size={36} className="text-white/15 mx-auto mb-3" />
-      <p className="text-white/65 text-sm">Нет подтверждённых проектов</p>
-      <p className="text-white/25 text-xs mt-1">Здесь появятся проекты после подтверждения бронирований</p>
-    </div>
-  );
-
   return (
     <div className="space-y-4">
       {/* Скрытый input для файлов */}
       <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileChange}
         accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls" />
+
+      {/* Главные табы: Запросы / Действующие проекты */}
+      <div className="flex gap-1 glass rounded-xl p-1">
+        <button
+          onClick={() => setMainTab("requests")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "requests" ? "bg-neon-purple text-white" : "text-white/65 hover:text-white"}`}
+        >
+          <Icon name="CalendarClock" size={15} />
+          Запросы
+          {pendingCount > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${mainTab === "requests" ? "bg-white/25 text-white" : "bg-neon-pink text-white"}`}>
+              {pendingCount > 9 ? "9+" : pendingCount}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setMainTab("active")}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${mainTab === "active" ? "bg-neon-purple text-white" : "text-white/65 hover:text-white"}`}
+        >
+          <Icon name="FolderOpen" size={15} />
+          Действующие проекты
+          {activeCount > 0 && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${mainTab === "active" ? "bg-white/25 text-white" : "bg-white/15 text-white/70"}`}>
+              {activeCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Раздел: Запросы на бронирование */}
+      {mainTab === "requests" && (
+        <BookingRequestsWidget onNavigate={onNavigate} onPendingCount={setPendingCount} />
+      )}
+
+      {/* Раздел: Действующие проекты */}
+      {mainTab === "active" && <>
 
       {/* Поиск + переключатель архива */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -468,6 +493,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat }: { onOpenChat?:
           </div>
         );
       })}
+      </>}
     </div>
   );
 }

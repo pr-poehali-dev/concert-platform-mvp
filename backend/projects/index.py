@@ -1,4 +1,4 @@
-"""Финансовый учёт проектов GLOBAL LINK."""
+"""Финансовый учёт проектов GLOBAL LINK. v4."""
 import json
 import os
 import base64
@@ -739,6 +739,8 @@ def handler(event: dict, context) -> dict:
         artist        = row[8] or ""
         cur.execute(f"SELECT name FROM {SCHEMA}.venues WHERE id=%s", (vid,))
         vrow = cur.fetchone(); venue_name = vrow[0] if vrow else "Площадка"
+        cur.execute(f"SELECT title FROM {SCHEMA}.projects WHERE id=%s", (project_id,))
+        prow = cur.fetchone(); project_title = prow[0] if prow else ""
 
         conversation_id = ""
         if response == "accepted":
@@ -784,6 +786,19 @@ def handler(event: dict, context) -> dict:
                     f"UPDATE {SCHEMA}.venue_bookings SET conversation_id=%s WHERE id=%s",
                     (conversation_id, booking_id))
                 conn2.commit(); conn2.close()
+
+            # Автоматически добавляем дату в busy_dates площадки
+            note_text = project_title or (f"{artist}" if artist else f"Бронирование #{booking_id[:8]}")
+            conn_bd = get_conn(); cur_bd = conn_bd.cursor()
+            cur_bd.execute(
+                f"SELECT id FROM {SCHEMA}.venue_busy_dates WHERE venue_id=%s AND busy_date=%s",
+                (vid, edate))
+            if not cur_bd.fetchone():
+                cur_bd.execute(
+                    f"INSERT INTO {SCHEMA}.venue_busy_dates (venue_id, busy_date, note) VALUES (%s, %s, %s)",
+                    (vid, edate, note_text))
+                conn_bd.commit()
+            conn_bd.close()
 
             send_notification(venue_user_id, "booking",
                               "Организатор принял условия бронирования",

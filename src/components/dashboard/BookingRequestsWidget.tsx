@@ -149,7 +149,7 @@ function OrganizerRespondModal({ booking, onClose, onSubmit }: OrganizerRespondM
 
 const CHAT_URL = "https://functions.poehali.dev/85035195-bd7b-44ce-b77c-db1255f711b5";
 
-export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (page: string) => void }) {
+export default function BookingRequestsWidget({ onNavigate, onPendingCount }: { onNavigate?: (page: string) => void; onPendingCount?: (count: number) => void }) {
   const { user } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
@@ -168,7 +168,11 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
         : `${PROJECTS_URL}?action=bookings_for_organizer&organizer_id=${user.id}`;
       const res = await fetch(url);
       const data = await res.json();
-      setBookings(data.bookings || []);
+      const all = data.bookings || [];
+      setBookings(all);
+      if (isVenue && onPendingCount) {
+        onPendingCount(all.filter((b: Booking) => b.status === "pending").length);
+      }
     } catch { /* silent */ }
     finally { setLoading(false); }
   };
@@ -204,48 +208,64 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
     load();
   };
 
-  // Фильтруем — показываем только те, где нужно действие
+  const STATUS_LABEL: Record<string, { label: string; cls: string; icon: string }> = {
+    pending:   { label: "Ожидает вашего ответа",           icon: "Clock",       cls: "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20" },
+    confirmed: { label: "Ожидает подтверждения организатора", icon: "Hourglass", cls: "text-neon-purple bg-neon-purple/10 border-neon-purple/20" },
+    accepted:  { label: "Подтверждено обеими сторонами",   icon: "CheckCircle2",cls: "text-neon-green bg-neon-green/10 border-neon-green/20" },
+    rejected:  { label: "Отклонено вами",                  icon: "XCircle",     cls: "text-neon-pink bg-neon-pink/10 border-neon-pink/20" },
+    cancelled: { label: "Отменено организатором",          icon: "Ban",         cls: "text-white/65 bg-white/5 border-white/10" },
+  };
+
+  // Для площадки — все запросы. Для организатора — только где нужно действие
   const actionNeeded = bookings.filter(b =>
     (isVenue && b.status === "pending") ||
     (!isVenue && b.status === "confirmed")
   );
   const others = bookings.filter(b => !actionNeeded.find(a => a.id === b.id));
 
-  const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
-    pending:   { label: "Ожидает ответа площадки", cls: "text-neon-cyan bg-neon-cyan/10 border-neon-cyan/20" },
-    confirmed: { label: "Площадка подтвердила — ожидает организатора", cls: "text-neon-green bg-neon-green/10 border-neon-green/20" },
-    accepted:  { label: "Бронирование подтверждено", cls: "text-neon-green bg-neon-green/10 border-neon-green/20" },
-    rejected:  { label: "Отклонено площадкой", cls: "text-neon-pink bg-neon-pink/10 border-neon-pink/20" },
-    cancelled: { label: "Отменено организатором", cls: "text-white/65 bg-white/5 border-white/10" },
-  };
+  // Для площадки: группируем по статусу
+  const pendingList   = isVenue ? bookings.filter(b => b.status === "pending")   : [];
+  const confirmedList = isVenue ? bookings.filter(b => b.status === "confirmed") : [];
+  const otherVenue    = isVenue ? bookings.filter(b => !["pending","confirmed"].includes(b.status)) : [];
 
   if (loading) return (
     <div className="space-y-2">{[1,2].map(i=><div key={i} className="glass rounded-2xl h-20 animate-pulse"/>)}</div>
   );
 
-  if (bookings.length === 0) return null;
+  if (bookings.length === 0) return (
+    <div className="glass rounded-2xl p-10 text-center">
+      <Icon name="CalendarClock" size={36} className="text-white/15 mx-auto mb-3" />
+      <p className="text-white/65 text-sm">Нет запросов на бронирование</p>
+      <p className="text-white/25 text-xs mt-1">Запросы от организаторов появятся здесь</p>
+    </div>
+  );
 
   const BookingCard = ({ b, action }: { b: Booking; action?: boolean }) => {
-    const st = STATUS_LABEL[b.status] || { label: b.status, cls: "text-white/65 bg-white/5 border-white/10" };
+    const st = STATUS_LABEL[b.status] || { label: b.status, icon: "Circle", cls: "text-white/65 bg-white/5 border-white/10" };
     return (
-      <div className={`glass rounded-2xl p-4 border ${action ? "border-neon-purple/30" : "border-white/5"}`}>
-        <div className="flex items-start justify-between gap-3 mb-2">
-          <div>
-            <p className="text-white font-medium text-sm">{isVenue ? b.projectTitle : b.venueName}</p>
-            <p className="text-white/65 text-xs mt-0.5">
-              {b.eventDate}{b.eventTime ? ` ${b.eventTime}` : ""}
-              {b.artist ? ` · ${b.artist}` : ""}
-              {b.ageLimit ? ` · ${b.ageLimit}+` : ""}
-              {b.expectedGuests > 0 ? ` · ${b.expectedGuests.toLocaleString()} гостей` : ""}
-            </p>
-            {b.organizerName && <p className="text-white/55 text-xs">Организатор: {b.organizerName}</p>}
+      <div className={`glass rounded-2xl p-4 border transition-all ${action ? "border-neon-purple/40 bg-neon-purple/5" : "border-white/8"}`}>
+        <div className="flex items-start justify-between gap-3 mb-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-white font-semibold text-sm truncate">{isVenue ? b.projectTitle : b.venueName}</p>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
+              <span className="text-neon-cyan text-xs font-medium">{b.eventDate}{b.eventTime ? ` · ${b.eventTime}` : ""}</span>
+              {b.artist && <span className="text-white/55 text-xs">{b.artist}</span>}
+              {b.expectedGuests > 0 && <span className="text-white/40 text-xs">{b.expectedGuests.toLocaleString()} гостей</span>}
+            </div>
+            {b.organizerName && <p className="text-white/40 text-xs mt-0.5">Организатор: {b.organizerName}</p>}
           </div>
-          <span className={`text-xs px-2 py-0.5 rounded-lg border shrink-0 ${st.cls}`}>{st.label}</span>
+          <span className={`flex items-center gap-1 text-xs px-2 py-1 rounded-lg border shrink-0 ${st.cls}`}>
+            <Icon name={st.icon} size={11}/>{st.label}
+          </span>
         </div>
         {b.rentalAmount !== null && (
-          <p className="text-neon-green text-xs font-medium">Аренда: {b.rentalAmount.toLocaleString("ru-RU")} ₽{b.venueConditions ? ` · ${b.venueConditions}` : ""}</p>
+          <div className="flex items-center gap-2 mb-2 text-xs">
+            <Icon name="Banknote" size={13} className="text-neon-green"/>
+            <span className="text-neon-green font-semibold">{b.rentalAmount.toLocaleString("ru-RU")} ₽</span>
+            {b.venueConditions && <span className="text-white/45 truncate">{b.venueConditions}</span>}
+          </div>
         )}
-        <div className="flex items-center gap-2 mt-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
           {action && (
             <button
               onClick={()=>{ setActiveBooking(b); setModalType(isVenue ? "venue" : "organizer"); }}
@@ -258,7 +278,7 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
             <button
               onClick={() => onNavigate(`chat:${b.conversationId}`)}
               className="relative flex items-center gap-1.5 px-3 py-2 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 rounded-xl text-xs font-medium hover:bg-neon-cyan/20 transition-colors">
-              <Icon name="MessageCircle" size={13}/>Открыть чат
+              <Icon name="MessageCircle" size={13}/>Чат
               {(unreadMap[b.conversationId] || 0) > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-neon-pink rounded-full text-white text-[9px] font-bold flex items-center justify-center">
                   {unreadMap[b.conversationId] > 9 ? "9+" : unreadMap[b.conversationId]}
@@ -272,22 +292,63 @@ export default function BookingRequestsWidget({ onNavigate }: { onNavigate?: (pa
   };
 
   return (
-    <div className="space-y-3 mb-6">
-      <h3 className="font-oswald font-semibold text-white flex items-center gap-2">
-        <Icon name="CalendarClock" size={16} className="text-neon-purple"/>
-        {isVenue ? "Запросы на бронирование" : "Бронирования площадок"}
-      </h3>
+    <div className="space-y-4">
+      {isVenue ? (
+        <>
+          {/* Новые запросы — требуют ответа */}
+          {pendingList.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-neon-cyan font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <Icon name="BellRing" size={12}/>Требуют ответа · {pendingList.length}
+              </p>
+              {pendingList.map(b => <BookingCard key={b.id} b={b} action/>)}
+            </div>
+          )}
 
-      {actionNeeded.length > 0 && (
-        <div className="space-y-2">
-          {actionNeeded.map(b => <BookingCard key={b.id} b={b} action/>)}
-        </div>
-      )}
+          {/* Подтверждены вами — ждём организатора */}
+          {confirmedList.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-neon-purple/80 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <Icon name="Hourglass" size={12}/>Ждут организатора · {confirmedList.length}
+              </p>
+              {confirmedList.map(b => <BookingCard key={b.id} b={b}/>)}
+            </div>
+          )}
 
-      {others.length > 0 && (
-        <div className="space-y-2">
-          {others.map(b => <BookingCard key={b.id} b={b}/>)}
-        </div>
+          {/* Остальные (принятые, отклонённые, отменённые) */}
+          {otherVenue.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-white/35 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <Icon name="History" size={12}/>История · {otherVenue.length}
+              </p>
+              {otherVenue.map(b => <BookingCard key={b.id} b={b}/>)}
+            </div>
+          )}
+
+          {pendingList.length === 0 && confirmedList.length === 0 && otherVenue.length === 0 && (
+            <div className="glass rounded-2xl p-10 text-center">
+              <Icon name="CalendarClock" size={36} className="text-white/15 mx-auto mb-3" />
+              <p className="text-white/65 text-sm">Нет запросов на бронирование</p>
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          {actionNeeded.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-xs text-neon-green font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <Icon name="BellRing" size={12}/>Требуют ответа · {actionNeeded.length}
+              </p>
+              {actionNeeded.map(b => <BookingCard key={b.id} b={b} action/>)}
+            </div>
+          )}
+          {others.length > 0 && (
+            <div className="space-y-2">
+              {actionNeeded.length > 0 && <p className="text-xs text-white/35 font-semibold uppercase tracking-wider flex items-center gap-1.5"><Icon name="History" size={12}/>Остальные</p>}
+              {others.map(b => <BookingCard key={b.id} b={b}/>)}
+            </div>
+          )}
+        </>
       )}
 
       {activeBooking && modalType === "venue" && createPortal(

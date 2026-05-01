@@ -178,6 +178,7 @@ export default function DashboardPage({ onNavigate, initialTab }: DashboardPageP
             {tab === "projects" && isVenue && (
               <DashboardVenueProjectsTab
                 onOpenChat={onNavigate ? (convId) => onNavigate(`chat:${convId}`) : undefined}
+                onNavigate={onNavigate}
               />
             )}
 

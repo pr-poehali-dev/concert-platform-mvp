@@ -3,6 +3,7 @@ import { useNotifications } from "@/context/NotificationsContext";
 import { useAuth } from "@/context/AuthContext";
 import { useTheme } from "@/context/ThemeContext";
 import { useHiddenSections } from "@/hooks/useHiddenSections";
+import { useVenuePendingBookings } from "@/hooks/useVenuePendingBookings";
 
 interface Props {
   activePage: string;
@@ -54,6 +55,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
   const { unreadCount } = useNotifications();
   const { theme, toggleTheme } = useTheme();
   const { isHidden, sortedIds } = useHiddenSections();
+  const { pendingCount: pendingBookingsCount } = useVenuePendingBookings();
 
   if (!user) return null;
 
@@ -106,7 +108,7 @@ export default function GlobalSidebar({ activePage, dashboardTab, onNavigate }: 
 
   const dashVenueAll: NavItem[] = [
     { id: "venues",        label: "Площадки",      icon: "Building2",    page: "dashboard", dashTab: "venues",        color: "cyan"   },
-    { id: "vprojects",     label: "Проекты",       icon: "FolderOpen",   page: "dashboard", dashTab: "projects",      color: "purple" },
+    { id: "vprojects",     label: "Проекты",       icon: "FolderOpen",   page: "dashboard", dashTab: "projects",      badge: () => pendingBookingsCount, color: "purple" },
     { id: "concerts",      label: "Мои концерты",  icon: "Music",        page: "dashboard", dashTab: "concerts",      color: "pink"   },
     { id: "bar",           label: "Бар",           icon: "Wine",         page: "dashboard", dashTab: "bar",           color: "cyan"   },
     { id: "documents",     label: "Документы",     icon: "FileArchive",  page: "dashboard", dashTab: "documents",     color: "cyan"   },
