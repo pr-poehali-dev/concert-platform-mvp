@@ -238,9 +238,10 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
   ];
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-[100]" style={{ top: "304px" }}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-2xl glass-strong rounded-2xl overflow-hidden animate-scale-in flex flex-col" style={{ maxHeight: "calc(100dvh - 2rem)" }}>
+      <div className="absolute inset-4 flex items-center justify-center">
+      <div className="relative z-10 w-full max-w-2xl glass-strong rounded-2xl overflow-hidden animate-scale-in flex flex-col" style={{ maxHeight: "calc(100dvh - 304px - 2rem)" }}>
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-purple to-transparent" />
 
         {/* Header */}
@@ -466,6 +467,7 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
