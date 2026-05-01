@@ -79,6 +79,14 @@ function IndexInner() {
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
+    if (page === "notifications") {
+      if (!user) { setActivePage("home"); return; }
+      setDashboardTab("notifications");
+      setActivePage("dashboard");
+      localStorage.setItem(PAGE_KEY, "dashboard");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (page === "signing") {
       if (!user) { setActivePage("home"); return; }
       setDashboardTab("signing");
