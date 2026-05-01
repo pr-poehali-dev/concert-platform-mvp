@@ -3,6 +3,7 @@ import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
 import VenueStepContent, { type VenueForm, type PhotoItem } from "@/components/venue-setup/VenueStepContent";
+import { compressImage, fileToBase64 } from "@/lib/imageCompress";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -12,21 +13,13 @@ interface VenueSetupModalProps {
   onCreated: () => void;
 }
 
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = () => res((r.result as string).split(",")[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
-}
-
 export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetupModalProps) {
   const { user } = useAuth();
   const { sendNotification } = useNotifications();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [progress, setProgress] = useState({ stage: "", current: 0, total: 0 });
 
   const [form, setForm] = useState<VenueForm>({
     name: "", city: "Москва", address: "", venueType: "Клуб",
@@ -90,66 +83,116 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
     return null;
   };
 
+  const safeFetch = async (url: string, body: unknown): Promise<Record<string, unknown>> => {
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Ошибка сервера (${res.status})`);
+        return data;
+      } catch (e) {
+        lastErr = e;
+        if (attempt === 0) await new Promise(r => setTimeout(r, 800));
+      }
+    }
+    throw lastErr;
+  };
+
   const handleSubmit = async () => {
     const validErr = validate();
     if (validErr) { setError(validErr); return; }
+    if (!user) { setError("Сессия истекла, войдите заново"); return; }
     setLoading(true);
     setError("");
     try {
-      // Конвертируем фото в base64
-      const photosBase64 = await Promise.all(
-        photos.map(async p => ({
-          data: await fileToBase64(p.file),
-          mime: p.file.type || "image/jpeg",
-        }))
-      );
+      // ─── 1. Сжимаем главное фото (если есть) ──────────────────────────
+      const totalSteps = 1 + photos.length + (riderFile ? 1 : 0) + (schemaFile ? 1 : 0);
+      let done = 0;
+      const tick = (stage: string) => {
+        done += 1;
+        setProgress({ stage, current: done, total: totalSteps });
+      };
 
-      const payload: Record<string, unknown> = {
-        userId: user!.id,
+      let mainPhoto: { data: string; mime: string } | null = null;
+      if (photos.length > 0) {
+        setProgress({ stage: "Подготовка фотографии 1...", current: 0, total: totalSteps });
+        mainPhoto = await compressImage(photos[0].file);
+      } else {
+        setProgress({ stage: "Создаём площадку...", current: 0, total: totalSteps });
+      }
+
+      // ─── 2. Создаём площадку только с главным фото ────────────────────
+      const createPayload: Record<string, unknown> = {
+        userId: user.id,
         name: form.name, city: form.city, address: form.address,
         venueType: form.venueType, capacity: Number(form.capacity),
         priceFrom: Number(form.priceFrom) || 0,
         description: form.description, tags: form.tags,
-        photosBase64,
+        photosBase64: mainPhoto ? [mainPhoto] : [],
         busyDates: Array.from(busyDates).map(d => ({ date: d, note: "" })),
       };
 
-      if (riderFile) {
-        payload.riderBase64 = await fileToBase64(riderFile);
-        payload.riderMime = riderFile.type;
-        payload.riderFileName = riderFile.name;
-      }
-      if (schemaFile) {
-        payload.schemaBase64 = await fileToBase64(schemaFile);
-        payload.schemaMime = schemaFile.type;
-        payload.schemaFileName = schemaFile.name;
+      setProgress({ stage: "Создаём площадку...", current: done, total: totalSteps });
+      const created = await safeFetch(`${VENUES_URL}?action=create`, createPayload);
+      const venueId = created.venueId as string;
+      tick("Площадка создана");
+
+      // ─── 3. Загружаем остальные фото ПО ОДНОМУ ────────────────────────
+      for (let i = 1; i < photos.length; i++) {
+        setProgress({ stage: `Загружаем фото ${i + 1} из ${photos.length}...`, current: done, total: totalSteps });
+        const compressed = await compressImage(photos[i].file);
+        await safeFetch(`${VENUES_URL}?action=add_photos`, {
+          venueId, userId: user.id, photosBase64: [compressed],
+        });
+        tick(`Фото ${i + 1} загружено`);
       }
 
-      const res = await fetch(`${VENUES_URL}?action=create`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Ошибка");
+      // ─── 4. Райдер ────────────────────────────────────────────────────
+      if (riderFile) {
+        setProgress({ stage: "Загружаем райдер...", current: done, total: totalSteps });
+        const riderB64 = await fileToBase64(riderFile);
+        await safeFetch(`${VENUES_URL}?action=update`, {
+          venueId, userId: user.id,
+          riderBase64: riderB64, riderMime: riderFile.type, riderFileName: riderFile.name,
+        });
+        tick("Райдер загружен");
+      }
+
+      // ─── 5. Схема ─────────────────────────────────────────────────────
+      if (schemaFile) {
+        setProgress({ stage: "Загружаем схему...", current: done, total: totalSteps });
+        const schemaB64 = await fileToBase64(schemaFile);
+        await safeFetch(`${VENUES_URL}?action=update`, {
+          venueId, userId: user.id,
+          schemaBase64: schemaB64, schemaMime: schemaFile.type, schemaFileName: schemaFile.name,
+        });
+        tick("Схема загружена");
+      }
 
       onCreated();
       onClose();
 
-      if (user) {
-        sendNotification(
-          user.id, "venue",
-          `Площадка «${form.name}» опубликована!`,
-          `Ваша площадка в ${form.city} теперь отображается в поиске.`,
-          "search"
-        ).catch(() => {});
-      }
+      sendNotification(
+        user.id, "venue",
+        `Площадка «${form.name}» опубликована!`,
+        `Ваша площадка в ${form.city} теперь отображается в поиске.`,
+        "search"
+      ).catch(() => {});
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Ошибка при сохранении";
+      const raw = e instanceof Error ? e.message : String(e);
+      const msg = raw.includes("Failed to fetch")
+        ? "Не удалось отправить файлы — проверьте интернет или уменьшите количество/размер фото"
+        : raw || "Ошибка при сохранении";
       console.error("[VenueSetupModal] submit error:", e);
       setError(msg);
     } finally {
       setLoading(false);
+      setProgress({ stage: "", current: 0, total: 0 });
     }
   };
 
@@ -209,6 +252,23 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
 
         {/* Footer */}
         <div className="flex flex-col gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+          {loading && progress.total > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs text-white/70">
+                <span className="flex items-center gap-2">
+                  <Icon name="Loader2" size={12} className="animate-spin text-neon-cyan" />
+                  {progress.stage}
+                </span>
+                <span className="text-white/40">{progress.current}/{progress.total}</span>
+              </div>
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-neon-purple to-neon-cyan transition-all duration-300"
+                  style={{ width: `${Math.round((progress.current / progress.total) * 100)}%` }}
+                />
+              </div>
+            </div>
+          )}
           {error && (
             <div className="flex items-center gap-2 text-neon-pink text-xs bg-neon-pink/10 rounded-xl px-3 py-2 border border-neon-pink/20">
               <Icon name="AlertCircle" size={13} className="shrink-0" />
