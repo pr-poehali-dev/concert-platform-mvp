@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { PROJECTS_URL } from "@/hooks/useProjects";
+import { BOOKING_DATA_URL } from "@/lib/bookingUrls";
 import { startPolling, stopPolling } from "@/lib/polling";
 
 interface PendingBooking {
@@ -31,7 +31,7 @@ export function useVenuePendingBookings(): VenuePendingBookingsState {
     if (!user || user.role !== "venue") return;
     setLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=bookings_for_venue&venue_user_id=${user.id}`);
+      const res = await fetch(`${BOOKING_DATA_URL}?action=bookings_for_venue&venue_user_id=${user.id}`);
       const data = await res.json();
       const all = data.bookings || [];
       setPendingBookings(all.filter((b: PendingBooking) => b.status === "pending"));

@@ -2,6 +2,7 @@ import { useState } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL } from "@/hooks/useProjects";
+import { BOOKING_DATA_URL, BOOKING_REQUESTS_URL } from "@/lib/bookingUrls";
 import { DEFAULT_EXPENSES, type VenueOption, type BookedDate, type ExpenseLine, type IncomeLine, type ProjectForm } from "./create/types";
 import StepBasic from "./create/StepBasic";
 import StepVenue from "./create/StepVenue";
@@ -48,7 +49,7 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
   const loadVenues = async (city: string) => {
     setVenuesLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=venues_list&city=${encodeURIComponent(city)}`);
+      const res = await fetch(`${BOOKING_DATA_URL}?action=venues_list&city=${encodeURIComponent(city)}`);
       const data = await res.json();
       setVenues(data.venues || []);
     } catch { /* silent */ }
@@ -57,7 +58,7 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
 
   const loadBookedDates = async (venueId: string) => {
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=booked_dates&venue_id=${venueId}`);
+      const res = await fetch(`${BOOKING_DATA_URL}?action=booked_dates&venue_id=${venueId}`);
       const data = await res.json();
       setBookedDates(data.bookedDates || []);
     } catch { /* silent */ }
@@ -123,7 +124,7 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
       const projectId = data.projectId;
 
       if (selectedVenue && form.dateStart && !dateStartBooked) {
-        await fetch(`${PROJECTS_URL}?action=request_booking`, {
+        await fetch(`${BOOKING_REQUESTS_URL}?action=request_booking`, {
           method: "POST", headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             projectId,

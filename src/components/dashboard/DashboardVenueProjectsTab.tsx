@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
-import { PROJECTS_URL, fmt } from "@/hooks/useProjects";
+import { fmt } from "@/hooks/useProjects";
+import { BOOKING_TASKS_URL } from "@/lib/bookingUrls";
 import VenueBookingCrmTab from "./VenueBookingCrmTab";
 import DashboardCompanyTab from "./DashboardCompanyTab";
 import BookingRequestsWidget from "./BookingRequestsWidget";
@@ -85,7 +86,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=booking_checklist&venue_id=${user.id}`);
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=booking_checklist&venue_id=${user.id}`);
       const data = await res.json();
       setProjects(data.bookings || []);
     } catch {
@@ -111,7 +112,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
   const loadFiles = async (bookingId: string) => {
     if (filesMap[bookingId]) return;
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=booking_files&booking_id=${bookingId}`);
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=booking_files&booking_id=${bookingId}`);
       const data = await res.json();
       setFilesMap(prev => ({ ...prev, [bookingId]: data.files || [] }));
     } catch { /* silent */ }
@@ -126,7 +127,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
   const toggleStep = async (itemId: string, currentDone: boolean, note: string, bookingId: string) => {
     setUpdatingItem(itemId);
     const newDone = !currentDone;
-    await fetch(`${PROJECTS_URL}?action=update_checklist`, {
+    await fetch(`${BOOKING_TASKS_URL}?action=update_checklist`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId, isDone: newDone, note }),
     });
@@ -139,7 +140,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
   };
 
   const saveNote = async (itemId: string, isDone: boolean, bookingId: string) => {
-    await fetch(`${PROJECTS_URL}?action=update_checklist`, {
+    await fetch(`${BOOKING_TASKS_URL}?action=update_checklist`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ itemId, isDone, note: noteText }),
     });
@@ -164,7 +165,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
-      const res = await fetch(`${PROJECTS_URL}?action=upload_booking_file`, {
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=upload_booking_file`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           bookingId, uploadedBy: user.id, stepKey,
@@ -187,7 +188,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
   };
 
   const deleteFile = async (bookingId: string, fileId: string) => {
-    await fetch(`${PROJECTS_URL}?action=delete_booking_file`, {
+    await fetch(`${BOOKING_TASKS_URL}?action=delete_booking_file`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ fileId }),
     });

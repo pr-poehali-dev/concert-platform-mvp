@@ -1,0 +1,10 @@
+{"tests": [
+  {"name": "OPTIONS CORS", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+  {"name": "venues_list empty city", "method": "GET", "path": "/?action=venues_list&city=test", "expectedStatus": 200, "bodyMatcher": "partial"},
+  {"name": "booked_dates no venue_id", "method": "GET", "path": "/?action=booked_dates", "expectedStatus": 400},
+  {"name": "booking_by_project no id", "method": "GET", "path": "/?action=booking_by_project", "expectedStatus": 400},
+  {"name": "bookings_for_organizer no id", "method": "GET", "path": "/?action=bookings_for_organizer", "expectedStatus": 400},
+  {"name": "bookings_for_venue no id", "method": "GET", "path": "/?action=bookings_for_venue", "expectedStatus": 400},
+  {"name": "booking_detail no id", "method": "GET", "path": "/?action=booking_detail", "expectedStatus": 400},
+  {"name": "Unknown action", "method": "GET", "path": "/?action=bogus", "expectedStatus": 404}
+]}

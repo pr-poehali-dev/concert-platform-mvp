@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
-import { PROJECTS_URL } from "@/hooks/useProjects";
+import { BOOKING_DATA_URL, BOOKING_REQUESTS_URL } from "@/lib/bookingUrls";
 
 interface Booking {
   id: string;
@@ -164,8 +164,8 @@ export default function BookingRequestsWidget({ onNavigate, onPendingCount }: { 
     setLoading(true);
     try {
       const url = isVenue
-        ? `${PROJECTS_URL}?action=bookings_for_venue&venue_user_id=${user.id}`
-        : `${PROJECTS_URL}?action=bookings_for_organizer&organizer_id=${user.id}`;
+        ? `${BOOKING_DATA_URL}?action=bookings_for_venue&venue_user_id=${user.id}`
+        : `${BOOKING_DATA_URL}?action=bookings_for_organizer&organizer_id=${user.id}`;
       const res = await fetch(url);
       const data = await res.json();
       const all = data.bookings || [];
@@ -191,7 +191,7 @@ export default function BookingRequestsWidget({ onNavigate, onPendingCount }: { 
   }, [user]);
 
   const venueRespond = async (bookingId: string, response: "confirmed" | "rejected", rentalAmount: number | null, conditions: string) => {
-    await fetch(`${PROJECTS_URL}?action=venue_respond`, {
+    await fetch(`${BOOKING_REQUESTS_URL}?action=venue_respond`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bookingId, response, rentalAmount, venueConditions: conditions, venueUserName: user?.name || "Площадка" }),
     });
@@ -200,7 +200,7 @@ export default function BookingRequestsWidget({ onNavigate, onPendingCount }: { 
   };
 
   const organizerRespond = async (bookingId: string, response: "accepted" | "cancelled") => {
-    await fetch(`${PROJECTS_URL}?action=organizer_respond`, {
+    await fetch(`${BOOKING_REQUESTS_URL}?action=organizer_respond`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bookingId, response, organizerName: user?.name || "Организатор" }),
     });

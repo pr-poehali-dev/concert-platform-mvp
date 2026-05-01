@@ -1,0 +1,7 @@
+{"tests": [
+  {"name": "OPTIONS CORS", "method": "OPTIONS", "path": "/", "expectedStatus": 200},
+  {"name": "booking_tasks no id", "method": "GET", "path": "/?action=booking_tasks", "expectedStatus": 400},
+  {"name": "booking_checklist no id", "method": "GET", "path": "/?action=booking_checklist", "expectedStatus": 400},
+  {"name": "booking_files no id", "method": "GET", "path": "/?action=booking_files", "expectedStatus": 400},
+  {"name": "Unknown action", "method": "GET", "path": "/?action=bogus", "expectedStatus": 404}
+]}

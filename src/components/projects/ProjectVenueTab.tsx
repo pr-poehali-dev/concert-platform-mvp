@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import Icon from "@/components/ui/icon";
-import { PROJECTS_URL } from "@/hooks/useProjects";
+import { BOOKING_DATA_URL, BOOKING_TASKS_URL, BOOKING_REQUESTS_URL } from "@/lib/bookingUrls";
 import { useAuth } from "@/context/AuthContext";
 import VenueBookingForm from "./VenueBookingForm";
 import ConfirmedBookingCard from "./ConfirmedBookingCard";
@@ -52,7 +52,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const bookRes = await fetch(`${PROJECTS_URL}?action=booking_by_project&project_id=${projectId}`);
+      const bookRes = await fetch(`${BOOKING_DATA_URL}?action=booking_by_project&project_id=${projectId}`);
       const bookData = await bookRes.json();
       setAllBookings(bookData.bookings || []);
 
@@ -61,13 +61,13 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
       );
       const detailed = await Promise.all(
         confirmedBookings.map(async (b: { id: string; conversationId?: string }) => {
-          const det = await fetch(`${PROJECTS_URL}?action=booking_detail&booking_id=${b.id}`).then(r => r.json());
+          const det = await fetch(`${BOOKING_DATA_URL}?action=booking_detail&booking_id=${b.id}`).then(r => r.json());
           const booking = det.booking || null;
           if (booking && !booking.conversationId && b.conversationId) {
             booking.conversationId = b.conversationId;
           }
           if (booking && !booking.conversationId) {
-            fetch(`${PROJECTS_URL}?action=create_missing_chat`, {
+            fetch(`${BOOKING_DATA_URL}?action=create_missing_chat`, {
               method: "POST", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ bookingId: booking.id }),
             }).then(r => r.json()).then(chatRes => {
@@ -105,7 +105,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
   const loadVenues = async () => {
     setVenuesLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=venues_list${projectCity ? `&city=${encodeURIComponent(projectCity)}` : ""}`);
+      const res = await fetch(`${BOOKING_DATA_URL}?action=venues_list${projectCity ? `&city=${encodeURIComponent(projectCity)}` : ""}`);
       const data = await res.json();
       setVenues(data.venues || []);
     } catch { setVenues([]); }
@@ -114,7 +114,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
 
   const loadBookedDates = async (venueId: string) => {
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=booked_dates&venue_id=${venueId}`);
+      const res = await fetch(`${BOOKING_DATA_URL}?action=booked_dates&venue_id=${venueId}`);
       const data = await res.json();
       setBookedDates(data.bookedDates || []);
     } catch { setBookedDates([]); }
@@ -140,7 +140,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
     if (isDateBusy) { setBookError("Эта дата уже занята на площадке"); return; }
     setBookSending(true); setBookError("");
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=request_booking`, {
+      const res = await fetch(`${BOOKING_REQUESTS_URL}?action=request_booking`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           projectId,
@@ -165,7 +165,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
 
   const handleOrganizerRespond = async (bookingId: string, response: "accepted" | "cancelled") => {
     setAcceptSaving(response);
-    await fetch(`${PROJECTS_URL}?action=organizer_respond`, {
+    await fetch(`${BOOKING_REQUESTS_URL}?action=organizer_respond`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ bookingId, response, organizerName: user?.name || "Организатор" }),
     });
@@ -176,7 +176,7 @@ export default function ProjectVenueTab({ projectId, onOpenChat, projectCity = "
 
   const updateTask = async (taskId: string, status: "pending" | "in_progress" | "done") => {
     setUpdatingTask(taskId);
-    await fetch(`${PROJECTS_URL}?action=update_task`, {
+    await fetch(`${BOOKING_TASKS_URL}?action=update_task`, {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ taskId, status }),
     });

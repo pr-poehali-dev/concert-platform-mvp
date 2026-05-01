@@ -1,4 +1,7 @@
 {
+  "booking-data": "https://functions.poehali.dev/1ba4879f-6ecb-439f-9932-ebfc403d529a",
+  "booking-requests": "https://functions.poehali.dev/c0f0692e-57af-453e-a334-d9619469defc",
+  "booking-tasks": "https://functions.poehali.dev/74593fae-0349-46e4-ae20-856e28ef91d4",
   "bar": "https://functions.poehali.dev/506e1ffe-4de6-4c2c-acd7-e558c2b91ce1",
   "mail": "https://functions.poehali.dev/d6b28aef-2d6a-48bc-a6c5-d915f12c0848",
   "ai-lawyer": "https://functions.poehali.dev/e35d1d2a-0369-4290-beac-eaafa663b6be",
