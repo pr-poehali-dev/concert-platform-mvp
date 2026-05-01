@@ -145,7 +145,9 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
         ).catch(() => {});
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Ошибка при сохранении");
+      const msg = e instanceof Error ? e.message : "Ошибка при сохранении";
+      console.error("[VenueSetupModal] submit error:", e);
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -206,26 +208,34 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
         />
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
-            className="flex items-center gap-2 px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm">
-            <Icon name="ChevronLeft" size={16} />
-            {step === 1 ? "Отмена" : "Назад"}
-          </button>
-
-          {step < STEPS.length ? (
-            <button onClick={() => { setError(""); setStep(s => s + 1); }}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
-              Далее <Icon name="ChevronRight" size={16} />
-            </button>
-          ) : (
-            <button onClick={handleSubmit} disabled={loading}
-              className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm">
-              {loading
-                ? <><Icon name="Loader2" size={16} className="animate-spin" />Публикуем...</>
-                : <><Icon name="Check" size={16} />Опубликовать</>}
-            </button>
+        <div className="flex flex-col gap-2 px-6 py-4 border-t border-white/10 shrink-0">
+          {error && (
+            <div className="flex items-center gap-2 text-neon-pink text-xs bg-neon-pink/10 rounded-xl px-3 py-2 border border-neon-pink/20">
+              <Icon name="AlertCircle" size={13} className="shrink-0" />
+              {error}
+            </div>
           )}
+          <div className="flex items-center justify-between">
+            <button onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
+              className="flex items-center gap-2 px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm">
+              <Icon name="ChevronLeft" size={16} />
+              {step === 1 ? "Отмена" : "Назад"}
+            </button>
+
+            {step < STEPS.length ? (
+              <button onClick={() => { setError(""); setStep(s => s + 1); }}
+                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity text-sm">
+                Далее <Icon name="ChevronRight" size={16} />
+              </button>
+            ) : (
+              <button onClick={handleSubmit} disabled={loading || !user}
+                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 transition-opacity disabled:opacity-50 text-sm">
+                {loading
+                  ? <><Icon name="Loader2" size={16} className="animate-spin" />Публикуем...</>
+                  : <><Icon name="Check" size={16} />Опубликовать</>}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
