@@ -104,9 +104,9 @@ export default function VenueCalendarModal({ venueId, venueName, userId, initial
   const sortedDates = Array.from(selected).sort();
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-start justify-center p-4" style={{ paddingTop: "80px" }}>
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4" style={{ top: "64px" }}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 w-full max-w-3xl glass-strong rounded-2xl overflow-hidden animate-scale-in flex flex-col" style={{ maxHeight: "calc(100dvh - 96px)" }}>
+      <div className="relative z-10 w-full max-w-3xl glass-strong rounded-2xl overflow-hidden animate-scale-in flex flex-col" style={{ maxHeight: "calc(100dvh - 64px - 2rem)" }}>
         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-pink to-transparent" />
 
         {/* Header */}
