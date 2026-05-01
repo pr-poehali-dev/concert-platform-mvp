@@ -61,7 +61,7 @@ export default function VenueStepContent({
   error,
 }: VenueStepContentProps) {
   return (
-    <div className="flex-1 overflow-y-auto scrollbar-thin px-6 pb-2">
+    <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin px-6 pb-2">
 
       {/* ── STEP 1: Основное ── */}
       {step === 1 && (
