@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { useNotifications } from "@/context/NotificationsContext";
@@ -20,6 +20,7 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [progress, setProgress] = useState({ stage: "", current: 0, total: 0 });
+  const submittingRef = useRef(false);
 
   const [form, setForm] = useState<VenueForm>({
     name: "", city: "Москва", address: "", venueType: "Клуб",
@@ -104,9 +105,11 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
   };
 
   const handleSubmit = async () => {
+    if (submittingRef.current) return;
     const validErr = validate();
     if (validErr) { setError(validErr); return; }
     if (!user) { setError("Сессия истекла, войдите заново"); return; }
+    submittingRef.current = true;
     setLoading(true);
     setError("");
     try {
@@ -193,6 +196,7 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
     } finally {
       setLoading(false);
       setProgress({ stage: "", current: 0, total: 0 });
+      submittingRef.current = false;
     }
   };
 
