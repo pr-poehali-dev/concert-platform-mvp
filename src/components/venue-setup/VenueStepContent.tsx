@@ -15,6 +15,14 @@ export interface VenueForm {
   priceFrom: string;
   description: string;
   tags: string[];
+  phone: string;
+  email: string;
+  website: string;
+  telegram: string;
+  vk: string;
+  instagram: string;
+  whatsapp: string;
+  youtube: string;
 }
 
 export interface PhotoItem {
@@ -129,6 +137,68 @@ export default function VenueStepContent({
                   {tag}
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Контакты */}
+          <div className="pt-2">
+            <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Контакты</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative">
+                <Icon name="Phone" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.phone} onChange={e => onFormChange("phone", e.target.value)}
+                  placeholder="+7 (999) 123-45-67"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+              <div className="relative">
+                <Icon name="Mail" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.email} onChange={e => onFormChange("email", e.target.value)}
+                  placeholder="hello@venue.ru"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+              <div className="relative col-span-2">
+                <Icon name="Globe" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.website} onChange={e => onFormChange("website", e.target.value)}
+                  placeholder="https://venue.ru"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+            </div>
+          </div>
+
+          {/* Соцсети */}
+          <div className="pt-2">
+            <label className="text-xs text-white/40 uppercase tracking-wider mb-2 block">Социальные сети</label>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="relative">
+                <Icon name="Send" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.telegram} onChange={e => onFormChange("telegram", e.target.value)}
+                  placeholder="@username или ссылка"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+              <div className="relative">
+                <Icon name="MessageCircle" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.whatsapp} onChange={e => onFormChange("whatsapp", e.target.value)}
+                  placeholder="+7 (999) ..."
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+              <div className="relative">
+                <Icon name="Users" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.vk} onChange={e => onFormChange("vk", e.target.value)}
+                  placeholder="vk.com/venue"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+              <div className="relative">
+                <Icon name="Instagram" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.instagram} onChange={e => onFormChange("instagram", e.target.value)}
+                  placeholder="@username или ссылка"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
+              <div className="relative col-span-2">
+                <Icon name="Youtube" size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30" />
+                <input value={form.youtube} onChange={e => onFormChange("youtube", e.target.value)}
+                  placeholder="youtube.com/@channel"
+                  className="w-full glass rounded-xl pl-9 pr-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm" />
+              </div>
             </div>
           </div>
         </div>

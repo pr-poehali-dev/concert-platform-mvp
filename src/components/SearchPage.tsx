@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import VenueSetupModal from "@/components/VenueSetupModal";
 import StartChatModal from "@/components/StartChatModal";
+import VenueDetailsModal, { type VenueDetailsData } from "@/components/VenueDetailsModal";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 const IMPORT_URL = "https://functions.poehali.dev/c7f2752f-6618-495c-9f9e-8553dce85384";
@@ -98,12 +99,21 @@ interface Venue {
   photos?: string[];
   riderUrl: string;
   riderName: string;
+  schemaUrl?: string;
+  schemaName?: string;
   tags: string[];
   rating: number;
   reviewsCount: number;
   verified: boolean;
   phone?: string;
+  email?: string;
   website?: string;
+  telegram?: string;
+  vk?: string;
+  instagram?: string;
+  whatsapp?: string;
+  youtube?: string;
+  busyDates?: { date: string; note: string }[];
   userId?: string;
   ownerUserId?: string;
   importedFrom?: string;
@@ -124,6 +134,10 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
   const [capacityMin, setCapacityMin] = useState(0);
   const [sortBy, setSortBy] = useState("rating");
   const [chatModal, setChatModal] = useState<{ venueId: string; venueUserId: string; venueName: string } | null>(null);
+  const [details, setDetails] = useState<{ data: VenueDetailsData; initialTab?: "info" | "photos" | "documents" | "calendar" } | null>(null);
+
+  const openDetails = (v: Venue, initialTab?: "info" | "photos" | "documents" | "calendar") =>
+    setDetails({ data: { ...v, busyDates: v.busyDates || [] }, initialTab });
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimDone, setClaimDone] = useState<Set<string>>(new Set());
 
@@ -299,7 +313,9 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {filtered.map(venue => (
-                  <div key={venue.id} className="glass rounded-2xl overflow-hidden hover-lift group cursor-pointer">
+                  <div key={venue.id}
+                    onClick={() => openDetails(venue, "info")}
+                    className="glass rounded-2xl overflow-hidden hover-lift group cursor-pointer">
                     <VenuePhotoSlider
                       photos={venue.photos && venue.photos.length > 0 ? venue.photos : (venue.photoUrl ? [venue.photoUrl] : [])}
                       fallback={FALLBACK_IMG}
@@ -352,7 +368,19 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
                         <span className="text-neon-cyan font-medium text-sm">
                           {venue.priceFrom > 0 ? `от ${venue.priceFrom.toLocaleString()} ₽` : "Цена по запросу"}
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 flex-wrap justify-end">
+                          <button
+                            onClick={e => { e.stopPropagation(); openDetails(venue); }}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-neon-cyan/15 text-neon-cyan text-xs rounded-lg hover:bg-neon-cyan/25 transition-colors border border-neon-cyan/30"
+                            title="Открыть карточку площадки">
+                            <Icon name="Eye" size={13} />Подробнее
+                          </button>
+                          <button
+                            onClick={e => { e.stopPropagation(); openDetails(venue, "calendar"); }}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-neon-pink/10 text-neon-pink text-xs rounded-lg hover:bg-neon-pink/20 transition-colors border border-neon-pink/30"
+                            title="Посмотреть занятые даты">
+                            <Icon name="Calendar" size={13} />Календарь
+                          </button>
                           {venue.riderUrl && (
                             <a href={venue.riderUrl} target="_blank" rel="noreferrer"
                               onClick={e => e.stopPropagation()}
@@ -403,6 +431,20 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
           venueUserId={chatModal.venueUserId}
           onClose={() => setChatModal(null)}
           onStarted={() => { setChatModal(null); onNavigate?.("chat"); }}
+        />
+      )}
+
+      {details && (
+        <VenueDetailsModal
+          venue={details.data}
+          initialTab={details.initialTab}
+          onClose={() => setDetails(null)}
+          showContactButton={user?.role === "organizer"}
+          onContact={() => {
+            const v = details.data;
+            setDetails(null);
+            setChatModal({ venueId: v.id, venueUserId: v.userId ?? "", venueName: v.name });
+          }}
         />
       )}
     </div>

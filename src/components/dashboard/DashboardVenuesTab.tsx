@@ -19,6 +19,9 @@ interface Venue {
   riderUrl?: string; riderName?: string;
   schemaUrl?: string; schemaName?: string;
   busyDates?: BusyDate[];
+  phone?: string; email?: string; website?: string;
+  telegram?: string; vk?: string; instagram?: string;
+  whatsapp?: string; youtube?: string;
 }
 
 interface DashboardVenuesTabProps {
@@ -61,6 +64,14 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue, onRelo
       schemaUrl:   v.schemaUrl   || "",
       schemaName:  v.schemaName  || "",
       busyDates:   getBusyDates(v),
+      phone:       v.phone       || "",
+      email:       v.email       || "",
+      website:     v.website     || "",
+      telegram:    v.telegram    || "",
+      vk:          v.vk          || "",
+      instagram:   v.instagram   || "",
+      whatsapp:    v.whatsapp    || "",
+      youtube:     v.youtube     || "",
     });
   };
 

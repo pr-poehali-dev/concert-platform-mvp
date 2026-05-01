@@ -76,7 +76,20 @@ def row_to_venue(row) -> dict:
         "website": row[20] if len(row) > 20 else "",
         "importedFrom": row[21] if len(row) > 21 else "",
         "ownerUserId": str(row[22]) if len(row) > 22 and row[22] else "",
+        "email": row[23] if len(row) > 23 and row[23] else "",
+        "telegram": row[24] if len(row) > 24 and row[24] else "",
+        "vk": row[25] if len(row) > 25 and row[25] else "",
+        "instagram": row[26] if len(row) > 26 and row[26] else "",
+        "whatsapp": row[27] if len(row) > 27 and row[27] else "",
+        "youtube": row[28] if len(row) > 28 and row[28] else "",
     }
+
+
+VENUE_SELECT_FIELDS = """id, user_id, name, city, address, venue_type, capacity, price_from,
+       description, photo_url, rider_url, rider_name, tags, rating,
+       reviews_count, verified, created_at, schema_url, schema_name,
+       phone, website, imported_from, owner_user_id,
+       email, telegram, vk, instagram, whatsapp, youtube"""
 
 
 def upload_file(s3, data_b64: str, mime: str, folder: str, ext: str) -> str:
@@ -104,10 +117,7 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         try:
             cur = conn.cursor()
-            query = f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
-                               description, photo_url, rider_url, rider_name, tags, rating,
-                               reviews_count, verified, created_at, schema_url, schema_name,
-                               phone, website, imported_from, owner_user_id
+            query = f"""SELECT {VENUE_SELECT_FIELDS}
                         FROM {SCHEMA}.venues WHERE 1=1"""
             args = []
             if city:
@@ -120,9 +130,10 @@ def handler(event: dict, context) -> dict:
             cur.execute(query, args)
             rows = cur.fetchall()
 
-            # Подтягиваем все фото для этих площадок
+            # Подтягиваем все фото и занятые даты для этих площадок
             venue_ids = [str(r[0]) for r in rows]
             photos_map: dict = {}
+            busy_map: dict = {}
             if venue_ids:
                 placeholders = ",".join(["%s"] * len(venue_ids))
                 cur.execute(
@@ -131,6 +142,12 @@ def handler(event: dict, context) -> dict:
                 )
                 for pr in cur.fetchall():
                     photos_map.setdefault(str(pr[0]), []).append(pr[1])
+                cur.execute(
+                    f"SELECT venue_id, busy_date, note FROM {SCHEMA}.venue_busy_dates WHERE venue_id IN ({placeholders})",
+                    venue_ids,
+                )
+                for bd in cur.fetchall():
+                    busy_map.setdefault(str(bd[0]), []).append({"date": str(bd[1]), "note": bd[2]})
         finally:
             conn.close()
 
@@ -138,6 +155,7 @@ def handler(event: dict, context) -> dict:
         for r in rows:
             v = row_to_venue(r)
             v["photos"] = photos_map.get(v["id"], [v["photoUrl"]] if v["photoUrl"] else [])
+            v["busyDates"] = busy_map.get(v["id"], [])
             result.append(v)
         return ok({"venues": result})
 
@@ -150,10 +168,7 @@ def handler(event: dict, context) -> dict:
         try:
             cur = conn.cursor()
             cur.execute(
-                f"""SELECT id, user_id, name, city, address, venue_type, capacity, price_from,
-                           description, photo_url, rider_url, rider_name, tags, rating,
-                           reviews_count, verified, created_at, schema_url, schema_name,
-                           phone, website, imported_from, owner_user_id
+                f"""SELECT {VENUE_SELECT_FIELDS}
                     FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
                 (user_id,)
             )
@@ -200,6 +215,14 @@ def handler(event: dict, context) -> dict:
         description = (body.get("description") or "").strip()
         tags = body.get("tags") or []
         busy_dates = body.get("busyDates") or []
+        phone     = (body.get("phone") or "").strip()
+        website   = (body.get("website") or "").strip()
+        email     = (body.get("email") or "").strip()
+        telegram  = (body.get("telegram") or "").strip()
+        vk        = (body.get("vk") or "").strip()
+        instagram = (body.get("instagram") or "").strip()
+        whatsapp  = (body.get("whatsapp") or "").strip()
+        youtube   = (body.get("youtube") or "").strip()
 
         if not name: return err("Введите название")
         if not city: return err("Укажите город")
@@ -246,10 +269,12 @@ def handler(event: dict, context) -> dict:
             cur.execute(
                 f"""INSERT INTO {SCHEMA}.venues
                     (user_id, name, city, address, venue_type, capacity, price_from, description,
-                     photo_url, rider_url, rider_name, tags, schema_url, schema_name)
-                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                     photo_url, rider_url, rider_name, tags, schema_url, schema_name,
+                     phone, website, email, telegram, vk, instagram, whatsapp, youtube)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                 (user_id, name, city, address, venue_type, capacity, price_from, description,
-                 photo_url, rider_url, rider_name, tags, schema_url, schema_name)
+                 photo_url, rider_url, rider_name, tags, schema_url, schema_name,
+                 phone, website, email, telegram, vk, instagram, whatsapp, youtube)
             )
             venue_id = str(cur.fetchone()[0])
 
@@ -335,7 +360,10 @@ def handler(event: dict, context) -> dict:
             # Основные поля
             fields = {}
             for key, col in [("name","name"),("city","city"),("address","address"),("venueType","venue_type"),
-                             ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags")]:
+                             ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags"),
+                             ("phone","phone"),("website","website"),("email","email"),
+                             ("telegram","telegram"),("vk","vk"),("instagram","instagram"),
+                             ("whatsapp","whatsapp"),("youtube","youtube")]:
                 if key in body:
                     fields[col] = body[key]
 

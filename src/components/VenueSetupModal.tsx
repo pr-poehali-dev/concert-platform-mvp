@@ -25,6 +25,8 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
   const [form, setForm] = useState<VenueForm>({
     name: "", city: "Москва", address: "", venueType: "Клуб",
     capacity: "", priceFrom: "", description: "", tags: [],
+    phone: "", email: "", website: "",
+    telegram: "", vk: "", instagram: "", whatsapp: "", youtube: "",
   });
 
   // Фотографии — несколько
@@ -136,6 +138,9 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
         venueType: form.venueType, capacity: Number(form.capacity),
         priceFrom: Number(form.priceFrom) || 0,
         description: form.description, tags: form.tags,
+        phone: form.phone, email: form.email, website: form.website,
+        telegram: form.telegram, vk: form.vk, instagram: form.instagram,
+        whatsapp: form.whatsapp, youtube: form.youtube,
         photosBase64: mainPhoto ? [mainPhoto] : [],
         busyDates: Array.from(busyDates).map(d => ({ date: d, note: "" })),
       };

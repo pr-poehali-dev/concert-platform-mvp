@@ -22,6 +22,14 @@ export interface VenueData {
   schemaUrl: string;
   schemaName: string;
   busyDates: { date: string; note: string }[];
+  phone?: string;
+  email?: string;
+  website?: string;
+  telegram?: string;
+  vk?: string;
+  instagram?: string;
+  whatsapp?: string;
+  youtube?: string;
 }
 
 interface Props {
@@ -59,6 +67,14 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
     priceFrom:   String(venue.priceFrom || ""),
     description: venue.description || "",
     tags:        venue.tags        || [],
+    phone:       venue.phone       || "",
+    email:       venue.email       || "",
+    website:     venue.website     || "",
+    telegram:    venue.telegram    || "",
+    vk:          venue.vk          || "",
+    instagram:   venue.instagram   || "",
+    whatsapp:    venue.whatsapp    || "",
+    youtube:     venue.youtube     || "",
   });
 
   // Существующие фото из CDN (уже загруженные)
@@ -136,6 +152,14 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
         priceFrom:   Number(form.priceFrom) || 0,
         description: form.description,
         tags:        form.tags,
+        phone:       form.phone,
+        email:       form.email,
+        website:     form.website,
+        telegram:    form.telegram,
+        vk:          form.vk,
+        instagram:   form.instagram,
+        whatsapp:    form.whatsapp,
+        youtube:     form.youtube,
         busyDates:   Array.from(busyDates).map(d => ({ date: d, note: "" })),
         existingPhotos,
       };
