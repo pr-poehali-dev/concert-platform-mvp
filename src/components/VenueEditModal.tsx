@@ -1,6 +1,7 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import VenueStepContent, { type VenueForm, type PhotoItem } from "@/components/venue-setup/VenueStepContent";
+import { useAuth } from "@/context/AuthContext";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -41,9 +42,13 @@ function fileToBase64(file: File): Promise<string> {
 const STEPS = ["Основное", "Детали", "Даты", "Медиа"];
 
 export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
+  const { user } = useAuth();
   const [step, setStep]       = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deletingRef = useRef(false);
 
   const [form, setForm] = useState<VenueForm>({
     name:        venue.name        || "",
@@ -175,6 +180,30 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
       setError(e instanceof Error ? e.message : "Ошибка при сохранении");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (deletingRef.current) return;
+    if (!user) { setError("Сессия истекла, войдите заново"); return; }
+    deletingRef.current = true;
+    setDeleting(true);
+    setError("");
+    try {
+      const res = await fetch(`${VENUES_URL}?action=delete`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ venueId: venue.id, userId: user.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Не удалось удалить площадку");
+      onSaved();
+      onClose();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Ошибка при удалении");
+    } finally {
+      setDeleting(false);
+      deletingRef.current = false;
     }
   };
 
@@ -336,12 +365,23 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
         )}
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-white/10 shrink-0">
-          <button onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
-            className="flex items-center gap-2 px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm">
-            <Icon name="ChevronLeft" size={16} />
-            {step === 1 ? "Отмена" : "Назад"}
-          </button>
+        <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-white/10 shrink-0">
+          <div className="flex items-center gap-2">
+            <button onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
+              className="flex items-center gap-2 px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm">
+              <Icon name="ChevronLeft" size={16} />
+              {step === 1 ? "Отмена" : "Назад"}
+            </button>
+            <button
+              onClick={() => { setError(""); setConfirmDelete(true); }}
+              disabled={loading || deleting}
+              className="flex items-center gap-2 px-3 py-2 rounded-xl text-neon-pink/80 hover:text-neon-pink hover:bg-neon-pink/10 border border-neon-pink/20 hover:border-neon-pink/40 transition-all text-sm disabled:opacity-50"
+              title="Удалить площадку"
+            >
+              <Icon name="Trash2" size={14} />
+              <span className="hidden sm:inline">Удалить</span>
+            </button>
+          </div>
 
           {step < STEPS.length ? (
             <button onClick={() => { setError(""); setStep(s => s + 1); }}
@@ -349,13 +389,59 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
               Далее <Icon name="ChevronRight" size={16} />
             </button>
           ) : (
-            <button onClick={handleSubmit} disabled={loading}
+            <button onClick={handleSubmit} disabled={loading || deleting}
               className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-50 transition-opacity text-sm">
               {loading ? <><Icon name="Loader2" size={16} className="animate-spin" />Сохранение...</> : <><Icon name="Check" size={16} />Сохранить изменения</>}
             </button>
           )}
         </div>
       </div>
+
+      {/* Подтверждение удаления */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !deleting && setConfirmDelete(false)} />
+          <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl overflow-hidden animate-scale-in">
+            <div className="p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-neon-pink/15 flex items-center justify-center shrink-0">
+                  <Icon name="AlertTriangle" size={20} className="text-neon-pink" />
+                </div>
+                <div>
+                  <h3 className="font-oswald font-bold text-lg text-white">Удалить площадку?</h3>
+                  <p className="text-white/50 text-sm mt-1">
+                    Площадка «{venue.name}» и все её данные (фото, занятые даты, райдер, схема) будут удалены навсегда. Это действие нельзя отменить.
+                  </p>
+                </div>
+              </div>
+              {error && (
+                <div className="mb-3 flex items-center gap-2 text-neon-pink text-xs bg-neon-pink/10 rounded-xl px-3 py-2 border border-neon-pink/20">
+                  <Icon name="AlertCircle" size={13} className="shrink-0" />
+                  {error}
+                </div>
+              )}
+              <div className="flex items-center justify-end gap-2 mt-5">
+                <button
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                  className="px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm disabled:opacity-50"
+                >
+                  Отмена
+                </button>
+                <button
+                  onClick={handleDelete}
+                  disabled={deleting}
+                  className="flex items-center gap-2 px-5 py-2 bg-neon-pink/90 hover:bg-neon-pink text-white font-oswald font-semibold rounded-xl transition-colors text-sm disabled:opacity-50"
+                >
+                  {deleting
+                    ? <><Icon name="Loader2" size={14} className="animate-spin" />Удаляем...</>
+                    : <><Icon name="Trash2" size={14} />Удалить</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

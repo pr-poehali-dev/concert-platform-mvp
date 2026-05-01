@@ -409,6 +409,35 @@ def handler(event: dict, context) -> dict:
             conn.close()
         return ok({"success": True})
 
+    # ── POST delete — удалить площадку (только владелец) ──────────────────
+    if method == "POST" and action == "delete":
+        body = json.loads(event.get("body") or "{}")
+        venue_id = body.get("venueId", "")
+        user_id  = body.get("userId", "")
+        if not venue_id:
+            return err("venueId обязателен")
+        if not user_id:
+            return err("userId обязателен")
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s",
+                (venue_id, user_id),
+            )
+            if not cur.fetchone():
+                conn.close()
+                return err("Площадка не найдена или нет прав", 403)
+
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (venue_id,))
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (venue_id,))
+            cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (venue_id,))
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True, "deleted": venue_id})
+
     # ── POST update_busy_dates — обновить только занятые даты площадки ──────
     if method == "POST" and action == "update_busy_dates":
         body     = json.loads(event.get("body") or "{}")

@@ -32,6 +32,15 @@
       "expectedStatus": 200,
       "expectedBody": {},
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Delete venue without venueId",
+      "method": "POST",
+      "path": "/?action=delete",
+      "body": { "userId": "test" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
     }
   ]
 }
