@@ -1,0 +1,1 @@
+{"tests": [{"name": "OPTIONS CORS", "method": "OPTIONS", "path": "/", "expectedStatus": 200}, {"name": "venues_list empty", "method": "GET", "path": "/?action=venues_list&city=test", "expectedStatus": 200, "bodyMatcher": "partial"}]}
