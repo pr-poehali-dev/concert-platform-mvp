@@ -38,6 +38,8 @@ interface Contract {
   organizer_id: string;
   venue_user_id: string;
   created_at: string;
+  contract_template: string;
+  contract_subject: string;
 }
 
 const STATUS_LABEL: Record<string, { label: string; color: string }> = {
@@ -288,10 +290,41 @@ export default function ContractModal({
                 ))}
               </div>
 
+              {/* Тело договора — шаблон площадки */}
+              {contract.contract_template ? (
+                <div className="glass rounded-xl border border-white/8 p-5">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon name="FileText" size={14} className="text-neon-cyan" />
+                    <p className="text-white/50 text-xs uppercase tracking-wider">
+                      {contract.contract_subject || "Текст договора"}
+                    </p>
+                  </div>
+                  <pre className="text-white/75 text-sm font-mono whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto scrollbar-thin">
+                    {contract.contract_template}
+                  </pre>
+                </div>
+              ) : (
+                <div className="glass rounded-xl border border-white/8 p-4">
+                  <p className="text-white/40 text-xs mb-2 uppercase tracking-wider">Предмет договора</p>
+                  <p className="text-white/65 text-sm">
+                    Арендодатель предоставляет площадку «{contract.venue_name}» для проведения мероприятия.
+                    {contract.artist ? ` Артист: ${contract.artist}.` : ""}
+                    {" "}Дата: {fmtDate(contract.event_date)}{contract.event_time ? ` в ${contract.event_time}` : ""}.
+                    {" "}Стоимость: {fmt(contract.rental_amount)}.
+                    {contract.venue_conditions ? ` Условия: ${contract.venue_conditions}.` : ""}
+                  </p>
+                  <p className="text-white/30 text-xs mt-2">
+                    Площадка не настроила шаблон договора. Добавьте его в редактировании площадки → шаг «Договор».
+                  </p>
+                </div>
+              )}
+
               {/* Скрытый печатный блок для PDF */}
               <div ref={printRef} style={{ position: "absolute", left: "-9999px", top: 0, width: "794px", background: "#fff", color: "#111", padding: "48px", fontFamily: "serif", fontSize: "13px", lineHeight: "1.7" }}>
                 <div style={{ textAlign: "center", marginBottom: "24px" }}>
-                  <div style={{ fontSize: "18px", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>Договор аренды концертной площадки</div>
+                  <div style={{ fontSize: "18px", fontWeight: "bold", textTransform: "uppercase", marginBottom: "4px" }}>
+                    {contract.contract_subject || "Договор аренды концертной площадки"}
+                  </div>
                   <div style={{ fontSize: "12px", color: "#555" }}>№{contract.contract_number} от {fmtDate(contract.created_at)}</div>
                 </div>
                 <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
@@ -309,6 +342,12 @@ export default function ContractModal({
                   {contract.venue_address && <div>Адрес: {contract.venue_address}</div>}
                   {contract.venue_phone   && <div>Тел.: {contract.venue_phone}</div>}
                 </div>
+                {/* Тело договора: шаблон или стандартный блок */}
+                {contract.contract_template ? (
+                  <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px", whiteSpace: "pre-wrap" }}>
+                    {contract.contract_template}
+                  </div>
+                ) : (
                 <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
                   <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Предмет договора</div>
                   <div>Арендодатель предоставляет площадку «{contract.venue_name}» для проведения мероприятия.</div>
@@ -317,6 +356,7 @@ export default function ContractModal({
                   <div><b>Стоимость аренды:</b> {fmt(contract.rental_amount)}</div>
                   {contract.venue_conditions && <div><b>Условия:</b> {contract.venue_conditions}</div>}
                 </div>
+                )}
                 <div style={{ borderTop: "1px solid #ddd", paddingTop: "16px", marginBottom: "16px" }}>
                   <div style={{ fontWeight: "bold", fontSize: "11px", letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: "8px", color: "#666" }}>Реквизиты Арендатора</div>
                   {contract.organizer_bank_name    && <div>Банк: {contract.organizer_bank_name}</div>}
@@ -353,10 +393,12 @@ export default function ContractModal({
                 </div>
               </div>
 
-              {/* Тело договора */}
+              {/* Тело договора — реквизиты + шаблон */}
               <div className="glass rounded-2xl p-5 border border-white/5 text-sm text-white/70 leading-relaxed space-y-4 font-mono text-xs">
                 <div className="text-center space-y-1">
-                  <p className="font-oswald font-bold text-white text-base uppercase">Договор аренды концертной площадки</p>
+                  <p className="font-oswald font-bold text-white text-base uppercase">
+                    {contract.contract_subject || "Договор аренды концертной площадки"}
+                  </p>
                   <p className="text-white/40">№{contract.contract_number} от {fmtDate(contract.created_at)}</p>
                 </div>
 
@@ -375,16 +417,24 @@ export default function ContractModal({
                   {contract.venue_phone   && <p><span className="text-white/40">Тел.: </span>{contract.venue_phone}</p>}
                 </div>
 
-                <div className="border-t border-white/5 pt-4 space-y-1">
-                  <p className="text-white/50 uppercase text-[10px] tracking-wider mb-2">Предмет договора</p>
-                  <p>Арендодатель обязуется предоставить концертную площадку <span className="text-white/90">«{contract.venue_name}»</span> во временное пользование для проведения мероприятия.</p>
-                  {contract.artist     && <p><span className="text-white/40">Артист: </span>{contract.artist}</p>}
-                  <p><span className="text-white/40">Дата мероприятия: </span><span className="text-white/90">{fmtDate(contract.event_date)}</span>{contract.event_time ? ` в ${contract.event_time}` : ""}</p>
-                  <p><span className="text-white/40">Стоимость аренды: </span><span className="text-neon-green font-bold text-sm">{fmt(contract.rental_amount)}</span></p>
-                  {contract.venue_conditions && (
-                    <p><span className="text-white/40">Условия: </span>{contract.venue_conditions}</p>
-                  )}
-                </div>
+                {/* Тело: шаблон площадки или стандартный предмет */}
+                {contract.contract_template ? (
+                  <div className="border-t border-white/5 pt-4">
+                    <p className="text-white/50 uppercase text-[10px] tracking-wider mb-2">Текст договора</p>
+                    <pre className="whitespace-pre-wrap text-white/75 leading-relaxed">{contract.contract_template}</pre>
+                  </div>
+                ) : (
+                  <div className="border-t border-white/5 pt-4 space-y-1">
+                    <p className="text-white/50 uppercase text-[10px] tracking-wider mb-2">Предмет договора</p>
+                    <p>Арендодатель обязуется предоставить концертную площадку <span className="text-white/90">«{contract.venue_name}»</span> во временное пользование для проведения мероприятия.</p>
+                    {contract.artist     && <p><span className="text-white/40">Артист: </span>{contract.artist}</p>}
+                    <p><span className="text-white/40">Дата мероприятия: </span><span className="text-white/90">{fmtDate(contract.event_date)}</span>{contract.event_time ? ` в ${contract.event_time}` : ""}</p>
+                    <p><span className="text-white/40">Стоимость аренды: </span><span className="text-neon-green font-bold text-sm">{fmt(contract.rental_amount)}</span></p>
+                    {contract.venue_conditions && (
+                      <p><span className="text-white/40">Условия: </span>{contract.venue_conditions}</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="border-t border-white/5 pt-4 space-y-1">
                   <p className="text-white/50 uppercase text-[10px] tracking-wider mb-2">Банковские реквизиты Арендатора</p>

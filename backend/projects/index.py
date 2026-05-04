@@ -1290,11 +1290,11 @@ def handler(event: dict, context) -> dict:
             conn.close()
             return ok({"contractId": str(existing[0]), "status": existing[1], "existed": True})
 
-        # Данные бронирования
+        # Данные бронирования + шаблон договора из venues
         cur.execute(
             f"""SELECT b.organizer_id, b.venue_user_id, b.venue_id,
                        b.event_date, b.event_time, b.artist, b.rental_amount, b.venue_conditions,
-                       b.project_id, v.name
+                       b.project_id, v.name, v.contract_template, v.contract_subject
                 FROM {SCHEMA}.venue_bookings b
                 JOIN {SCHEMA}.venues v ON v.id = b.venue_id
                 WHERE b.id=%s""", (booking_id,))
@@ -1309,13 +1309,15 @@ def handler(event: dict, context) -> dict:
         venue_conditions = row[7] or ""
         project_id = str(row[8]) if row[8] else None
         venue_name = row[9]
+        raw_template = row[10] or ""
+        contract_subject = row[11] or ""
 
         # Реквизиты организатора
         cur.execute(
             f"""SELECT legal_name, inn, kpp, ogrn, legal_address,
-                       bank_name, bank_account, bank_bik, phone
+                       bank_name, bank_account, bank_bik, phone, name
                 FROM {SCHEMA}.users WHERE id=%s""", (organizer_id,))
-        org = cur.fetchone() or ("","","","","","","","","")
+        org = cur.fetchone() or ("","","","","","","","","","")
 
         # Реквизиты площадки
         cur.execute(
@@ -1323,6 +1325,19 @@ def handler(event: dict, context) -> dict:
                        bank_name, bank_account, bank_bik, phone
                 FROM {SCHEMA}.users WHERE id=%s""", (venue_user_id,))
         ven = cur.fetchone() or ("","","","","","","","","")
+
+        # Подставляем переменные в шаблон
+        organizer_display = org[0] or org[9] or "Организатор"
+        rental_fmt = f"{int(rental_amount):,}".replace(",", " ") + " руб." if rental_amount else ""
+        contract_template_filled = (raw_template
+            .replace("{venue_name}", venue_name)
+            .replace("{event_date}", str(event_date))
+            .replace("{rental_amount}", rental_fmt)
+            .replace("{organizer_name}", organizer_display)
+            .replace("{artist}", artist)
+            .replace("{event_time}", event_time)
+            .replace("{venue_conditions}", venue_conditions)
+        )
 
         import random, string
         contract_number = "GL-" + "".join(random.choices(string.digits, k=8))
@@ -1335,15 +1350,15 @@ def handler(event: dict, context) -> dict:
                  venue_legal_name, venue_inn, venue_kpp, venue_ogrn, venue_address,
                  venue_bank_name, venue_bank_account, venue_bank_bik, venue_phone,
                  venue_name, event_date, event_time, artist, rental_amount, venue_conditions,
-                 contract_number, status)
+                 contract_number, status, contract_template, contract_subject)
                 VALUES (%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,
-                        %s,%s,%s,%s,%s,%s, %s,'draft')
+                        %s,%s,%s,%s,%s,%s, %s,'draft', %s,%s)
                 RETURNING id""",
             (booking_id, project_id, organizer_id, venue_user_id,
              org[0],org[1],org[2],org[3],org[4], org[5],org[6],org[7],org[8],
              ven[0],ven[1],ven[2],ven[3],ven[4], ven[5],ven[6],ven[7],ven[8],
              venue_name, event_date, event_time, artist, rental_amount, venue_conditions,
-             contract_number))
+             contract_number, contract_template_filled, contract_subject))
         contract_id = str(cur.fetchone()[0])
         conn.commit(); conn.close()
 
