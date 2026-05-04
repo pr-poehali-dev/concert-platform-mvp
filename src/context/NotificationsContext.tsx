@@ -19,10 +19,13 @@ export interface Notification {
 interface NotificationsContextType {
   notifications: Notification[];
   unreadCount: number;
+  unreadByPage: (page: string) => number;
+  unreadByType: (type: string) => number;
   loading: boolean;
   refresh: () => void;
   markRead: (id: string) => void;
   markAllRead: () => void;
+  markReadByPage: (page: string) => void;
   sendNotification: (userId: string, type: string, title: string, body: string, linkPage?: string) => Promise<void>;
 }
 
@@ -91,8 +94,27 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
 
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  const unreadByPage = (page: string) =>
+    notifications.filter(n => !n.isRead && n.linkPage === page).length;
+
+  const unreadByType = (type: string) =>
+    notifications.filter(n => !n.isRead && n.type === type).length;
+
+  const markReadByPage = async (page: string) => {
+    const ids = notifications.filter(n => !n.isRead && n.linkPage === page).map(n => n.id);
+    if (!ids.length) return;
+    setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, isRead: true } : n));
+    await Promise.all(ids.map(id =>
+      fetch(`${NOTIF_URL}?action=read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      })
+    ));
+  };
+
   return (
-    <NotificationsContext.Provider value={{ notifications, unreadCount, loading, refresh, markRead, markAllRead, sendNotification }}>
+    <NotificationsContext.Provider value={{ notifications, unreadCount, unreadByPage, unreadByType, loading, refresh, markRead, markAllRead, markReadByPage, sendNotification }}>
       {children}
     </NotificationsContext.Provider>
   );

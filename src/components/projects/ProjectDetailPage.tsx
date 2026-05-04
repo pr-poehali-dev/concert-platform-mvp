@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import Icon from "@/components/ui/icon";
 import { PROJECTS_URL, type Project, type Expense, type IncomeLine, recalcFinance } from "@/hooks/useProjects";
 import { useAuth } from "@/context/AuthContext";
+import { useNotifications } from "@/context/NotificationsContext";
 import { useEffect } from "react";
 import ProjectDetailHeader from "./ProjectDetailHeader";
 import ProjectBudgetTab from "./ProjectBudgetTab";
@@ -17,6 +18,7 @@ interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversat
 
 export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Props) {
   const { user } = useAuth();
+  const { unreadByPage, markReadByPage } = useNotifications();
   const [project, setProject] = useState<Project|null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<"budget"|"income"|"summary"|"venue"|"crm"|"logistics"|"company"|"documents"|"members">("budget");
@@ -143,15 +145,15 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const canEditIncome   = !user?.isEmployee || (ap?.canEditIncome   ?? true);
 
   const ALL_TABS = [
-    {id:"budget",    label:"Бюджет расходов", icon:"TrendingDown",  visible: canViewExpenses},
-    {id:"income",    label:"Доходы",          icon:"TrendingUp",    visible: canViewIncome},
-    {id:"summary",   label:"Итог / P&L",      icon:"BarChart3",     visible: canViewSummary},
-    {id:"venue",     label:"Площадка",        icon:"Building2",     visible: true},
-    {id:"crm",       label:"Задачи",          icon:"ClipboardList", visible: true},
-    {id:"logistics", label:"Логистика",       icon:"Briefcase",     visible: true},
-    {id:"documents", label:"Документы",       icon:"FileArchive",   visible: true},
-    {id:"members",   label:"Участники",       icon:"UserCheck",     visible: true},
-    {id:"company",   label:"Компания",        icon:"Building2",     visible: !user?.isEmployee},
+    {id:"budget",    label:"Бюджет расходов", icon:"TrendingDown",  visible: canViewExpenses,   page:""},
+    {id:"income",    label:"Доходы",          icon:"TrendingUp",    visible: canViewIncome,     page:""},
+    {id:"summary",   label:"Итог / P&L",      icon:"BarChart3",     visible: canViewSummary,    page:""},
+    {id:"venue",     label:"Площадка",        icon:"Building2",     visible: true,              page:"booking"},
+    {id:"crm",       label:"Задачи",          icon:"ClipboardList", visible: true,              page:"projects"},
+    {id:"logistics", label:"Логистика",       icon:"Briefcase",     visible: true,              page:""},
+    {id:"documents", label:"Документы",       icon:"FileArchive",   visible: true,              page:""},
+    {id:"members",   label:"Участники",       icon:"UserCheck",     visible: true,              page:""},
+    {id:"company",   label:"Компания",        icon:"Building2",     visible: !user?.isEmployee, page:""},
   ] as const;
   const TABS = ALL_TABS.filter(t => t.visible);
 
@@ -171,12 +173,20 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-24">
         {/* Tabs */}
         <div className="flex gap-1 mb-6 glass rounded-xl p-1 w-fit flex-wrap">
-          {TABS.map(t=>(
-            <button key={t.id} onClick={()=>setActiveTab(t.id)}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab===t.id?"bg-neon-purple text-white":"text-white/50 hover:text-white"}`}>
+          {TABS.map(t=>{
+            const badge = t.page ? unreadByPage(t.page) : 0;
+            return (
+            <button key={t.id} onClick={()=>{ setActiveTab(t.id); if(t.page) markReadByPage(t.page); }}
+              className={`relative flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-oswald font-medium transition-all ${activeTab===t.id?"bg-neon-purple text-white":"text-white/50 hover:text-white"}`}>
               <Icon name={t.icon} size={15}/>{t.label}
+              {badge > 0 && (
+                <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-neon-pink text-white shadow-md shadow-neon-pink/30 min-w-[18px] text-center">
+                  {badge > 9 ? "9+" : badge}
+                </span>
+              )}
             </button>
-          ))}
+            );
+          })}
         </div>
 
         {/* ── BUDGET ── */}

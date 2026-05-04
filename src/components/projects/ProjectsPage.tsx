@@ -3,11 +3,14 @@ import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
 import { PROJECTS_URL, STATUS_CONFIG, fmt, type Project } from "@/hooks/useProjects";
+import { useNotifications } from "@/context/NotificationsContext";
 import CreateProjectModal from "./CreateProjectModal";
 import ProjectDetailPage from "./ProjectDetailPage";
 
 export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
+  const { unreadByType } = useNotifications();
+  const totalBookingUnread = unreadByType("booking");
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
@@ -125,7 +128,7 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
               const overdue = p.hasOverdueTasks;
               return (
                 <div key={p.id} onClick={()=>setOpenProjectId(p.id)}
-                  className={`glass rounded-2xl p-5 cursor-pointer hover-lift group transition-all border hover:border-neon-purple/20 ${overdue ? "border-neon-pink/40 animate-pulse-border" : "border-white/5"}`}>
+                  className={`relative glass rounded-2xl p-5 cursor-pointer hover-lift group transition-all border hover:border-neon-purple/20 ${overdue ? "border-neon-pink/40 animate-pulse-border" : "border-white/5"}`}>
                   {/* Card header */}
                   <div className="flex items-start justify-between mb-3 gap-2">
                     <div className="flex-1 min-w-0">
@@ -153,7 +156,14 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                         </p>
                       )}
                     </div>
-                    <Icon name="ChevronRight" size={16} className="text-white/20 group-hover:text-neon-purple transition-colors shrink-0 mt-1"/>
+                    <div className="flex items-center gap-2 shrink-0 mt-1">
+                      {totalBookingUnread > 0 && (
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-neon-pink text-white shadow-md shadow-neon-pink/30 min-w-[18px] text-center animate-pulse">
+                          {totalBookingUnread > 9 ? "9+" : totalBookingUnread}
+                        </span>
+                      )}
+                      <Icon name="ChevronRight" size={16} className="text-white/20 group-hover:text-neon-purple transition-colors"/>
+                    </div>
                   </div>
 
                   <div className="flex items-center gap-3 text-white/35 text-xs mb-4 flex-wrap">

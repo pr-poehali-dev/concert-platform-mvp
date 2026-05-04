@@ -82,6 +82,8 @@ def row_to_venue(row) -> dict:
         "instagram": row[26] if len(row) > 26 and row[26] else "",
         "whatsapp": row[27] if len(row) > 27 and row[27] else "",
         "youtube": row[28] if len(row) > 28 and row[28] else "",
+        "contractTemplate": row[29] if len(row) > 29 and row[29] else "",
+        "contractSubject": row[30] if len(row) > 30 and row[30] else "",
     }
 
 
@@ -89,7 +91,8 @@ VENUE_SELECT_FIELDS = """id, user_id, name, city, address, venue_type, capacity,
        description, photo_url, rider_url, rider_name, tags, rating,
        reviews_count, verified, created_at, schema_url, schema_name,
        phone, website, imported_from, owner_user_id,
-       email, telegram, vk, instagram, whatsapp, youtube"""
+       email, telegram, vk, instagram, whatsapp, youtube,
+       contract_template, contract_subject"""
 
 
 def upload_file(s3, data_b64: str, mime: str, folder: str, ext: str) -> str:
@@ -363,7 +366,8 @@ def handler(event: dict, context) -> dict:
                              ("capacity","capacity"),("priceFrom","price_from"),("description","description"),("tags","tags"),
                              ("phone","phone"),("website","website"),("email","email"),
                              ("telegram","telegram"),("vk","vk"),("instagram","instagram"),
-                             ("whatsapp","whatsapp"),("youtube","youtube")]:
+                             ("whatsapp","whatsapp"),("youtube","youtube"),
+                             ("contractTemplate","contract_template"),("contractSubject","contract_subject")]:
                 if key in body:
                     fields[col] = body[key]
 
@@ -505,6 +509,48 @@ def handler(event: dict, context) -> dict:
         finally:
             conn.close()
         return ok({"success": True, "busyDates": saved, "count": len(saved)})
+
+    # ── POST transfer — передать площадку другому кабинету по display_id ───
+    if method == "POST" and action == "transfer":
+        body = json.loads(event.get("body") or "{}")
+        venue_id    = body.get("venueId", "")
+        from_user_id = body.get("userId", "")
+        target_display_id = (body.get("targetDisplayId") or "").strip()
+
+        if not venue_id or not from_user_id:
+            return err("venueId и userId обязательны")
+        if not target_display_id:
+            return err("Введите ID кабинета получателя")
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT id FROM {SCHEMA}.venues WHERE id = %s AND user_id = %s",
+                (venue_id, from_user_id))
+            if not cur.fetchone():
+                conn.close(); return err("Площадка не найдена или вы не владелец", 403)
+
+            cur.execute(
+                f"SELECT id, role FROM {SCHEMA}.users WHERE display_id = %s",
+                (target_display_id,))
+            target = cur.fetchone()
+            if not target:
+                conn.close(); return err("Кабинет с таким ID не найден")
+            target_id = str(target[0])
+            target_role = target[1]
+            if target_role != "venue":
+                conn.close(); return err("Принимающий кабинет должен иметь роль «Площадка»")
+            if target_id == from_user_id:
+                conn.close(); return err("Нельзя передать площадку самому себе")
+
+            cur.execute(
+                f"UPDATE {SCHEMA}.venues SET user_id = %s WHERE id = %s",
+                (target_id, venue_id))
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True, "newOwnerId": target_id})
 
     # ── GET home_stats — реальная статистика для главной страницы ─────────
     if method == "GET" and action == "home_stats":

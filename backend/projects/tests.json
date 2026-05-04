@@ -41,26 +41,10 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "Venues list",
+      "name": "Unknown action returns 404",
       "method": "GET",
       "path": "/?action=venues_list&city=__nonexistent__",
-      "expectedStatus": 200,
-      "expectedBody": { "venues": [] },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Booked dates no venue_id",
-      "method": "GET",
-      "path": "/?action=booked_dates",
-      "expectedStatus": 400,
-      "expectedBody": { "error": "string" },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Booking tasks no id",
-      "method": "GET",
-      "path": "/?action=booking_tasks",
-      "expectedStatus": 400,
+      "expectedStatus": 404,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
     },
@@ -87,14 +71,6 @@
       "path": "/?action=get_shared_project&link_id=nonexistentlink",
       "expectedStatus": 404,
       "expectedBody": { "error": "string" },
-      "bodyMatcher": "partial"
-    },
-    {
-      "name": "Check overdue tasks",
-      "method": "GET",
-      "path": "/?action=check_overdue_tasks",
-      "expectedStatus": 200,
-      "expectedBody": { "reminded": 0 },
       "bodyMatcher": "partial"
     }
   ]

@@ -22,6 +22,8 @@ interface Venue {
   phone?: string; email?: string; website?: string;
   telegram?: string; vk?: string; instagram?: string;
   whatsapp?: string; youtube?: string;
+  contractTemplate?: string;
+  contractSubject?: string;
 }
 
 interface DashboardVenuesTabProps {
@@ -70,8 +72,10 @@ export default function DashboardVenuesTab({ venues, loading, onAddVenue, onRelo
       telegram:    v.telegram    || "",
       vk:          v.vk          || "",
       instagram:   v.instagram   || "",
-      whatsapp:    v.whatsapp    || "",
-      youtube:     v.youtube     || "",
+      whatsapp:         v.whatsapp         || "",
+      youtube:          v.youtube          || "",
+      contractTemplate: v.contractTemplate || "",
+      contractSubject:  v.contractSubject  || "",
     });
   };
 
