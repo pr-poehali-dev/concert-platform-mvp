@@ -653,17 +653,19 @@ def handler(event: dict, context) -> dict:
         return ok({"events": result})
 
     # ── POST create_from_tc — создать проект из события TicketsCloud ───────
+    # Быстрый шаг: только создаём проект + интеграцию (без загрузки заказов).
+    # После создания фронт вызывает action=sync — там вся загрузка данных.
     if method == "POST" and action == "create_from_tc":
-        b          = json.loads(event.get("body") or "{}")
-        user_id    = b.get("userId", "")
-        api_key    = (b.get("apiKey") or "").strip()
+        b           = json.loads(event.get("body") or "{}")
+        user_id     = b.get("userId", "")
+        api_key     = (b.get("apiKey") or "").strip()
         tc_event_id = (b.get("eventId") or "").strip()
-        project_id_existing = b.get("projectId") or None  # если уже есть проект — просто создать интеграцию
+        project_id_existing = b.get("projectId") or None
 
         if not user_id or not api_key or not tc_event_id:
             return err("userId, apiKey, eventId обязательны")
 
-        # Получаем данные события
+        # Получаем только мета-данные и категории (2 быстрых запроса, ~1 сек)
         event_info = fetch_ticketscloud_event_info(api_key, tc_event_id)
         event_sets = fetch_ticketscloud_event_sets(api_key, tc_event_id)
 
@@ -674,7 +676,6 @@ def handler(event: dict, context) -> dict:
             if project_id_existing:
                 project_id = project_id_existing
             else:
-                # Создаём проект
                 title      = event_info.get("title") or f"Событие {tc_event_id[:8]}"
                 city       = event_info.get("city") or ""
                 date_start = event_info.get("date_start") or None
@@ -688,16 +689,6 @@ def handler(event: dict, context) -> dict:
                 )
                 project_id = str(cur.fetchone()[0])
 
-                # Создаём строки доходов из event_sets
-                for i, s in enumerate(event_sets):
-                    cur.execute(
-                        f"""INSERT INTO {SCHEMA}.project_income_lines
-                            (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
-                            VALUES (%s,%s,%s,%s,%s,%s,%s)""",
-                        (project_id, s["name"], s["total"], s["price"], s.get("sold", 0),
-                         f"ticketscloud:{tc_event_id}", i)
-                    )
-
             # Создаём интеграцию
             webhook_secret = generate_webhook_secret()
             title_for_name = event_info.get("title") or f"TicketsCloud #{tc_event_id[:8]}"
@@ -710,21 +701,28 @@ def handler(event: dict, context) -> dict:
             )
             integration_id = str(cur.fetchone()[0])
 
-            # Загружаем заказы и синхронизируем доходы
-            try:
-                orders = fetch_ticketscloud_orders(api_key, tc_event_id)
-                all_sales = []
-                for order in orders:
-                    all_sales.extend(parse_ticketscloud_order(order, integration_id, project_id))
-                upsert_sales(cur, all_sales)
-                sync_income_lines(cur, project_id, integration_id, event_sets)
+            # Сразу создаём строки доходов с ПРАВИЛЬНЫМ note (integration_id:set_id)
+            # чтобы первый же sync их нашёл и корректно обновил
+            for i, s in enumerate(event_sets):
+                note_key = f"ticketscloud:{integration_id}:{s['id']}"
                 cur.execute(
-                    f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
-                    (integration_id,)
+                    f"""INSERT INTO {SCHEMA}.project_income_lines
+                        (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s)
+                        ON CONFLICT DO NOTHING""",
+                    (project_id, s["name"], s["total"], s["price"], 0, note_key, i)
                 )
-            except RuntimeError:
-                pass  # если не удалось загрузить заказы — не критично
 
+            # Пересчитываем план (sold_count=0 пока — факт придёт после sync)
+            cur.execute(
+                f"""UPDATE {SCHEMA}.projects SET
+                      total_income_plan = COALESCE(
+                        (SELECT SUM(ticket_count::numeric * ticket_price)
+                         FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
+                      updated_at = NOW()
+                    WHERE id = %s""",
+                (project_id, project_id)
+            )
             conn.commit()
         finally:
             conn.close()

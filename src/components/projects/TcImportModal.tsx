@@ -75,6 +75,8 @@ export default function TcImportModal({ userId, onClose, onImported }: Props) {
     let lastId = "";
 
     for (const ev of selectedEvents) {
+      // Шаг 1: создаём проект + интеграцию (быстро, ~1-2 сек)
+      let integrationId = "";
       try {
         const res = await fetch(`${TICKETS_URL}?action=create_from_tc`, {
           method: "POST",
@@ -82,11 +84,29 @@ export default function TcImportModal({ userId, onClose, onImported }: Props) {
           body: JSON.stringify({ userId, apiKey, eventId: ev.id }),
         });
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Ошибка");
+        if (!res.ok) throw new Error(data.error || "Ошибка создания");
+        integrationId = data.integrationId;
         lastId = data.projectId;
-        log.push({ title: ev.title, ok: true, msg: "Создан" });
+        log.push({ title: ev.title, ok: true, msg: "Создан, загружаю продажи..." });
+        setImportLog([...log]);
       } catch (e: unknown) {
         log.push({ title: ev.title, ok: false, msg: e instanceof Error ? e.message : "Ошибка" });
+        setImportLog([...log]);
+        continue;
+      }
+
+      // Шаг 2: синхронизируем заказы + факт продаж отдельным вызовом
+      try {
+        const syncRes = await fetch(`${TICKETS_URL}?action=sync`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ integrationId }),
+        });
+        const syncData = await syncRes.json();
+        const orders = syncData.ordersProcessed ?? 0;
+        log[log.length - 1] = { title: ev.title, ok: true, msg: `Создан · ${orders} заказов` };
+      } catch {
+        log[log.length - 1] = { title: ev.title, ok: true, msg: "Создан (синхр. позже)" };
       }
       setImportLog([...log]);
     }
