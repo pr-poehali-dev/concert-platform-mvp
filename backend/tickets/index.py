@@ -139,63 +139,38 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
 
 
 def fetch_ticketscloud_event_sets(api_key: str, event_id: str) -> list:
-    """Получает категории билетов события из TicketsCloud API v2.
+    """Получает категории билетов события из TicketsCloud API v1.
 
-    GET /v2/resources/events/{event_id}
-    Возвращает список категорий (sets) с полями:
-      id, name, price, nominal, total (тираж), sold, reserved, free
+    GET /v1/resources/events/{event_id}/sets
+    Возвращает список категорий с полями:
+      id, name, amount (тираж), amount_vacant (свободно), current_price
     """
-    import sys
-    data = {}
-    url = f"https://ticketscloud.com/v2/resources/events/{event_id}"
+    url = f"https://ticketscloud.com/v1/resources/events/{event_id}/sets"
     try:
-        data = _tc_request(url, api_key)
-        print(f"[TC:events] keys={list(data.keys())}", file=sys.stderr)
-    except RuntimeError as e1:
-        print(f"[TC:events] {url} failed: {e1}", file=sys.stderr)
-        # Пробуем через список событий
-        try:
-            url2 = f"https://ticketscloud.com/v2/resources/events?ids={event_id}"
-            data = _tc_request(url2, api_key)
-            items = data.get("data") or []
-            data = {"data": items[0]} if items else {}
-            print(f"[TC:events] list fallback keys={list(data.keys())}", file=sys.stderr)
-        except RuntimeError as e2:
-            print(f"[TC:events] list fallback failed: {e2}", file=sys.stderr)
-            return []
+        raw = _tc_request(url, api_key)
+    except RuntimeError:
+        return []
 
-    # Событие может быть прямо в data или в data.data
-    event = data.get("data") or data
-    if isinstance(event, list):
-        event = event[0] if event else {}
-
-    print(f"[TC:events] event keys={list(event.keys()) if isinstance(event, dict) else type(event)}", file=sys.stderr)
-
-    sets = event.get("sets") or event.get("categories") or []
-    if not sets:
-        for key in ("ticket_sets", "places", "sectors"):
-            if event.get(key):
-                sets = event[key]
-                break
-
-    print(f"[TC:events] sets count={len(sets)}", file=sys.stderr)
-    if sets:
-        print(f"[TC:events] first set sample={json.dumps(sets[0], ensure_ascii=False, default=str)[:300]}", file=sys.stderr)
+    # Ответ — массив напрямую (не обёртка)
+    sets = raw if isinstance(raw, list) else (raw.get("data") or [])
 
     result = []
     for s in sets:
-        if not isinstance(s, dict):
+        if not isinstance(s, dict) or s.get("removed"):
             continue
-        set_id   = str(s.get("id") or "")
-        name     = str(s.get("name") or set_id)
-        price    = float(s.get("price") or s.get("nominal") or 0)
-        total    = int(s.get("total") or s.get("count") or s.get("capacity") or s.get("quantity") or 0)
-        sold     = int(s.get("sold") or s.get("sold_count") or s.get("orders_count") or 0)
-        reserved = int(s.get("reserved") or s.get("reserved_count") or 0)
+        set_id  = str(s.get("id") or "")
+        name    = str(s.get("name") or set_id)
+        price   = float(s.get("current_price") or s.get("price") or 0)
+        total   = int(s.get("amount") or 0)          # тираж
+        vacant  = int(s.get("amount_vacant") or 0)   # свободно
+        sold    = max(0, total - vacant)              # продано + забронировано
         result.append({
-            "id": set_id, "name": name, "price": price,
-            "total": total, "sold": sold, "reserved": reserved,
-            "free": max(0, total - sold - reserved),
+            "id":    set_id,
+            "name":  name,
+            "price": price,
+            "total": total,   # план
+            "sold":  sold,    # факт (проданные + забронированные)
+            "free":  vacant,
         })
 
     return result

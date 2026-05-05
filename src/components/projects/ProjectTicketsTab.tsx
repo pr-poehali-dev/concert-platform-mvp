@@ -157,14 +157,11 @@ export default function ProjectTicketsTab({ projectId }: Props) {
       });
       const data = await res.json();
       if (res.ok) {
-        console.log("[TC:sync] eventSets from API:", JSON.stringify(data.eventSets));
         const parts = [`Загружено ${data.ordersProcessed} заказов`];
         if (data.incomeLinesUpdated > 0)
-          parts.push(`обновлено ${data.incomeLinesUpdated} категорий в доходах проекта`);
+          parts.push(`обновлено ${data.incomeLinesUpdated} категорий в доходах`);
         if (data.eventSets?.length > 0)
-          parts.push(`тираж: ${data.eventSets.map((s: {name:string;total:number}) => `${s.name}=${s.total}`).join(", ")}`);
-        else
-          parts.push(`⚠️ тираж не получен из API TicketsCloud`);
+          parts.push(`тираж: ${data.eventSets.map((s: {name:string;total:number}) => `${s.name} ${s.total} шт.`).join(", ")}`);
         setSyncMsg(parts.join(" · "));
         loadStats(intId);
       } else {
