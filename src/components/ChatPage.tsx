@@ -258,11 +258,21 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
 
           {/* ── Chat window ── */}
           <div
-            className={`flex-1 flex flex-col glass sm:rounded-2xl overflow-hidden ${activeConvId ? "flex" : "hidden sm:flex"} ${dragOver ? "ring-2 ring-neon-cyan/50" : ""}`}
+            className={`relative flex-1 flex flex-col glass sm:rounded-2xl overflow-hidden ${activeConvId ? "flex" : "hidden sm:flex"} ${dragOver ? "ring-2 ring-neon-cyan/50" : ""}`}
             onDragOver={e => { e.preventDefault(); if (activeConvId) setDragOver(true); }}
-            onDragLeave={() => setDragOver(false)}
+            onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(false); }}
             onDrop={handleDrop}
           >
+            {/* Drag & Drop оверлей */}
+            {dragOver && activeConvId && (
+              <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-background/80 backdrop-blur-sm border-2 border-dashed border-neon-cyan/60 rounded-2xl pointer-events-none">
+                <div className="w-16 h-16 rounded-2xl bg-neon-cyan/15 border border-neon-cyan/30 flex items-center justify-center">
+                  <Icon name="Upload" size={28} className="text-neon-cyan" />
+                </div>
+                <p className="text-neon-cyan font-oswald font-bold text-lg">Отпустите файл</p>
+                <p className="text-white/40 text-sm">PDF, Word, Excel, изображения — до 20 МБ</p>
+              </div>
+            )}
             {!activeConv ? (
               <div className="flex flex-col items-center justify-center h-full gap-4">
                 <div className="w-16 h-16 rounded-2xl bg-neon-purple/10 flex items-center justify-center">

@@ -215,12 +215,29 @@ def handler(event: dict, context) -> dict:
         first_msg     = (body.get("message") or "").strip()
         organizer_name = (body.get("organizerName") or "Организатор").strip()
 
-        if not organizer_id or not venue_id or not venue_user_id:
-            return err("organizerId, venueId, venueUserId обязательны")
+        if not organizer_id or not venue_user_id:
+            return err("organizerId, venueUserId обязательны")
 
         conn = get_conn()
         try:
             cur = conn.cursor()
+
+            # Подтягиваем venue_id и venue_name из таблицы venues если не переданы
+            if not venue_id or not venue_name:
+                cur.execute(
+                    f"SELECT id, name FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC LIMIT 1",
+                    (venue_user_id,)
+                )
+                vrow = cur.fetchone()
+                if vrow:
+                    if not venue_id:
+                        venue_id = str(vrow[0])
+                    if not venue_name:
+                        venue_name = vrow[1] or ""
+
+            # Если venue_id всё ещё не определён — используем venue_user_id как fallback
+            if not venue_id:
+                venue_id = venue_user_id
 
             cur.execute(
                 f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s AND venue_id = %s",

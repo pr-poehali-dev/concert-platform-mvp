@@ -65,16 +65,19 @@ export default function FindUserById({ currentUserId, sessionId, onConversationC
       const isFoundVenue = found.role === "venue";
       const body = isFoundVenue
         ? {
+            // текущий пользователь = организатор, найденный = площадка
             organizerId: currentUserId,
             venueId: found.id,
             venueUserId: found.id,
             venueName: found.legalName || found.name,
           }
         : {
+            // текущий пользователь = площадка, найденный = организатор
             organizerId: found.id,
             venueId: currentUserId,
             venueUserId: currentUserId,
-            venueName: found.legalName || found.name,
+            // venueName должен быть именем ПЛОЩАДКИ (текущего пользователя), а не найденного
+            organizerName: found.legalName || found.name,
           };
 
       const res = await fetch(`${CHAT_URL}?action=start`, {
