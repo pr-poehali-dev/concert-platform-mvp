@@ -139,12 +139,16 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
 
 
 def fetch_ticketscloud_event_info(api_key: str, event_id: str) -> dict:
-    """Получает мета-информацию события: название, город, площадка, дата/время.
+    """Получает мета-информацию события из TicketsCloud API v1.
 
     GET /v1/resources/events/{event_id}
-    Возвращает dict: {title, city, venue_name, date_start, date_end}
-    Пустой dict если данные недоступны.
+    Возвращает dict: {title, city, date_start, date_end}
+
+    Примечание: TicketsCloud API не возвращает название площадки и город
+    как отдельные поля — org и map приходят только как ID-строки.
+    Город извлекается из названия события эвристически.
     """
+    import re as _re
     url = f"https://ticketscloud.com/v1/resources/events/{event_id}"
     try:
         ev = _tc_request(url, api_key)
@@ -153,46 +157,43 @@ def fetch_ticketscloud_event_info(api_key: str, event_id: str) -> dict:
 
     result = {}
 
-    # Название
+    # Название события
     title_obj = ev.get("title") or {}
+    title_text = ""
     if isinstance(title_obj, dict):
-        result["title"] = title_obj.get("text") or ""
+        title_text = title_obj.get("text") or ""
     elif isinstance(title_obj, str):
-        result["title"] = title_obj
+        title_text = title_obj
+    if title_text:
+        result["title"] = title_text
 
-    # Площадка — поле org или venue
-    org = ev.get("org") or {}
-    if isinstance(org, dict):
-        result["venue_name"] = org.get("name") or org.get("title") or ""
-        addr = org.get("address") or org.get("location") or {}
-        if isinstance(addr, dict):
-            result["city"] = addr.get("city") or addr.get("locality") or ""
-        elif isinstance(addr, str):
-            result["city"] = addr
-
-    # Площадка может быть отдельным полем
-    if not result.get("venue_name"):
-        venue = ev.get("venue") or ev.get("place") or {}
-        if isinstance(venue, dict):
-            result["venue_name"] = venue.get("name") or venue.get("title") or ""
-            if not result.get("city"):
-                result["city"] = venue.get("city") or ""
-        elif isinstance(venue, str):
-            result["venue_name"] = venue
+    # Город — ищем после предлогов "в", "во" перед существительным с заглавной
+    # Пример: "CAPTOWN 5 июня в Санкт-Петербурге" → "Санкт-Петербурге"
+    # Приводим к именительному падежу не нужно — берём как есть
+    if title_text:
+        # Ищем паттерн: " в " / " во " + слово(а) с заглавной буквы
+        city_match = _re.search(
+            r'\bв[о]?\s+([А-ЯЁ][а-яё]+(?:[- ][А-ЯЁа-яё]+)*)',
+            title_text
+        )
+        if city_match:
+            result["city"] = city_match.group(1)
 
     # Дата/время из lifetime (iCal формат)
+    # Пример: DTSTART;VALUE=DATE-TIME:20260605T170000Z
     lifetime = ev.get("lifetime") or ""
     if lifetime:
-        import re
-        m_start = re.search(r'DTSTART[^:]*:(\d{8}T\d{6})', lifetime)
-        m_end   = re.search(r'DTEND[^:]*:(\d{8}T\d{6})', lifetime)
+        m_start = _re.search(r'DTSTART[^:]*:(\d{8}T\d{6})', lifetime)
+        m_end   = _re.search(r'DTEND[^:]*:(\d{8}T\d{6})', lifetime)
+
         def parse_ical_dt(s):
             try:
                 from datetime import datetime, timezone
                 dt = datetime.strptime(s, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
-                return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+                return dt.strftime("%Y-%m-%d")   # только дата для сравнения с projects.date_start
             except Exception:
                 return None
+
         if m_start:
             result["date_start"] = parse_ical_dt(m_start.group(1))
         if m_end:
@@ -870,30 +871,51 @@ def handler(event: dict, context) -> dict:
                         event_info = fetch_ticketscloud_event_info(api_key, event_id_val)
                         if event_info:
                             cur.execute(
-                                f"SELECT city, venue_name, date_start, date_end FROM {SCHEMA}.projects WHERE id=%s",
+                                f"SELECT city, date_start, date_end FROM {SCHEMA}.projects WHERE id=%s",
                                 (project_id,)
                             )
                             proj_row = cur.fetchone()
                             if proj_row:
-                                p_city, p_venue, p_date_start, p_date_end = proj_row
-                                tc_city  = event_info.get("city") or ""
-                                tc_venue = event_info.get("venue_name") or ""
-                                tc_ds    = event_info.get("date_start") or ""
-                                tc_de    = event_info.get("date_end") or ""
-                                if tc_city  and tc_city  != (p_city or ""):
-                                    event_diff["city"]       = {"current": p_city or "", "new": tc_city}
-                                if tc_venue and tc_venue != (p_venue or ""):
-                                    event_diff["venue_name"] = {"current": p_venue or "", "new": tc_venue}
+                                p_city, p_date_start, p_date_end = proj_row
+                                tc_city = event_info.get("city") or ""
+                                tc_ds   = event_info.get("date_start") or ""
+                                tc_de   = event_info.get("date_end") or ""
+
+                                def fmt_date(d):
+                                    if not d:
+                                        return ""
+                                    s = str(d)[:10]
+                                    try:
+                                        from datetime import date
+                                        y, m, day = s.split("-")
+                                        months = ["", "января","февраля","марта","апреля","мая","июня",
+                                                  "июля","августа","сентября","октября","ноября","декабря"]
+                                        return f"{int(day)} {months[int(m)]} {y}"
+                                    except Exception:
+                                        return s
+
+                                p_city_str = (p_city or "").strip()
+                                if tc_city and tc_city != p_city_str:
+                                    event_diff["city"] = {
+                                        "current": p_city_str or "не указан",
+                                        "new": tc_city
+                                    }
                                 if tc_ds:
-                                    tc_date = tc_ds[:10]
-                                    p_date  = str(p_date_start)[:10] if p_date_start else ""
-                                    if tc_date != p_date:
-                                        event_diff["date_start"] = {"current": p_date, "new": tc_ds}
+                                    p_date = str(p_date_start)[:10] if p_date_start else ""
+                                    if tc_ds != p_date:
+                                        event_diff["date_start"] = {
+                                            "current": fmt_date(p_date) or "не указана",
+                                            "new": fmt_date(tc_ds),
+                                            "raw": tc_ds
+                                        }
                                 if tc_de:
-                                    tc_date = tc_de[:10]
-                                    p_date  = str(p_date_end)[:10] if p_date_end else ""
-                                    if tc_date != p_date:
-                                        event_diff["date_end"] = {"current": p_date, "new": tc_de}
+                                    p_date = str(p_date_end)[:10] if p_date_end else ""
+                                    if tc_de != p_date:
+                                        event_diff["date_end"] = {
+                                            "current": fmt_date(p_date) or "не указана",
+                                            "new": fmt_date(tc_de),
+                                            "raw": tc_de
+                                        }
                 except RuntimeError as e:
                     api_error = str(e)
 

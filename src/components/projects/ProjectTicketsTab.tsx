@@ -81,14 +81,13 @@ export default function ProjectTicketsTab({ projectId }: Props) {
   const [syncMsg, setSyncMsg] = useState("");
 
   // Диалог замены данных проекта
-  type DiffField = { current: string; new: string };
+  type DiffField = { current: string; new: string; raw?: string };
   const [eventDiff, setEventDiff] = useState<Record<string, DiffField> | null>(null);
   const [pendingIntId, setPendingIntId] = useState<string | null>(null);
   const [applying, setApplying] = useState(false);
 
   const FIELD_LABELS: Record<string, string> = {
     city: "Город",
-    venue_name: "Площадка",
     date_start: "Дата начала",
     date_end: "Дата окончания",
   };
@@ -160,9 +159,14 @@ export default function ProjectTicketsTab({ projectId }: Props) {
     finally { setAdding(false); }
   };
 
-  const applyEventDiff = async (fields: Record<string, string>) => {
-    if (!pendingIntId) return;
+  const applyEventDiff = async () => {
+    if (!pendingIntId || !eventDiff) return;
     setApplying(true);
+    // Для дат передаём raw (YYYY-MM-DD), для остальных — new (читаемое значение)
+    const fields: Record<string, string> = {};
+    Object.entries(eventDiff).forEach(([k, v]) => {
+      fields[k] = v.raw ?? v.new;
+    });
     try {
       await fetch(`${TICKETS_URL}?action=apply_event_info`, {
         method: "POST",
@@ -475,11 +479,7 @@ export default function ProjectTicketsTab({ projectId }: Props) {
                     </div>
                     <div className="flex gap-2">
                       <button
-                        onClick={() => {
-                          const fields: Record<string, string> = {};
-                          Object.entries(eventDiff).forEach(([k, v]) => { fields[k] = v.new; });
-                          applyEventDiff(fields);
-                        }}
+                        onClick={applyEventDiff}
                         disabled={applying}
                         className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-yellow/15 border border-neon-yellow/30 text-neon-yellow rounded-lg text-xs hover:bg-neon-yellow/25 transition-colors disabled:opacity-50"
                       >
