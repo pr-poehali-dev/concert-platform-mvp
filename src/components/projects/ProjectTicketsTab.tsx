@@ -80,6 +80,19 @@ export default function ProjectTicketsTab({ projectId }: Props) {
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState("");
 
+  // Диалог замены данных проекта
+  type DiffField = { current: string; new: string };
+  const [eventDiff, setEventDiff] = useState<Record<string, DiffField> | null>(null);
+  const [pendingIntId, setPendingIntId] = useState<string | null>(null);
+  const [applying, setApplying] = useState(false);
+
+  const FIELD_LABELS: Record<string, string> = {
+    city: "Город",
+    venue_name: "Площадка",
+    date_start: "Дата начала",
+    date_end: "Дата окончания",
+  };
+
   // Форма добавления
   const [form, setForm] = useState({ provider: "ticketscloud", name: "", apiKey: "", eventId: "" });
   const [adding, setAdding] = useState(false);
@@ -147,8 +160,25 @@ export default function ProjectTicketsTab({ projectId }: Props) {
     finally { setAdding(false); }
   };
 
+  const applyEventDiff = async (fields: Record<string, string>) => {
+    if (!pendingIntId) return;
+    setApplying(true);
+    try {
+      await fetch(`${TICKETS_URL}?action=apply_event_info`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ integrationId: pendingIntId, fields }),
+      });
+    } catch { /* ignore */ }
+    finally {
+      setApplying(false);
+      setEventDiff(null);
+      setPendingIntId(null);
+    }
+  };
+
   const handleSync = async (intId: string) => {
-    setSyncing(true); setSyncMsg("");
+    setSyncing(true); setSyncMsg(""); setEventDiff(null);
     try {
       const res = await fetch(`${TICKETS_URL}?action=sync`, {
         method: "POST",
@@ -164,6 +194,11 @@ export default function ProjectTicketsTab({ projectId }: Props) {
           parts.push(`тираж: ${data.eventSets.map((s: {name:string;total:number}) => `${s.name} ${s.total} шт.`).join(", ")}`);
         setSyncMsg(parts.join(" · "));
         loadStats(intId);
+        // Если есть расхождения в данных события — показываем диалог
+        if (data.eventDiff && Object.keys(data.eventDiff).length > 0) {
+          setEventDiff(data.eventDiff);
+          setPendingIntId(intId);
+        }
       } else {
         setSyncMsg(data.error || "Ошибка синхронизации");
       }
@@ -418,6 +453,47 @@ export default function ProjectTicketsTab({ projectId }: Props) {
                     <p className="text-neon-cyan text-xs flex items-center gap-1">
                       <Icon name="CheckCircle" size={11} />{syncMsg}
                     </p>
+                  </div>
+                )}
+
+                {/* Диалог замены данных проекта */}
+                {eventDiff && isActive && Object.keys(eventDiff).length > 0 && (
+                  <div className="mx-4 mb-3 rounded-xl border border-neon-yellow/30 bg-neon-yellow/5 p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Icon name="AlertTriangle" size={15} className="text-neon-yellow shrink-0" />
+                      <span className="text-neon-yellow text-sm font-semibold">Данные события отличаются от проекта</span>
+                    </div>
+                    <div className="space-y-2 mb-4">
+                      {Object.entries(eventDiff).map(([field, diff]) => (
+                        <div key={field} className="grid grid-cols-[auto_1fr_auto_1fr] items-center gap-2 text-xs">
+                          <span className="text-white/40 shrink-0">{FIELD_LABELS[field] || field}:</span>
+                          <span className="text-white/40 line-through truncate">{diff.current || "—"}</span>
+                          <Icon name="ArrowRight" size={11} className="text-white/30 shrink-0" />
+                          <span className="text-neon-yellow truncate">{diff.new || "—"}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          const fields: Record<string, string> = {};
+                          Object.entries(eventDiff).forEach(([k, v]) => { fields[k] = v.new; });
+                          applyEventDiff(fields);
+                        }}
+                        disabled={applying}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-neon-yellow/15 border border-neon-yellow/30 text-neon-yellow rounded-lg text-xs hover:bg-neon-yellow/25 transition-colors disabled:opacity-50"
+                      >
+                        <Icon name={applying ? "Loader2" : "Check"} size={12} className={applying ? "animate-spin" : ""} />
+                        Обновить в проекте
+                      </button>
+                      <button
+                        onClick={() => { setEventDiff(null); setPendingIntId(null); }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 glass border border-white/10 text-white/40 rounded-lg text-xs hover:text-white/70 transition-colors"
+                      >
+                        <Icon name="X" size={12} />
+                        Оставить как есть
+                      </button>
+                    </div>
                   </div>
                 )}
 

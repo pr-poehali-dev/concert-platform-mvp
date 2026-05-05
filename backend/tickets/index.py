@@ -138,6 +138,69 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
 
 
 
+def fetch_ticketscloud_event_info(api_key: str, event_id: str) -> dict:
+    """Получает мета-информацию события: название, город, площадка, дата/время.
+
+    GET /v1/resources/events/{event_id}
+    Возвращает dict: {title, city, venue_name, date_start, date_end}
+    Пустой dict если данные недоступны.
+    """
+    url = f"https://ticketscloud.com/v1/resources/events/{event_id}"
+    try:
+        ev = _tc_request(url, api_key)
+    except RuntimeError:
+        return {}
+
+    result = {}
+
+    # Название
+    title_obj = ev.get("title") or {}
+    if isinstance(title_obj, dict):
+        result["title"] = title_obj.get("text") or ""
+    elif isinstance(title_obj, str):
+        result["title"] = title_obj
+
+    # Площадка — поле org или venue
+    org = ev.get("org") or {}
+    if isinstance(org, dict):
+        result["venue_name"] = org.get("name") or org.get("title") or ""
+        addr = org.get("address") or org.get("location") or {}
+        if isinstance(addr, dict):
+            result["city"] = addr.get("city") or addr.get("locality") or ""
+        elif isinstance(addr, str):
+            result["city"] = addr
+
+    # Площадка может быть отдельным полем
+    if not result.get("venue_name"):
+        venue = ev.get("venue") or ev.get("place") or {}
+        if isinstance(venue, dict):
+            result["venue_name"] = venue.get("name") or venue.get("title") or ""
+            if not result.get("city"):
+                result["city"] = venue.get("city") or ""
+        elif isinstance(venue, str):
+            result["venue_name"] = venue
+
+    # Дата/время из lifetime (iCal формат)
+    lifetime = ev.get("lifetime") or ""
+    if lifetime:
+        import re
+        m_start = re.search(r'DTSTART[^:]*:(\d{8}T\d{6})', lifetime)
+        m_end   = re.search(r'DTEND[^:]*:(\d{8}T\d{6})', lifetime)
+        def parse_ical_dt(s):
+            try:
+                from datetime import datetime, timezone
+                dt = datetime.strptime(s, "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+                return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            except Exception:
+                return None
+        if m_start:
+            result["date_start"] = parse_ical_dt(m_start.group(1))
+        if m_end:
+            result["date_end"] = parse_ical_dt(m_end.group(1))
+
+    return result
+
+
 def fetch_ticketscloud_event_sets(api_key: str, event_id: str) -> list:
     """Получает категории билетов события из TicketsCloud API v1.
 
@@ -363,20 +426,17 @@ def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: lis
 
     base_marker = f"ticketscloud:{integration_id}"
     synced = 0
-
-    # Актуальные set_id из API
-    active_set_ids = set()
+    active_note_keys = set()
 
     for s in event_sets:
-        set_id       = s["id"]
-        name         = s["name"]
-        price        = s["price"]
-        total        = s["total"]    # план = тираж
-        sold_count   = sales_by_set.get(set_id, 0)  # факт = оплачено по set_id
-        note_key     = f"{base_marker}:{set_id}"
-        active_set_ids.add(set_id)
+        set_id     = s["id"]
+        name       = s["name"]
+        price      = s["price"]
+        total      = s["total"]
+        sold_count = sales_by_set.get(set_id, 0)
+        note_key   = f"{base_marker}:{set_id}"
+        active_note_keys.add(note_key)
 
-        # Ищем строку по уникальному note_key
         cur.execute(
             f"SELECT id FROM {SCHEMA}.project_income_lines WHERE project_id = %s AND note = %s LIMIT 1",
             (project_id, note_key)
@@ -404,17 +464,7 @@ def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: lis
             )
         synced += 1
 
-    # Обнуляем старые строки этой интеграции, которых больше нет в API
-    # (не удаляем — пользователь мог их видеть, просто сбрасываем в 0)
-    cur.execute(
-        f"""UPDATE {SCHEMA}.project_income_lines
-            SET ticket_count = 0, sold_count = 0
-            WHERE project_id = %s
-              AND note LIKE %s
-              AND note != %s""",
-        (project_id, f"{base_marker}:%", base_marker)
-    )
-    # Удаляем старые строки со старым форматом note (без set_id) этой интеграции
+    # Обнуляем только строки со старым форматом note (без set_id) — это мусор
     cur.execute(
         f"""UPDATE {SCHEMA}.project_income_lines
             SET ticket_count = 0, sold_count = 0
@@ -673,6 +723,42 @@ def handler(event: dict, context) -> dict:
             "byType":            by_type,
         })
 
+    # ── POST apply_event_info — применить данные события к проекту ──────────
+    if method == "POST" and action == "apply_event_info":
+        body = json.loads(event.get("body") or "{}")
+        int_id     = body.get("integrationId") or params.get("integration_id", "")
+        fields     = body.get("fields") or {}  # {city, venue_name, date_start, date_end}
+        if not int_id or not fields:
+            return err("integrationId и fields обязательны", 400)
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"SELECT project_id FROM {SCHEMA}.ticket_integrations WHERE id=%s AND is_active=TRUE",
+                (int_id,)
+            )
+            row = cur.fetchone()
+            if not row or not row[0]:
+                return err("Интеграция не найдена", 404)
+            project_id = row[0]
+
+            allowed = {"city", "venue_name", "date_start", "date_end"}
+            updates = {k: v for k, v in fields.items() if k in allowed}
+            if not updates:
+                return err("Нет допустимых полей для обновления", 400)
+
+            set_parts = ", ".join(f"{k} = %s" for k in updates)
+            vals = list(updates.values()) + [project_id]
+            cur.execute(
+                f"UPDATE {SCHEMA}.projects SET {set_parts}, updated_at=NOW() WHERE id=%s",
+                vals
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True, "updated": list(updates.keys())})
+
     # ── POST webhook/ticketscloud — принять вебхук ────────────────────────
     if method == "POST" and action == "webhook":
         provider = params.get("provider", "ticketscloud")
@@ -768,6 +854,8 @@ def handler(event: dict, context) -> dict:
 
             income_synced = 0
             event_sets = []
+            event_info = {}
+            event_diff = {}
             if provider == "ticketscloud":
                 try:
                     orders = fetch_ticketscloud_orders(api_key, event_id_val)
@@ -775,10 +863,37 @@ def handler(event: dict, context) -> dict:
                     for order in orders:
                         all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
                     inserted = upsert_sales(cur, all_sales)
-                    # Получаем тираж категорий из API события
                     if project_id:
                         event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
                         income_synced = sync_income_lines(cur, str(project_id), int_id, event_sets)
+                        # Получаем мета-данные события и сравниваем с проектом
+                        event_info = fetch_ticketscloud_event_info(api_key, event_id_val)
+                        if event_info:
+                            cur.execute(
+                                f"SELECT city, venue_name, date_start, date_end FROM {SCHEMA}.projects WHERE id=%s",
+                                (project_id,)
+                            )
+                            proj_row = cur.fetchone()
+                            if proj_row:
+                                p_city, p_venue, p_date_start, p_date_end = proj_row
+                                tc_city  = event_info.get("city") or ""
+                                tc_venue = event_info.get("venue_name") or ""
+                                tc_ds    = event_info.get("date_start") or ""
+                                tc_de    = event_info.get("date_end") or ""
+                                if tc_city  and tc_city  != (p_city or ""):
+                                    event_diff["city"]       = {"current": p_city or "", "new": tc_city}
+                                if tc_venue and tc_venue != (p_venue or ""):
+                                    event_diff["venue_name"] = {"current": p_venue or "", "new": tc_venue}
+                                if tc_ds:
+                                    tc_date = tc_ds[:10]
+                                    p_date  = str(p_date_start)[:10] if p_date_start else ""
+                                    if tc_date != p_date:
+                                        event_diff["date_start"] = {"current": p_date, "new": tc_ds}
+                                if tc_de:
+                                    tc_date = tc_de[:10]
+                                    p_date  = str(p_date_end)[:10] if p_date_end else ""
+                                    if tc_date != p_date:
+                                        event_diff["date_end"] = {"current": p_date, "new": tc_de}
                 except RuntimeError as e:
                     api_error = str(e)
 
@@ -799,6 +914,7 @@ def handler(event: dict, context) -> dict:
             "ordersProcessed": len(orders),
             "incomeLinesUpdated": income_synced,
             "eventSets": event_sets if project_id else [],
+            "eventDiff": event_diff,
         })
 
     return err("Not found", 404)
