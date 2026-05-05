@@ -282,16 +282,15 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
     tickets = order.get("tickets") or []
 
     if tickets:
-        # Группируем по set_id
+        # Группируем по set_id — ключ уникален, поэтому два VIP с разной ценой не смешиваются
         groups: dict = {}
         for t in tickets:
             set_id = str(t.get("set") or "unknown")
             if set_id not in groups:
-                # Пытаемся получить имя и цену из sets_values
-                sv = sets_values.get(set_id) or {}
+                sv    = sets_values.get(set_id) or {}
                 name  = sv.get("name") or set_id
-                price = float(sv.get("price") or sv.get("nominal") or 0)
-                groups[set_id] = {"name": name, "price": price, "count": 0}
+                price = float(sv.get("price") or sv.get("nominal") or t.get("price") or 0)
+                groups[set_id] = {"name": name, "price": price, "count": 0, "set_id": set_id}
             groups[set_id]["count"] += 1
 
         for set_id, g in groups.items():
@@ -302,6 +301,7 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
                 "event_id":       event_id,
                 "order_id":       f"{oid}_{set_id[:20]}",
                 "ticket_type":    g["name"],
+                "set_id":         g["set_id"],
                 "quantity":       g["count"],
                 "price":          g["price"],
                 "total_amount":   g["price"] * g["count"],
@@ -312,7 +312,6 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
                 "raw_payload":    raw_str,
             })
     else:
-        # Нет списка билетов — одна запись с общей суммой
         total = float(order.get("total") or order.get("amount") or order.get("price") or 0)
         rows.append({
             "integration_id": integration_id,
@@ -321,6 +320,7 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
             "event_id":       event_id,
             "order_id":       oid,
             "ticket_type":    "Стандарт",
+            "set_id":         "",
             "quantity":       1,
             "price":          total,
             "total_amount":   total,
@@ -334,83 +334,61 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
 
 
 def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: list = None):
-    """Синхронизирует строки доходов проекта на основе продаж + тиража из TicketsCloud.
+    """Синхронизирует строки доходов проекта.
 
     Логика:
-    - ticket_count (план) = тираж категории из event_sets (сколько выставлено на продажу)
-    - sold_count   (факт) = кол-во оплаченных билетов из ticket_sales
-    - ticket_price         = цена категории
-    - Если event_sets недоступны — план = факт (как раньше)
+    - Каждая категория идентифицируется по set_id (уникален в TicketsCloud)
+    - note = 'ticketscloud:{integration_id}:{set_id}' — уникальный ключ строки
+    - ticket_count (план) = amount из /v1/events/{id}/sets
+    - sold_count   (факт) = sum paid из ticket_sales GROUP BY set_id
+    - Устаревшие строки (set_id больше не существует) обнуляются до 0
     """
     if not project_id:
         return 0
 
-    # Агрегируем факт продаж по типу билета из ticket_sales
-    cur.execute(
-        f"""SELECT 
-              ticket_type,
-              SUM(CASE WHEN status='paid' THEN quantity ELSE 0 END) as paid_qty,
-              AVG(price) as avg_price
-            FROM {SCHEMA}.ticket_sales
-            WHERE integration_id = %s AND status != 'refunded'
-            GROUP BY ticket_type""",
-        (integration_id,)
-    )
-    sales_rows = cur.fetchall()
-
-    # Индекс продаж по имени категории
-    sales_by_name: dict = {}
-    for ticket_type, paid_qty, avg_price in sales_rows:
-        sales_by_name[ticket_type] = {
-            "sold": int(paid_qty or 0),
-            "price": float(avg_price or 0),
-        }
-
-    # Строим итоговый список категорий
-    # Приоритет: event_sets (тираж) > sales (только факт)
-    categories: dict = {}  # name -> {total, sold, price}
-
-    if event_sets:
-        for s in event_sets:
-            name  = s["name"]
-            total = s["total"]   # тираж — план
-            price = s["price"]
-            # Факт берём из продаж (точнее чем из event_sets.sold — там может быть иная логика)
-            sold  = sales_by_name.get(name, {}).get("sold", s.get("sold", 0))
-            if not price and name in sales_by_name:
-                price = sales_by_name[name]["price"]
-            categories[name] = {"total": total, "sold": sold, "price": price}
-
-    # Добавляем категории которые есть в продажах но нет в event_sets
-    for name, s in sales_by_name.items():
-        if name not in categories:
-            categories[name] = {"total": s["sold"], "sold": s["sold"], "price": s["price"]}
-
-    if not categories:
+    if not event_sets:
         return 0
 
-    note_marker = f"ticketscloud:{integration_id}"
+    # Факт продаж по set_id из ticket_sales
+    cur.execute(
+        f"""SELECT
+              set_id,
+              SUM(CASE WHEN status='paid' THEN quantity ELSE 0 END) as paid_qty
+            FROM {SCHEMA}.ticket_sales
+            WHERE integration_id = %s AND status != 'refunded'
+            GROUP BY set_id""",
+        (integration_id,)
+    )
+    sales_by_set: dict = {row[0]: int(row[1] or 0) for row in cur.fetchall()}
+
+    base_marker = f"ticketscloud:{integration_id}"
     synced = 0
 
-    for ticket_type, vals in categories.items():
-        ticket_count = vals["total"]   # план = весь тираж
-        sold_count   = vals["sold"]    # факт = оплачено
-        price        = vals["price"]
+    # Актуальные set_id из API
+    active_set_ids = set()
 
-        # Ищем существующую строку по маркеру
+    for s in event_sets:
+        set_id       = s["id"]
+        name         = s["name"]
+        price        = s["price"]
+        total        = s["total"]    # план = тираж
+        sold_count   = sales_by_set.get(set_id, 0)  # факт = оплачено по set_id
+        note_key     = f"{base_marker}:{set_id}"
+        active_set_ids.add(set_id)
+
+        # Ищем строку по уникальному note_key
         cur.execute(
-            f"""SELECT id FROM {SCHEMA}.project_income_lines
-                WHERE project_id = %s AND note = %s AND category = %s LIMIT 1""",
-            (project_id, note_marker, ticket_type)
+            f"SELECT id FROM {SCHEMA}.project_income_lines WHERE project_id = %s AND note = %s LIMIT 1",
+            (project_id, note_key)
         )
         existing = cur.fetchone()
 
         if existing:
             cur.execute(
                 f"""UPDATE {SCHEMA}.project_income_lines
-                    SET ticket_count = %s, sold_count = %s, ticket_price = %s
+                    SET category = %s, ticket_count = %s, sold_count = %s, ticket_price = %s
                     WHERE id = %s""",
-                (ticket_count, sold_count, price, existing[0])
+                (name, total, sold_count, price, existing[0])
             )
         else:
             cur.execute(
@@ -422,9 +400,27 @@ def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: lis
                 f"""INSERT INTO {SCHEMA}.project_income_lines
                     (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                (project_id, ticket_type, ticket_count, price, sold_count, note_marker, sort_order)
+                (project_id, name, total, price, sold_count, note_key, sort_order)
             )
         synced += 1
+
+    # Обнуляем старые строки этой интеграции, которых больше нет в API
+    # (не удаляем — пользователь мог их видеть, просто сбрасываем в 0)
+    cur.execute(
+        f"""UPDATE {SCHEMA}.project_income_lines
+            SET ticket_count = 0, sold_count = 0
+            WHERE project_id = %s
+              AND note LIKE %s
+              AND note != %s""",
+        (project_id, f"{base_marker}:%", base_marker)
+    )
+    # Удаляем старые строки со старым форматом note (без set_id) этой интеграции
+    cur.execute(
+        f"""UPDATE {SCHEMA}.project_income_lines
+            SET ticket_count = 0, sold_count = 0
+            WHERE project_id = %s AND note = %s""",
+        (project_id, base_marker)
+    )
 
     # Пересчитываем итоги проекта
     cur.execute(
@@ -448,16 +444,18 @@ def upsert_sales(cur, sales: list):
         cur.execute(
             f"""INSERT INTO {SCHEMA}.ticket_sales
                 (integration_id, project_id, provider, event_id, order_id,
-                 ticket_type, quantity, price, total_amount, status,
+                 ticket_type, set_id, quantity, price, total_amount, status,
                  buyer_name, buyer_email, sold_at, raw_payload)
-                VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s)
+                VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s)
                 ON CONFLICT (integration_id, order_id) DO UPDATE SET
-                  status = EXCLUDED.status,
+                  status       = EXCLUDED.status,
+                  set_id       = EXCLUDED.set_id,
+                  ticket_type  = EXCLUDED.ticket_type,
                   total_amount = EXCLUDED.total_amount,
                   raw_payload  = EXCLUDED.raw_payload""",
             (
                 s["integration_id"], s["project_id"], s["provider"], s["event_id"], s["order_id"],
-                s["ticket_type"], s["quantity"], s["price"], s["total_amount"], s["status"],
+                s["ticket_type"], s.get("set_id", ""), s["quantity"], s["price"], s["total_amount"], s["status"],
                 s["buyer_name"], s["buyer_email"], s.get("sold_at"), s["raw_payload"],
             ),
         )
