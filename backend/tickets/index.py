@@ -187,24 +187,24 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
                 all_orders.append(item)
         print(f"[TC] matched for event {event_id}: {len(all_orders) - matched_before} new", file=sys.stderr)
 
-        # Пробуем разные ключи пагинации
-        pagination = data.get("pagination") or data.get("meta") or data.get("page_info") or {}
+        # Пагинация TicketsCloud v2: {"page": N, "page_size": 50, "total": N_pages}
+        pagination = data.get("pagination") or data.get("meta") or {}
         print(f"[TC] pagination: {pagination}", file=sys.stderr)
 
-        total   = int(pagination.get("total") or pagination.get("count") or 0)
-        pages   = int(pagination.get("pages") or pagination.get("total_pages") or pagination.get("num_pages") or 0)
-        current = int(pagination.get("page") or pagination.get("current_page") or page)
+        page_size   = int(pagination.get("page_size") or pagination.get("size") or pagination.get("limit") or 50)
+        total_pages = int(pagination.get("total") or pagination.get("pages") or pagination.get("total_pages") or 0)
+        current     = int(pagination.get("page") or page)
 
         # Условия выхода
         if len(items) == 0:
             break
-        if pages and current >= pages:
-            break
-        if total and len(all_orders) >= total:
-            break
         if not pagination:
             break
-        if page >= 50:  # жёсткий лимит
+        if total_pages and current >= total_pages:
+            break
+        if len(items) < page_size:
+            break
+        if page >= 100:  # жёсткий лимит
             break
         page += 1
 
