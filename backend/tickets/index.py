@@ -212,70 +212,73 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
 
 
 def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> list:
-    """Разбирает один deal TicketsCloud в список записей ticket_sales.
-    
-    Структура deal (TicketsCloud v1):
-      id, status (accepted/rejected/returned), event (id события),
-      created_at, client {firstname, lastname, email, phone},
-      tickets: [{id, set (название категории), price, serial}, ...]
-      total — итоговая сумма
+    """Разбирает один заказ TicketsCloud v2 в записи ticket_sales.
+
+    Структура TicketsCloud v2 order:
+      id, status (done/cancelled/returned), event (id),
+      created_at, settings.customer {email},
+      tickets: [{id, set (id категории), serial}, ...],
+      values: {price, full, sets_values: {set_id: {name, price, nominal}}}
     """
     rows = []
-    oid = str(order.get("id") or order.get("_id") or "")
+    oid = str(order.get("id") or "")
     if not oid:
         return rows
 
-    status_raw = str(order.get("status") or "accepted").lower()
-    status = "paid"     if status_raw in ("accepted", "paid", "complete", "completed") else \
-             "refunded" if status_raw in ("returned", "refunded", "cancelled") else \
-             "reserved"
+    # Статус: TicketsCloud v2 использует "done" для оплаченных
+    status_raw = str(order.get("status") or "").lower()
+    status = "paid"     if status_raw in ("done", "accepted", "paid", "complete", "completed") else \
+             "refunded" if status_raw in ("returned", "refunded") else \
+             "reserved" if status_raw in ("reserved",) else \
+             "reserved"  # cancelled и прочие — пропускаем ниже
 
-    # Покупатель
-    buyer = order.get("client") or order.get("customer") or order.get("buyer") or {}
-    buyer_name  = f"{buyer.get('firstname', '')} {buyer.get('lastname', '')}".strip()
-    buyer_email = buyer.get("email", "")
+    # Отменённые не сохраняем
+    if status_raw in ("cancelled", "cancel"):
+        return rows
 
-    sold_at = order.get("created_at") or order.get("date") or None
+    # Покупатель — в v2 лежит в settings.customer
+    settings = order.get("settings") or {}
+    customer = settings.get("customer") or {}
+    buyer_email = customer.get("email", "")
+    buyer_name  = ""  # v2 не возвращает имя покупателя в списке заказов
 
-    # event id — может быть строкой или dict с полем id
+    sold_at = order.get("created_at") or None
+
+    # event id
     ev = order.get("event") or ""
     event_id = str(ev.get("id") if isinstance(ev, dict) else ev)
 
     raw_str = json.dumps(order, ensure_ascii=False, default=str)
 
+    # Словарь имён и цен категорий из values.sets_values
+    # {set_id: {name, price, nominal}}
+    values = order.get("values") or {}
+    sets_values = values.get("sets_values") or {}
+
     # Массив билетов
     tickets = order.get("tickets") or []
 
     if tickets:
-        # Группируем по типу (set/category) для агрегации
+        # Группируем по set_id
         groups: dict = {}
         for t in tickets:
-            ticket_set = t.get("set") or t.get("name") or t.get("category") or "Стандарт"
-            if isinstance(ticket_set, dict):
-                ticket_set = ticket_set.get("name") or ticket_set.get("id") or "Стандарт"
-            ticket_set = str(ticket_set)
+            set_id = str(t.get("set") or "unknown")
+            if set_id not in groups:
+                # Пытаемся получить имя и цену из sets_values
+                sv = sets_values.get(set_id) or {}
+                name  = sv.get("name") or set_id
+                price = float(sv.get("price") or sv.get("nominal") or 0)
+                groups[set_id] = {"name": name, "price": price, "count": 0}
+            groups[set_id]["count"] += 1
 
-            price = 0.0
-            # price может быть в t.price или t.values.price
-            if t.get("price") is not None:
-                price = float(t["price"])
-            elif isinstance(t.get("values"), dict) and t["values"].get("price") is not None:
-                price = float(t["values"]["price"])
-
-            key = ticket_set
-            if key not in groups:
-                groups[key] = {"count": 0, "price": price, "ids": []}
-            groups[key]["count"] += 1
-            groups[key]["ids"].append(str(t.get("id", "")))
-
-        for set_name, g in groups.items():
+        for set_id, g in groups.items():
             rows.append({
                 "integration_id": integration_id,
                 "project_id":     project_id,
                 "provider":       "ticketscloud",
                 "event_id":       event_id,
-                "order_id":       f"{oid}_{set_name[:20]}",
-                "ticket_type":    set_name,
+                "order_id":       f"{oid}_{set_id[:20]}",
+                "ticket_type":    g["name"],
                 "quantity":       g["count"],
                 "price":          g["price"],
                 "total_amount":   g["price"] * g["count"],
