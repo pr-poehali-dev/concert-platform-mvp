@@ -310,6 +310,90 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
     return rows
 
 
+def sync_income_lines(cur, project_id: str, integration_id: str):
+    """Синхронизирует строки доходов проекта на основе продаж из билетной системы.
+
+    Логика:
+    - Группируем ticket_sales по ticket_type (только paid/reserved)
+    - Для каждой категории: ticket_count = total_qty (план = всего продано),
+      sold_count = qty со статусом paid (факт), ticket_price = avg цена
+    - Ищем существующую строку по category + note='ticketscloud:<integration_id>'
+    - Если есть — обновляем, нет — создаём
+    - Пересчитываем итоги проекта
+    """
+    if not project_id:
+        return 0
+
+    # Агрегируем продажи по типу билета
+    cur.execute(
+        f"""SELECT 
+              ticket_type,
+              SUM(quantity) as total_qty,
+              SUM(CASE WHEN status='paid' THEN quantity ELSE 0 END) as paid_qty,
+              AVG(price) as avg_price
+            FROM {SCHEMA}.ticket_sales
+            WHERE integration_id = %s AND status != 'refunded'
+            GROUP BY ticket_type
+            HAVING SUM(quantity) > 0""",
+        (integration_id,)
+    )
+    rows = cur.fetchall()
+    if not rows:
+        return 0
+
+    note_marker = f"ticketscloud:{integration_id}"
+    synced = 0
+
+    for ticket_type, total_qty, paid_qty, avg_price in rows:
+        ticket_count = int(total_qty or 0)
+        sold_count   = int(paid_qty or 0)
+        price        = float(avg_price or 0)
+
+        # Ищем существующую строку по маркеру в note
+        cur.execute(
+            f"""SELECT id FROM {SCHEMA}.project_income_lines
+                WHERE project_id = %s AND category = %s AND note = %s LIMIT 1""",
+            (project_id, ticket_type, note_marker)
+        )
+        existing = cur.fetchone()
+
+        if existing:
+            cur.execute(
+                f"""UPDATE {SCHEMA}.project_income_lines
+                    SET ticket_count = %s, sold_count = %s, ticket_price = %s
+                    WHERE id = %s""",
+                (ticket_count, sold_count, price, existing[0])
+            )
+        else:
+            # Получаем следующий sort_order
+            cur.execute(
+                f"SELECT COALESCE(MAX(sort_order), 0) + 1 FROM {SCHEMA}.project_income_lines WHERE project_id = %s",
+                (project_id,)
+            )
+            sort_order = cur.fetchone()[0]
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.project_income_lines
+                    (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)""",
+                (project_id, ticket_type, ticket_count, price, sold_count, note_marker, sort_order)
+            )
+        synced += 1
+
+    # Пересчитываем итоги проекта
+    cur.execute(
+        f"""UPDATE {SCHEMA}.projects SET
+              total_income_plan = COALESCE(
+                (SELECT SUM(ticket_count::numeric * ticket_price) FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
+              total_income_fact = COALESCE(
+                (SELECT SUM(sold_count::numeric * ticket_price) FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
+              updated_at = NOW()
+            WHERE id = %s""",
+        (project_id, project_id, project_id)
+    )
+
+    return synced
+
+
 def upsert_sales(cur, sales: list):
     """Вставляет продажи, пропуская дубликаты по (integration_id, order_id)."""
     inserted = 0
@@ -588,6 +672,8 @@ def handler(event: dict, context) -> dict:
             if provider == "ticketscloud":
                 sales = parse_ticketscloud_order(order_data, int_id, project_id)
                 inserted = upsert_sales(cur, sales)
+                if project_id and inserted:
+                    sync_income_lines(cur, str(project_id), int_id)
                 cur.execute(
                     f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
                     (int_id,)
@@ -623,6 +709,7 @@ def handler(event: dict, context) -> dict:
             inserted = 0
             api_error = ""
 
+            income_synced = 0
             if provider == "ticketscloud":
                 try:
                     orders = fetch_ticketscloud_orders(api_key, event_id_val)
@@ -630,6 +717,9 @@ def handler(event: dict, context) -> dict:
                     for order in orders:
                         all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
                     inserted = upsert_sales(cur, all_sales)
+                    # Автоматически синхронизируем строки доходов проекта
+                    if project_id:
+                        income_synced = sync_income_lines(cur, str(project_id), int_id)
                 except RuntimeError as e:
                     api_error = str(e)
 
@@ -644,6 +734,11 @@ def handler(event: dict, context) -> dict:
         if api_error:
             return err(f"Ошибка API провайдера: {api_error}", 422)
 
-        return ok({"success": True, "inserted": inserted, "ordersProcessed": len(orders)})
+        return ok({
+            "success": True,
+            "inserted": inserted,
+            "ordersProcessed": len(orders),
+            "incomeLinesUpdated": income_synced,
+        })
 
     return err("Not found", 404)

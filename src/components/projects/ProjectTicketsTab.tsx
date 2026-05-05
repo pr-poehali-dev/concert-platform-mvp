@@ -157,7 +157,10 @@ export default function ProjectTicketsTab({ projectId }: Props) {
       });
       const data = await res.json();
       if (res.ok) {
-        setSyncMsg(`Загружено ${data.inserted} продаж из ${data.ordersProcessed} заказов`);
+        const parts = [`Загружено ${data.ordersProcessed} заказов`];
+        if (data.incomeLinesUpdated > 0)
+          parts.push(`обновлено ${data.incomeLinesUpdated} категорий в доходах проекта`);
+        setSyncMsg(parts.join(" · "));
         loadStats(intId);
       } else {
         setSyncMsg(data.error || "Ошибка синхронизации");
