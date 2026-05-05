@@ -13,6 +13,7 @@ import DashboardCompanyTab from "@/components/dashboard/DashboardCompanyTab";
 import ProjectDocumentsTab from "@/components/projects/ProjectDocumentsTab";
 import ProjectMembersTab from "@/components/projects/ProjectMembersTab";
 import ProjectLogisticsTab from "@/components/projects/ProjectLogisticsTab";
+import ProjectTicketsTab from "@/components/projects/ProjectTicketsTab";
 
 interface Props { projectId: string; onBack: () => void; onOpenChat?: (conversationId: string) => void; }
 
@@ -153,7 +154,8 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
     {id:"logistics", label:"Логистика",       icon:"Briefcase",     visible: true,              page:""},
     {id:"documents", label:"Документы",       icon:"FileArchive",   visible: true,              page:""},
     {id:"members",   label:"Участники",       icon:"UserCheck",     visible: true,              page:""},
-    {id:"company",   label:"Компания",        icon:"Building2",     visible: !user?.isEmployee, page:""},
+    {id:"tickets",   label:"Билеты",           icon:"Ticket",        visible: true,              page:""},
+    {id:"company",   label:"Компания",         icon:"Building2",     visible: !user?.isEmployee, page:""},
   ] as const;
   const TABS = ALL_TABS.filter(t => t.visible);
 
@@ -269,6 +271,11 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
         {/* ── УЧАСТНИКИ ── */}
         {activeTab==="members" && (
           <ProjectMembersTab projectId={projectId} isOwner={isOwner} />
+        )}
+
+        {/* ── БИЛЕТЫ ── */}
+        {activeTab==="tickets" && (
+          <ProjectTicketsTab projectId={projectId} />
         )}
 
         {/* ── КОМПАНИЯ ── */}

@@ -231,6 +231,53 @@ def handler(event: dict, context) -> dict:
             "createdAt":    str(r[6]),
         } for r in rows]})
 
+    # ── POST check_connection — проверить IMAP/SMTP без сохранения ────────
+    if method == "POST" and action == "check_connection":
+        body      = json.loads(event.get("body") or "{}")
+        imap_host = (body.get("imapHost") or "").strip()
+        imap_port = int(body.get("imapPort") or 993)
+        imap_ssl  = bool(body.get("imapSsl", True))
+        smtp_host = (body.get("smtpHost") or "").strip()
+        smtp_port = int(body.get("smtpPort") or 465)
+        smtp_ssl  = bool(body.get("smtpSsl", True))
+        username  = (body.get("username") or body.get("email") or "").strip()
+        password  = body.get("password") or ""
+
+        if not imap_host or not smtp_host or not username or not password:
+            return err("Заполните email, пароль и серверы")
+
+        test_acc = {
+            "imap_host": imap_host, "imap_port": imap_port, "imap_ssl": imap_ssl,
+            "smtp_host": smtp_host, "smtp_port": smtp_port, "smtp_ssl": smtp_ssl,
+            "username": username, "password": password,
+        }
+        imap_ok = False
+        smtp_ok = False
+        imap_err = ""
+        smtp_err = ""
+
+        try:
+            imap = imap_connect(test_acc)
+            imap.logout()
+            imap_ok = True
+        except Exception as e:
+            imap_err = str(e)[:200]
+
+        try:
+            smtp = smtp_connect(test_acc)
+            smtp.quit()
+            smtp_ok = True
+        except Exception as e:
+            smtp_err = str(e)[:200]
+
+        return ok({
+            "imapOk": imap_ok,
+            "smtpOk": smtp_ok,
+            "imapError": imap_err,
+            "smtpError": smtp_err,
+            "allOk": imap_ok and smtp_ok,
+        })
+
     # ── POST add_account ───────────────────────────────────────────────────
     if method == "POST" and action == "add_account":
         body = json.loads(event.get("body") or "{}")

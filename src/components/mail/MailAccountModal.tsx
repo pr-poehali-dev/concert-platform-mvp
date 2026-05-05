@@ -23,6 +23,8 @@ export default function MailAccountModal({ onClose, onAdded }: Props) {
   const [showGuide, setShowGuide] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [checkResult, setCheckResult] = useState<{ imapOk: boolean; smtpOk: boolean; imapError: string; smtpError: string } | null>(null);
 
   const preset = MAIL_PRESETS.find(p => p.id === presetId) || MAIL_PRESETS[0];
 
@@ -38,6 +40,33 @@ export default function MailAccountModal({ onClose, onAdded }: Props) {
     const p = detectPreset(email);
     if (p && p.id !== "custom") setPresetId(p.id);
   }, [email]);
+
+  // Сбрасываем результат проверки при изменении параметров
+  useEffect(() => { setCheckResult(null); }, [email, password, imapHost, imapPort, smtpHost, smtpPort]);
+
+  const checkConnection = async () => {
+    if (!email.trim() || !password || !imapHost || !smtpHost) {
+      setError("Заполните email, пароль и серверы для проверки"); return;
+    }
+    setChecking(true); setCheckResult(null); setError("");
+    try {
+      const res = await fetch(`${MAIL_URL}?action=check_connection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim().toLowerCase(),
+          username: email.trim().toLowerCase(),
+          password,
+          imapHost, imapPort, imapSsl: true,
+          smtpHost, smtpPort, smtpSsl: smtpPort === 465,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || "Ошибка проверки"); return; }
+      setCheckResult(data);
+    } catch { setError("Ошибка соединения"); }
+    finally { setChecking(false); }
+  };
 
   const submit = async () => {
     if (!user) return;
@@ -274,6 +303,37 @@ export default function MailAccountModal({ onClose, onAdded }: Props) {
             </div>
           )}
 
+          {/* Результат проверки */}
+          {checkResult && (
+            <div className={`rounded-xl border p-4 space-y-2 ${checkResult.imapOk && checkResult.smtpOk ? "border-neon-green/30 bg-neon-green/5" : "border-neon-pink/30 bg-neon-pink/5"}`}>
+              <div className="flex items-center gap-2 mb-1">
+                <Icon name={checkResult.imapOk && checkResult.smtpOk ? "CheckCircle2" : "AlertCircle"} size={15}
+                  className={checkResult.imapOk && checkResult.smtpOk ? "text-neon-green" : "text-neon-pink"} />
+                <span className={`font-semibold text-sm ${checkResult.imapOk && checkResult.smtpOk ? "text-neon-green" : "text-neon-pink"}`}>
+                  {checkResult.imapOk && checkResult.smtpOk ? "Соединение успешно — можно подключать!" : "Есть проблемы с подключением"}
+                </span>
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-xs">
+                  <Icon name={checkResult.imapOk ? "Check" : "X"} size={12}
+                    className={checkResult.imapOk ? "text-neon-green" : "text-neon-pink"} />
+                  <span className="text-white/60">IMAP ({imapHost}:{imapPort})</span>
+                  {!checkResult.imapOk && checkResult.imapError && (
+                    <span className="text-neon-pink/70 truncate max-w-[200px]">{checkResult.imapError}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <Icon name={checkResult.smtpOk ? "Check" : "X"} size={12}
+                    className={checkResult.smtpOk ? "text-neon-green" : "text-neon-pink"} />
+                  <span className="text-white/60">SMTP ({smtpHost}:{smtpPort})</span>
+                  {!checkResult.smtpOk && checkResult.smtpError && (
+                    <span className="text-neon-pink/70 truncate max-w-[200px]">{checkResult.smtpError}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="bg-neon-pink/10 border border-neon-pink/30 rounded-lg px-3 py-2 text-neon-pink text-xs flex items-start gap-2">
               <Icon name="AlertCircle" size={14} className="shrink-0 mt-0.5" />
@@ -282,19 +342,30 @@ export default function MailAccountModal({ onClose, onAdded }: Props) {
           )}
         </div>
 
-        <div className="p-5 border-t border-white/10 flex items-center justify-end gap-2">
+        <div className="p-5 border-t border-white/10 flex items-center justify-between gap-2">
           <button onClick={onClose} className="px-4 py-2 text-white/65 hover:text-white text-sm transition-colors">
             Отмена
           </button>
-          <button
-            onClick={submit}
-            disabled={loading}
-            className="px-5 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg disabled:opacity-50 transition-opacity text-sm flex items-center gap-2"
-          >
-            {loading
-              ? <><Icon name="Loader2" size={14} className="animate-spin" />Подключаю...</>
-              : <><Icon name="Plus" size={14} />Подключить</>}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={checkConnection}
+              disabled={checking || loading}
+              className="flex items-center gap-2 px-4 py-2 glass border border-white/15 hover:border-neon-cyan/40 text-white/60 hover:text-neon-cyan rounded-lg text-sm disabled:opacity-50 transition-all"
+            >
+              {checking
+                ? <><Icon name="Loader2" size={14} className="animate-spin" />Проверяю...</>
+                : <><Icon name="Wifi" size={14} />Проверить</>}
+            </button>
+            <button
+              onClick={submit}
+              disabled={loading}
+              className="px-5 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg disabled:opacity-50 transition-opacity text-sm flex items-center gap-2"
+            >
+              {loading
+                ? <><Icon name="Loader2" size={14} className="animate-spin" />Подключаю...</>
+                : <><Icon name="Plus" size={14} />Подключить</>}
+            </button>
+          </div>
         </div>
       </div>
     </div>

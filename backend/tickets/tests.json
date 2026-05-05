@@ -1,0 +1,62 @@
+{
+  "tests": [
+    {
+      "name": "OPTIONS CORS",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 404,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List no user_id",
+      "method": "GET",
+      "path": "/?action=list",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "List empty",
+      "method": "GET",
+      "path": "/?action=list&user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 200,
+      "expectedBody": { "integrations": [] },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create missing fields",
+      "method": "POST",
+      "path": "/?action=create",
+      "body": { "userId": "00000000-0000-0000-0000-000000000001" },
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Sales no integration_id",
+      "method": "GET",
+      "path": "/?action=sales",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Stats no id",
+      "method": "GET",
+      "path": "/?action=stats",
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Webhook no integration_id",
+      "method": "POST",
+      "path": "/?action=webhook&provider=ticketscloud",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

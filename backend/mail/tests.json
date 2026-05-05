@@ -78,6 +78,15 @@
       "bodyMatcher": "partial"
     },
     {
+      "name": "Check connection missing fields",
+      "method": "POST",
+      "path": "/?action=check_connection",
+      "body": {},
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
       "name": "Unknown action",
       "method": "GET",
       "path": "/?action=foo",
