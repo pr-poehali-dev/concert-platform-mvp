@@ -137,62 +137,53 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
         raise RuntimeError(f"TicketsCloud connection error: {e}")
 
 
-# Базовые хосты — пробуем по очереди
-TC_API_BASES = [
-    "https://api.ticketscloud.org/v2",
-    "https://api.ticketscloud.com/v2",
-]
-
 
 def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
-    """Запрашивает историю заказов из TicketsCloud API v2.
+    """Запрашивает заказы из TicketsCloud API v2.
 
     TicketsCloud API v2:
-      Base: https://api.ticketscloud.org/v2
-      Orders: GET /resources/orders?event=<id>&limit=100&page=1
+      Base: https://ticketscloud.com
+      Orders: GET /v2/resources/orders   (без фильтров по event в query)
       Auth: Authorization: key <token>
-      Response: {"data": [...], "meta": {"total": N, "limit": N, "page": N}}
+      Response: {"data": [...], "pagination": {"total": N, "page": N, "size": N}}
+
+    Фильтруем заказы по event_id уже на нашей стороне.
     """
-    last_error = ""
+    base = "https://ticketscloud.com"
+    all_orders = []
+    page = 1
 
-    for base in TC_API_BASES:
-        all_orders = []
-        page = 1
-        try:
-            while True:
-                url = f"{base}/resources/orders?event={event_id}&limit=100&page={page}"
-                data = _tc_request(url, api_key)
+    while True:
+        url = f"{base}/v2/resources/orders?page={page}&size=100"
+        data = _tc_request(url, api_key)
 
-                # Формат: {"data": [...], "meta": {...}} или {"data": {"items": [...]}}
-                raw_data = data.get("data") or []
-                if isinstance(raw_data, dict):
-                    items = raw_data.get("items") or raw_data.get("results") or list(raw_data.values())
-                elif isinstance(raw_data, list):
-                    items = raw_data
-                else:
-                    items = []
+        raw_data = data.get("data") or []
+        if isinstance(raw_data, list):
+            items = raw_data
+        elif isinstance(raw_data, dict):
+            items = list(raw_data.values())
+        else:
+            items = []
 
-                all_orders.extend(items)
+        # Фильтруем по event_id
+        for item in items:
+            item_event = item.get("event") or ""
+            if isinstance(item_event, dict):
+                item_event = item_event.get("id") or ""
+            if str(item_event) == str(event_id):
+                all_orders.append(item)
 
-                meta = data.get("meta") or {}
-                total = int(meta.get("total") or meta.get("count") or len(items))
-                limit = int(meta.get("limit") or 100)
+        # Пагинация — ключ "pagination" в v2
+        pagination = data.get("pagination") or data.get("meta") or {}
+        total = int(pagination.get("total") or 0)
+        size  = int(pagination.get("size") or pagination.get("limit") or 100)
 
-                if len(all_orders) >= total or len(items) < limit or total == 0:
-                    break
-                page += 1
+        # Если получили меньше страницы или уже собрали всё — выходим
+        if len(items) < size or total == 0 or page * size >= total:
+            break
+        page += 1
 
-            return all_orders  # успех — возвращаем
-
-        except RuntimeError as e:
-            last_error = str(e)
-            # Если 401/403 — смысла пробовать другой хост нет (неверный ключ)
-            if "401" in last_error or "403" in last_error:
-                raise RuntimeError(f"Неверный API-ключ или нет доступа: {last_error}")
-            # Иначе пробуем следующий хост
-            continue
-
-    raise RuntimeError(f"Не удалось подключиться к TicketsCloud API. Последняя ошибка: {last_error}")
+    return all_orders
 
 
 def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> list:
