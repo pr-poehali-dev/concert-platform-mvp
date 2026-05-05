@@ -597,6 +597,146 @@ def handler(event: dict, context) -> dict:
             conn.close()
         return ok({"id": new_id, "webhookSecret": webhook_secret}, 201)
 
+    # ── GET list_tc_events — все события из кабинета TicketsCloud ──────────
+    if method == "GET" and action == "list_tc_events":
+        api_key = params.get("api_key", "")
+        if not api_key:
+            return err("api_key required")
+        try:
+            raw = _tc_request("https://ticketscloud.com/v1/resources/events", api_key)
+        except RuntimeError as e:
+            return err(f"TicketsCloud API: {e}", 422)
+
+        events_raw = raw if isinstance(raw, list) else (raw.get("data") or [])
+        import re as _re
+        result = []
+        for ev in events_raw:
+            if not isinstance(ev, dict) or ev.get("removed"):
+                continue
+            ev_id   = str(ev.get("id") or "")
+            title_o = ev.get("title") or {}
+            title   = (title_o.get("text") if isinstance(title_o, dict) else str(title_o)) or ev_id
+            status  = ev.get("status") or ""
+
+            # Дата из lifetime
+            lifetime = ev.get("lifetime") or ""
+            date_start = ""
+            if lifetime:
+                m = _re.search(r'DTSTART[^:]*:(\d{8}T\d{6})', lifetime)
+                if m:
+                    try:
+                        from datetime import datetime, timezone
+                        dt = datetime.strptime(m.group(1), "%Y%m%dT%H%M%S").replace(tzinfo=timezone.utc)
+                        date_start = dt.strftime("%Y-%m-%d")
+                    except Exception:
+                        pass
+
+            # Город из названия
+            city = ""
+            if title:
+                cm = _re.search(r'\bв[о]?\s+([А-ЯЁ][а-яё]+(?:[- ][А-ЯЁа-яё]+)*)', title)
+                if cm:
+                    city = cm.group(1)
+
+            result.append({
+                "id": ev_id,
+                "title": title,
+                "status": status,
+                "date_start": date_start,
+                "city": city,
+            })
+
+        # Сортируем: сначала будущие по дате, потом прошедшие
+        from datetime import date as _date
+        today = str(_date.today())
+        result.sort(key=lambda e: (e["date_start"] < today, e["date_start"] or "9999"))
+        return ok({"events": result})
+
+    # ── POST create_from_tc — создать проект из события TicketsCloud ───────
+    if method == "POST" and action == "create_from_tc":
+        b          = json.loads(event.get("body") or "{}")
+        user_id    = b.get("userId", "")
+        api_key    = (b.get("apiKey") or "").strip()
+        tc_event_id = (b.get("eventId") or "").strip()
+        project_id_existing = b.get("projectId") or None  # если уже есть проект — просто создать интеграцию
+
+        if not user_id or not api_key or not tc_event_id:
+            return err("userId, apiKey, eventId обязательны")
+
+        # Получаем данные события
+        event_info = fetch_ticketscloud_event_info(api_key, tc_event_id)
+        event_sets = fetch_ticketscloud_event_sets(api_key, tc_event_id)
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+
+            if project_id_existing:
+                project_id = project_id_existing
+            else:
+                # Создаём проект
+                title      = event_info.get("title") or f"Событие {tc_event_id[:8]}"
+                city       = event_info.get("city") or ""
+                date_start = event_info.get("date_start") or None
+                date_end   = event_info.get("date_end") or None
+
+                cur.execute(
+                    f"""INSERT INTO {SCHEMA}.projects
+                        (user_id, title, artist, city, date_start, date_end, status)
+                        VALUES (%s,%s,%s,%s,%s,%s,'planning') RETURNING id""",
+                    (user_id, title, "", city, date_start, date_end)
+                )
+                project_id = str(cur.fetchone()[0])
+
+                # Создаём строки доходов из event_sets
+                for i, s in enumerate(event_sets):
+                    cur.execute(
+                        f"""INSERT INTO {SCHEMA}.project_income_lines
+                            (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                        (project_id, s["name"], s["total"], s["price"], s.get("sold", 0),
+                         f"ticketscloud:{tc_event_id}", i)
+                    )
+
+            # Создаём интеграцию
+            webhook_secret = generate_webhook_secret()
+            title_for_name = event_info.get("title") or f"TicketsCloud #{tc_event_id[:8]}"
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.ticket_integrations
+                    (user_id, project_id, provider, name, api_key, event_id, webhook_secret)
+                    VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                (user_id, project_id, "ticketscloud",
+                 title_for_name[:80], api_key, tc_event_id, webhook_secret)
+            )
+            integration_id = str(cur.fetchone()[0])
+
+            # Загружаем заказы и синхронизируем доходы
+            try:
+                orders = fetch_ticketscloud_orders(api_key, tc_event_id)
+                all_sales = []
+                for order in orders:
+                    all_sales.extend(parse_ticketscloud_order(order, integration_id, project_id))
+                upsert_sales(cur, all_sales)
+                sync_income_lines(cur, project_id, integration_id, event_sets)
+                cur.execute(
+                    f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
+                    (integration_id,)
+                )
+            except RuntimeError:
+                pass  # если не удалось загрузить заказы — не критично
+
+            conn.commit()
+        finally:
+            conn.close()
+
+        webhook_url = f"https://functions.poehali.dev/e8e3c7c9-b452-4e77-8db2-ca0266399006?action=webhook&provider=ticketscloud&integration_id={integration_id}"
+        return ok({
+            "projectId": project_id,
+            "integrationId": integration_id,
+            "webhookSecret": webhook_secret,
+            "webhookUrl": webhook_url,
+        }, 201)
+
     # ── POST update — обновить интеграцию ─────────────────────────────────
     if method == "POST" and action == "update":
         b      = json.loads(event.get("body") or "{}")

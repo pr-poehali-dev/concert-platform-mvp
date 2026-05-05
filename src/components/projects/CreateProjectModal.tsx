@@ -9,6 +9,9 @@ import StepVenue from "./create/StepVenue";
 import StepExpenses from "./create/StepExpenses";
 import StepIncome from "./create/StepIncome";
 import StepTax from "./create/StepTax";
+import StepTickets, { type TicketIntegrationForm } from "./create/StepTickets";
+
+const TICKETS_URL = "https://functions.poehali.dev/e8e3c7c9-b452-4e77-8db2-ca0266399006";
 
 interface Props { open?: boolean; onClose: () => void; onCreated: (id: string) => void; defaultType?: string; }
 
@@ -41,6 +44,13 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
     { id: "0", category: "Партер", ticketCount: 0, ticketPrice: 0, soldCount: 0, note: "" },
     { id: "1", category: "VIP",    ticketCount: 0, ticketPrice: 0, soldCount: 0, note: "" },
   ]);
+
+  const [ticketIntegration, setTicketIntegration] = useState<TicketIntegrationForm>({
+    skip: false,
+    apiKey: "",
+    eventId: "",
+    selectedEvent: null,
+  });
 
   if (!open) return null;
 
@@ -140,13 +150,28 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
         });
       }
 
+      // Подключаем интеграцию TicketsCloud если указана
+      if (!ticketIntegration.skip && ticketIntegration.apiKey && ticketIntegration.eventId) {
+        try {
+          await fetch(`${TICKETS_URL}?action=create_from_tc`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userId: user!.id,
+              projectId,
+              apiKey: ticketIntegration.apiKey,
+              eventId: ticketIntegration.eventId,
+            }),
+          });
+        } catch { /* не критично — интеграцию можно подключить позже */ }
+      }
+
       onCreated(projectId);
       onClose();
     } catch (e: unknown) { setError(e instanceof Error ? e.message : "Ошибка"); }
     finally { setLoading(false); }
   };
 
-  const STEPS = ["Основное", "Площадка", "Расходы", "Доходы", "Налоги"];
+  const STEPS = ["Основное", "Площадка", "Расходы", "Доходы", "Налоги", "Билеты"];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -234,6 +259,13 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
               onSet={set}
             />
           )}
+          {step === 6 && (
+            <StepTickets
+              userId={user?.id || ""}
+              value={ticketIntegration}
+              onChange={setTicketIntegration}
+            />
+          )}
 
           {error && (
             <div className="flex items-center gap-2 text-neon-pink text-sm bg-neon-pink/10 rounded-xl px-4 py-3 border border-neon-pink/20">
@@ -256,7 +288,7 @@ export default function CreateProjectModal({ open = true, onClose, onCreated, de
             }}
               disabled={!canNext}
               className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-xl hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed text-sm transition-opacity">
-              {step === 2 && !selectedVenue ? "Пропустить" : "Далее"}<Icon name="ChevronRight" size={16} />
+              {step === 2 && !selectedVenue ? "Пропустить" : step === 5 ? "Далее → Билеты" : "Далее"}<Icon name="ChevronRight" size={16} />
             </button>
           ) : (
             <button onClick={handleSubmit} disabled={loading || !step1Valid || !!dateStartBooked}

@@ -6,6 +6,7 @@ import { PROJECTS_URL, STATUS_CONFIG, fmt, type Project } from "@/hooks/useProje
 import { useNotifications } from "@/context/NotificationsContext";
 import CreateProjectModal from "./CreateProjectModal";
 import ProjectDetailPage from "./ProjectDetailPage";
+import TcImportModal from "./TcImportModal";
 
 export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: string) => void }) {
   const { user } = useAuth();
@@ -14,6 +15,7 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showTcImport, setShowTcImport] = useState(false);
   const [openProjectId, setOpenProjectId] = useState<string|null>(null);
   const [filter, setFilter] = useState("all");
 
@@ -66,10 +68,18 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                 <p className="text-white/45 text-xs mt-0.5">Управление бюджетами, P&L и финансовая отчётность</p>
               </div>
             </div>
-            <button onClick={()=>setShowCreate(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm">
-              <Icon name="Plus" size={16}/>Новый проект
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={()=>setShowTcImport(true)}
+                className="flex items-center gap-2 px-3 py-2 glass border border-white/10 hover:border-neon-cyan/40 text-white/50 hover:text-neon-cyan rounded-lg text-sm transition-all">
+                <span className="text-base leading-none">🎫</span>
+                <span className="hidden sm:inline">Импорт из TicketsCloud</span>
+                <span className="sm:hidden">TC</span>
+              </button>
+              <button onClick={()=>setShowCreate(true)}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-neon-purple to-neon-cyan text-white font-oswald font-semibold rounded-lg hover:opacity-90 transition-opacity text-sm">
+                <Icon name="Plus" size={16}/>Новый проект
+              </button>
+            </div>
           </div>
 
           {/* Сводка */}
@@ -213,6 +223,14 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
         onClose={()=>setShowCreate(false)}
         onCreated={id=>{setShowCreate(false);setOpenProjectId(id);load();}}
       />
+
+      {showTcImport && (
+        <TcImportModal
+          userId={user!.id}
+          onClose={()=>setShowTcImport(false)}
+          onImported={(id)=>{ setShowTcImport(false); setOpenProjectId(id); load(); }}
+        />
+      )}
     </div>
   );
 }
