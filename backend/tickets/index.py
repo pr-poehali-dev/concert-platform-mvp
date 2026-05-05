@@ -138,6 +138,69 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
 
 
 
+def fetch_ticketscloud_event_sets(api_key: str, event_id: str) -> list:
+    """Получает категории билетов события из TicketsCloud API v2.
+
+    GET /v2/resources/events/{event_id}
+    Возвращает список категорий (sets) с полями:
+      id, name, price, nominal, total (тираж), sold, reserved, free
+    """
+    import sys
+    data = {}
+    url = f"https://ticketscloud.com/v2/resources/events/{event_id}"
+    try:
+        data = _tc_request(url, api_key)
+        print(f"[TC:events] keys={list(data.keys())}", file=sys.stderr)
+    except RuntimeError as e1:
+        print(f"[TC:events] {url} failed: {e1}", file=sys.stderr)
+        # Пробуем через список событий
+        try:
+            url2 = f"https://ticketscloud.com/v2/resources/events?ids={event_id}"
+            data = _tc_request(url2, api_key)
+            items = data.get("data") or []
+            data = {"data": items[0]} if items else {}
+            print(f"[TC:events] list fallback keys={list(data.keys())}", file=sys.stderr)
+        except RuntimeError as e2:
+            print(f"[TC:events] list fallback failed: {e2}", file=sys.stderr)
+            return []
+
+    # Событие может быть прямо в data или в data.data
+    event = data.get("data") or data
+    if isinstance(event, list):
+        event = event[0] if event else {}
+
+    print(f"[TC:events] event keys={list(event.keys()) if isinstance(event, dict) else type(event)}", file=sys.stderr)
+
+    sets = event.get("sets") or event.get("categories") or []
+    if not sets:
+        for key in ("ticket_sets", "places", "sectors"):
+            if event.get(key):
+                sets = event[key]
+                break
+
+    print(f"[TC:events] sets count={len(sets)}", file=sys.stderr)
+    if sets:
+        print(f"[TC:events] first set sample={json.dumps(sets[0], ensure_ascii=False, default=str)[:300]}", file=sys.stderr)
+
+    result = []
+    for s in sets:
+        if not isinstance(s, dict):
+            continue
+        set_id   = str(s.get("id") or "")
+        name     = str(s.get("name") or set_id)
+        price    = float(s.get("price") or s.get("nominal") or 0)
+        total    = int(s.get("total") or s.get("count") or s.get("capacity") or s.get("quantity") or 0)
+        sold     = int(s.get("sold") or s.get("sold_count") or s.get("orders_count") or 0)
+        reserved = int(s.get("reserved") or s.get("reserved_count") or 0)
+        result.append({
+            "id": set_id, "name": name, "price": price,
+            "total": total, "sold": sold, "reserved": reserved,
+            "free": max(0, total - sold - reserved),
+        })
+
+    return result
+
+
 def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
     """Запрашивает заказы из TicketsCloud API v2.
 
@@ -295,50 +358,75 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
     return rows
 
 
-def sync_income_lines(cur, project_id: str, integration_id: str):
-    """Синхронизирует строки доходов проекта на основе продаж из билетной системы.
+def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: list = None):
+    """Синхронизирует строки доходов проекта на основе продаж + тиража из TicketsCloud.
 
     Логика:
-    - Группируем ticket_sales по ticket_type (только paid/reserved)
-    - Для каждой категории: ticket_count = total_qty (план = всего продано),
-      sold_count = qty со статусом paid (факт), ticket_price = avg цена
-    - Ищем существующую строку по category + note='ticketscloud:<integration_id>'
-    - Если есть — обновляем, нет — создаём
-    - Пересчитываем итоги проекта
+    - ticket_count (план) = тираж категории из event_sets (сколько выставлено на продажу)
+    - sold_count   (факт) = кол-во оплаченных билетов из ticket_sales
+    - ticket_price         = цена категории
+    - Если event_sets недоступны — план = факт (как раньше)
     """
     if not project_id:
         return 0
 
-    # Агрегируем продажи по типу билета
+    # Агрегируем факт продаж по типу билета из ticket_sales
     cur.execute(
         f"""SELECT 
               ticket_type,
-              SUM(quantity) as total_qty,
               SUM(CASE WHEN status='paid' THEN quantity ELSE 0 END) as paid_qty,
               AVG(price) as avg_price
             FROM {SCHEMA}.ticket_sales
             WHERE integration_id = %s AND status != 'refunded'
-            GROUP BY ticket_type
-            HAVING SUM(quantity) > 0""",
+            GROUP BY ticket_type""",
         (integration_id,)
     )
-    rows = cur.fetchall()
-    if not rows:
+    sales_rows = cur.fetchall()
+
+    # Индекс продаж по имени категории
+    sales_by_name: dict = {}
+    for ticket_type, paid_qty, avg_price in sales_rows:
+        sales_by_name[ticket_type] = {
+            "sold": int(paid_qty or 0),
+            "price": float(avg_price or 0),
+        }
+
+    # Строим итоговый список категорий
+    # Приоритет: event_sets (тираж) > sales (только факт)
+    categories: dict = {}  # name -> {total, sold, price}
+
+    if event_sets:
+        for s in event_sets:
+            name  = s["name"]
+            total = s["total"]   # тираж — план
+            price = s["price"]
+            # Факт берём из продаж (точнее чем из event_sets.sold — там может быть иная логика)
+            sold  = sales_by_name.get(name, {}).get("sold", s.get("sold", 0))
+            if not price and name in sales_by_name:
+                price = sales_by_name[name]["price"]
+            categories[name] = {"total": total, "sold": sold, "price": price}
+
+    # Добавляем категории которые есть в продажах но нет в event_sets
+    for name, s in sales_by_name.items():
+        if name not in categories:
+            categories[name] = {"total": s["sold"], "sold": s["sold"], "price": s["price"]}
+
+    if not categories:
         return 0
 
     note_marker = f"ticketscloud:{integration_id}"
     synced = 0
 
-    for ticket_type, total_qty, paid_qty, avg_price in rows:
-        ticket_count = int(total_qty or 0)
-        sold_count   = int(paid_qty or 0)
-        price        = float(avg_price or 0)
+    for ticket_type, vals in categories.items():
+        ticket_count = vals["total"]   # план = весь тираж
+        sold_count   = vals["sold"]    # факт = оплачено
+        price        = vals["price"]
 
-        # Ищем существующую строку по маркеру в note
+        # Ищем существующую строку по маркеру
         cur.execute(
             f"""SELECT id FROM {SCHEMA}.project_income_lines
-                WHERE project_id = %s AND category = %s AND note = %s LIMIT 1""",
-            (project_id, ticket_type, note_marker)
+                WHERE project_id = %s AND note = %s AND category = %s LIMIT 1""",
+            (project_id, note_marker, ticket_type)
         )
         existing = cur.fetchone()
 
@@ -350,7 +438,6 @@ def sync_income_lines(cur, project_id: str, integration_id: str):
                 (ticket_count, sold_count, price, existing[0])
             )
         else:
-            # Получаем следующий sort_order
             cur.execute(
                 f"SELECT COALESCE(MAX(sort_order), 0) + 1 FROM {SCHEMA}.project_income_lines WHERE project_id = %s",
                 (project_id,)
@@ -658,7 +745,19 @@ def handler(event: dict, context) -> dict:
                 sales = parse_ticketscloud_order(order_data, int_id, project_id)
                 inserted = upsert_sales(cur, sales)
                 if project_id and inserted:
-                    sync_income_lines(cur, str(project_id), int_id)
+                    # При вебхуке тираж запрашиваем из API события
+                    cur.execute(
+                        f"SELECT api_key, event_id FROM {SCHEMA}.ticket_integrations WHERE id=%s",
+                        (int_id,)
+                    )
+                    int_row = cur.fetchone()
+                    wh_event_sets = []
+                    if int_row:
+                        try:
+                            wh_event_sets = fetch_ticketscloud_event_sets(int_row[0], int_row[1])
+                        except Exception:
+                            pass
+                    sync_income_lines(cur, str(project_id), int_id, wh_event_sets or None)
                 cur.execute(
                     f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
                     (int_id,)
@@ -695,6 +794,7 @@ def handler(event: dict, context) -> dict:
             api_error = ""
 
             income_synced = 0
+            event_sets = []
             if provider == "ticketscloud":
                 try:
                     orders = fetch_ticketscloud_orders(api_key, event_id_val)
@@ -702,9 +802,10 @@ def handler(event: dict, context) -> dict:
                     for order in orders:
                         all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
                     inserted = upsert_sales(cur, all_sales)
-                    # Автоматически синхронизируем строки доходов проекта
+                    # Получаем тираж категорий из API события
                     if project_id:
-                        income_synced = sync_income_lines(cur, str(project_id), int_id)
+                        event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
+                        income_synced = sync_income_lines(cur, str(project_id), int_id, event_sets)
                 except RuntimeError as e:
                     api_error = str(e)
 
@@ -724,6 +825,7 @@ def handler(event: dict, context) -> dict:
             "inserted": inserted,
             "ordersProcessed": len(orders),
             "incomeLinesUpdated": income_synced,
+            "eventSets": event_sets if project_id else [],
         })
 
     return err("Not found", 404)
