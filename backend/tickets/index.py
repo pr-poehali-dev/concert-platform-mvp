@@ -113,61 +113,86 @@ def verify_ticketscloud_signature(payload: bytes, signature: str, secret: str) -
     return hmac.compare_digest(expected, signature.lower().replace("sha256=", ""))
 
 
+def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
+    """Выполняет GET-запрос к TicketsCloud API, возвращает распарсенный JSON."""
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Authorization": f"key {api_key}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        body = ""
+        try:
+            body = e.read().decode()[:400]
+        except Exception:
+            pass
+        raise RuntimeError(f"TicketsCloud HTTP {e.code}: {e.reason}. Response: {body[:200]}")
+    except Exception as e:
+        raise RuntimeError(f"TicketsCloud connection error: {e}")
+
+
+# Базовые хосты — пробуем по очереди
+TC_API_BASES = [
+    "https://api.ticketscloud.org/v2",
+    "https://api.ticketscloud.com/v2",
+]
+
+
 def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
-    """Запрашивает историю заказов из TicketsCloud API v1.
-    
-    TicketsCloud API:
-      Base: http://ticketscloud.ru/v1
-      Deals: GET /resources/deals?event=<id>&status=accepted&limit=200
+    """Запрашивает историю заказов из TicketsCloud API v2.
+
+    TicketsCloud API v2:
+      Base: https://api.ticketscloud.org/v2
+      Orders: GET /resources/orders?event=<id>&limit=100&page=1
       Auth: Authorization: key <token>
+      Response: {"data": [...], "meta": {"total": N, "limit": N, "page": N}}
     """
-    all_orders = []
-    # Запрашиваем оплаченные (accepted) заказы
-    for status in ("accepted",):
+    last_error = ""
+
+    for base in TC_API_BASES:
+        all_orders = []
         page = 1
-        while True:
-            url = (
-                f"http://ticketscloud.ru/v1/resources/deals"
-                f"?event={event_id}&status={status}&limit=200&page={page}"
-            )
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "Authorization": f"key {api_key}",
-                    "Accept": "application/json",
-                },
-            )
-            try:
-                with urllib.request.urlopen(req, timeout=20) as resp:
-                    raw = resp.read().decode()
-                    data = json.loads(raw)
-            except urllib.error.HTTPError as e:
-                body = ""
-                try:
-                    body = e.read().decode()[:300]
-                except Exception:
-                    pass
-                raise RuntimeError(f"TicketsCloud HTTP {e.code}: {e.reason}. Body: {body}")
-            except Exception as e:
-                raise RuntimeError(f"TicketsCloud API error: {e}")
+        try:
+            while True:
+                url = f"{base}/resources/orders?event={event_id}&limit=100&page={page}"
+                data = _tc_request(url, api_key)
 
-            # Формат ответа: {"data": [...], "meta": {"total": N, "page": N}}
-            page_data = data.get("data") or data.get("results") or []
-            if isinstance(page_data, list):
-                all_orders.extend(page_data)
-            else:
-                all_orders.append(page_data)
+                # Формат: {"data": [...], "meta": {...}} или {"data": {"items": [...]}}
+                raw_data = data.get("data") or []
+                if isinstance(raw_data, dict):
+                    items = raw_data.get("items") or raw_data.get("results") or list(raw_data.values())
+                elif isinstance(raw_data, list):
+                    items = raw_data
+                else:
+                    items = []
 
-            # Пагинация
-            meta = data.get("meta") or {}
-            total = int(meta.get("total") or 0)
-            current_page = int(meta.get("page") or page)
-            limit = int(meta.get("limit") or 200)
-            if len(all_orders) >= total or len(page_data) < limit or total == 0:
-                break
-            page += 1
+                all_orders.extend(items)
 
-    return all_orders
+                meta = data.get("meta") or {}
+                total = int(meta.get("total") or meta.get("count") or len(items))
+                limit = int(meta.get("limit") or 100)
+
+                if len(all_orders) >= total or len(items) < limit or total == 0:
+                    break
+                page += 1
+
+            return all_orders  # успех — возвращаем
+
+        except RuntimeError as e:
+            last_error = str(e)
+            # Если 401/403 — смысла пробовать другой хост нет (неверный ключ)
+            if "401" in last_error or "403" in last_error:
+                raise RuntimeError(f"Неверный API-ключ или нет доступа: {last_error}")
+            # Иначе пробуем следующий хост
+            continue
+
+    raise RuntimeError(f"Не удалось подключиться к TicketsCloud API. Последняя ошибка: {last_error}")
 
 
 def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> list:
