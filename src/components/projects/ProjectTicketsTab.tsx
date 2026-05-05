@@ -64,6 +64,162 @@ function fmtDt(s: string) {
   return new Date(s).toLocaleString("ru", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+// ── Инструкция по настройке вебхука ──────────────────────────────────────────
+function WebhookInstructions({ integrationId, provider }: { integrationId: string; provider: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState<string | null>(null);
+
+  if (provider !== "ticketscloud") return null;
+
+  const webhookUrl = `${TICKETS_URL}?action=webhook&provider=ticketscloud&integration_id=${integrationId}`;
+
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const STEPS = [
+    {
+      num: 1,
+      text: "Откройте TicketsCloud → Мероприятия → выберите событие",
+      link: "https://manager.ticketscloud.com",
+      linkText: "Перейти в TicketsCloud →",
+    },
+    {
+      num: 2,
+      text: "В настройках события найдите раздел «Вебхуки» или «Уведомления»",
+    },
+    {
+      num: 3,
+      text: "Нажмите «Добавить вебхук» и вставьте URL:",
+      copyKey: "url",
+      copyValue: webhookUrl,
+    },
+    {
+      num: 4,
+      text: "Выберите события: order.done (оплата), order.returned (возврат)",
+    },
+    {
+      num: 5,
+      text: "Сохраните. Теперь каждая продажа будет мгновенно появляться в проекте.",
+    },
+  ];
+
+  return (
+    <div className="mt-4 border-t border-white/8 pt-4">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 text-white/35 hover:text-white/60 text-xs transition-colors w-full"
+      >
+        <Icon name={open ? "ChevronUp" : "ChevronDown"} size={13} />
+        <Icon name="Webhook" size={13} />
+        Как настроить вебхук для получения заказов в реальном времени
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-3">
+          <div className="rounded-xl border border-neon-cyan/20 bg-neon-cyan/5 p-4 space-y-3">
+            <p className="text-neon-cyan text-xs font-semibold flex items-center gap-1.5">
+              <Icon name="Zap" size={13} />
+              Вебхук = заказы появляются мгновенно, без ручной синхронизации
+            </p>
+            <p className="text-white/40 text-xs">
+              Автосинхронизация уже работает каждые 30 минут. Вебхук ускоряет это до секунды.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            {STEPS.map(s => (
+              <div key={s.num} className="flex gap-3">
+                <div className="w-5 h-5 rounded-full bg-white/8 border border-white/15 flex items-center justify-center text-[10px] text-white/40 font-bold shrink-0 mt-0.5">
+                  {s.num}
+                </div>
+                <div className="flex-1 space-y-1.5">
+                  <p className="text-white/55 text-xs">{s.text}</p>
+                  {s.copyValue && (
+                    <div className="flex items-center gap-2 glass border border-white/10 rounded-lg px-2.5 py-1.5">
+                      <code className="flex-1 text-neon-cyan text-[11px] break-all">{s.copyValue}</code>
+                      <button
+                        onClick={() => copy(s.copyValue!, s.copyKey!)}
+                        className="shrink-0 text-white/30 hover:text-neon-cyan transition-colors"
+                        title="Скопировать"
+                      >
+                        <Icon name={copied === s.copyKey ? "Check" : "Copy"} size={13} className={copied === s.copyKey ? "text-neon-green" : ""} />
+                      </button>
+                    </div>
+                  )}
+                  {s.link && (
+                    <a href={s.link} target="_blank" rel="noopener noreferrer"
+                      className="text-neon-cyan/60 hover:text-neon-cyan text-xs flex items-center gap-1 transition-colors">
+                      <Icon name="ExternalLink" size={11} />{s.linkText}
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-white/25 text-xs flex items-center gap-1.5 pt-1">
+            <Icon name="Info" size={11} />
+            Если вебхука нет в настройках — обратитесь в поддержку TicketsCloud для его активации
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Гайд после создания интеграции ────────────────────────────────────────────
+function CreatedWebhookGuide({ webhookUrl, webhookSecret }: { webhookUrl: string; webhookSecret: string }) {
+  const [copied, setCopied] = useState<string | null>(null);
+  const copy = (text: string, key: string) => {
+    navigator.clipboard.writeText(text);
+    setCopied(key);
+    setTimeout(() => setCopied(null), 2000);
+  };
+  return (
+    <div className="space-y-3 border border-white/8 rounded-xl p-4">
+      <p className="text-white/50 text-xs font-semibold uppercase tracking-wider flex items-center gap-1.5">
+        <Icon name="Webhook" size={12} />Как подключить вебхук (реальное время)
+      </p>
+      <div className="space-y-2.5 text-xs">
+        {[
+          { num: 1, text: "Откройте TicketsCloud → Мероприятия → ваше событие", link: "https://manager.ticketscloud.com", linkText: "Открыть кабинет →" },
+          { num: 2, text: "Настройки события → раздел «Вебхуки» / «Уведомления» → Добавить" },
+          { num: 3, text: "Вставьте URL вебхука:", copy: webhookUrl, copyKey: "url" },
+          { num: 4, text: "Если есть поле «Секрет» — вставьте:", copy: webhookSecret, copyKey: "secret" },
+          { num: 5, text: "Выберите события: order.done, order.returned → Сохранить" },
+        ].map(s => (
+          <div key={s.num} className="flex gap-2.5">
+            <span className="w-4 h-4 rounded-full bg-white/8 flex items-center justify-center text-[10px] text-white/35 font-bold shrink-0 mt-0.5">{s.num}</span>
+            <div className="flex-1">
+              <p className="text-white/50">{s.text}</p>
+              {s.copy && (
+                <div className="flex items-center gap-1.5 glass border border-white/10 rounded-lg px-2 py-1 mt-1">
+                  <code className="flex-1 text-neon-cyan text-[10px] break-all">{s.copy}</code>
+                  <button onClick={() => copy(s.copy!, s.copyKey!)} className="text-white/25 hover:text-neon-cyan shrink-0 transition-colors">
+                    <Icon name={copied === s.copyKey ? "Check" : "Copy"} size={12} className={copied === s.copyKey ? "text-neon-green" : ""} />
+                  </button>
+                </div>
+              )}
+              {s.link && (
+                <a href={s.link} target="_blank" rel="noopener noreferrer" className="text-neon-cyan/60 hover:text-neon-cyan flex items-center gap-1 mt-0.5 transition-colors">
+                  <Icon name="ExternalLink" size={10} />{s.linkText}
+                </a>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="text-white/25 text-[11px] flex items-center gap-1.5 pt-1 border-t border-white/8">
+        <Icon name="RefreshCw" size={10} />
+        Без вебхука данные автоматически обновляются каждые 30 минут
+      </p>
+    </div>
+  );
+}
+
 interface Props {
   projectId: string;
 }
@@ -98,19 +254,43 @@ export default function ProjectTicketsTab({ projectId }: Props) {
   const [addError, setAddError] = useState("");
   const [created, setCreated] = useState<{ webhookUrl: string; webhookSecret: string } | null>(null);
 
-  const loadIntegrations = useCallback(async () => {
+  const loadIntegrations = useCallback(async (autoSync = false) => {
     if (!user) return;
     setLoading(true);
     try {
       const res = await fetch(`${TICKETS_URL}?action=list&user_id=${user.id}`);
       const data = await res.json();
       const all: Integration[] = data.integrations || [];
-      setIntegrations(all.filter(i => i.projectId === projectId || !i.projectId));
+      const filtered = all.filter(i => i.projectId === projectId || !i.projectId);
+      setIntegrations(filtered);
+
+      // Автосинхронизация: если прошло >30 мин с последней синхронизации
+      if (autoSync && filtered.length > 0) {
+        const now = Date.now();
+        for (const int of filtered) {
+          if (!int.isActive) continue;
+          const lastSync = int.lastSyncAt ? new Date(int.lastSyncAt).getTime() : 0;
+          const diffMin = (now - lastSync) / 1000 / 60;
+          if (diffMin > 30) {
+            // Тихая фоновая синхронизация без UI-лоадера
+            fetch(`${TICKETS_URL}?action=sync`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ integrationId: int.id }),
+            }).then(r => r.json()).then(d => {
+              if (d.eventDiff && Object.keys(d.eventDiff).length > 0) {
+                setEventDiff(d.eventDiff);
+                setPendingIntId(int.id);
+              }
+            }).catch(() => {});
+          }
+        }
+      }
     } catch { setIntegrations([]); }
     finally { setLoading(false); }
   }, [user, projectId]);
 
-  useEffect(() => { loadIntegrations(); }, [loadIntegrations]);
+  useEffect(() => { loadIntegrations(true); }, [loadIntegrations]);
 
   const loadStats = useCallback(async (intId: string) => {
     setSalesLoading(true);
@@ -354,7 +534,7 @@ export default function ProjectTicketsTab({ projectId }: Props) {
         </div>
       )}
 
-      {/* После создания — показываем URL вебхука */}
+      {/* После создания — показываем инструкцию по вебхуку */}
       {created && (
         <div className="glass rounded-2xl border border-neon-green/30 p-5 space-y-4">
           <div className="flex items-center gap-3">
@@ -363,40 +543,16 @@ export default function ProjectTicketsTab({ projectId }: Props) {
             </div>
             <div>
               <h4 className="font-oswald font-bold text-white">Интеграция создана!</h4>
-              <p className="text-white/45 text-xs">Настройте вебхук в TicketsCloud для получения данных в реальном времени</p>
+              <p className="text-white/45 text-xs">Данные за всё время уже загружаются. Настройте вебхук для обновлений в реальном времени.</p>
             </div>
           </div>
-          <div className="space-y-3">
-            <div>
-              <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">URL вебхука — вставьте в настройки события</label>
-              <div className="flex items-center gap-2 glass border border-white/10 rounded-xl px-3 py-2">
-                <code className="flex-1 text-neon-cyan text-xs break-all">{created.webhookUrl}</code>
-                <button onClick={() => navigator.clipboard.writeText(created.webhookUrl)}
-                  className="shrink-0 text-white/30 hover:text-neon-cyan transition-colors" title="Скопировать">
-                  <Icon name="Copy" size={14} />
-                </button>
-              </div>
-            </div>
-            {created.webhookSecret && (
-              <div>
-                <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Секрет вебхука (опционально, для верификации)</label>
-                <div className="flex items-center gap-2 glass border border-white/10 rounded-xl px-3 py-2">
-                  <code className="flex-1 text-white/60 text-xs break-all font-mono">{created.webhookSecret}</code>
-                  <button onClick={() => navigator.clipboard.writeText(created.webhookSecret)}
-                    className="shrink-0 text-white/30 hover:text-neon-cyan transition-colors" title="Скопировать">
-                    <Icon name="Copy" size={14} />
-                  </button>
-                </div>
-              </div>
-            )}
-            <p className="text-white/35 text-xs flex items-start gap-1.5">
-              <Icon name="Info" size={11} className="shrink-0 mt-0.5" />
-              Кроме вебхука можно нажать «Синхронизировать» — мы сразу загрузим всю историю заказов
-            </p>
-          </div>
-          <button onClick={() => { setShowAdd(false); setCreated(null); }}
+
+          {/* Встроенная инструкция с раскрытым состоянием */}
+          <CreatedWebhookGuide webhookUrl={created.webhookUrl} webhookSecret={created.webhookSecret} />
+
+          <button onClick={() => { setShowAdd(false); setCreated(null); loadIntegrations(); }}
             className="px-4 py-2 glass border border-white/10 rounded-xl text-white/60 hover:text-white text-sm transition-colors">
-            Закрыть
+            Готово
           </button>
         </div>
       )}
@@ -594,6 +750,9 @@ export default function ProjectTicketsTab({ projectId }: Props) {
                         <p className="text-white/30 text-sm">Не удалось загрузить данные</p>
                       </div>
                     )}
+
+                    {/* Инструкция по вебхуку */}
+                    <WebhookInstructions integrationId={int.id} provider={int.provider} />
                   </div>
                 )}
               </div>
