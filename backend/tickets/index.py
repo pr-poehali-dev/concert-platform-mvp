@@ -149,47 +149,32 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
 
     Фильтруем заказы по event_id уже на нашей стороне.
     """
-    import sys
     base = "https://ticketscloud.com"
     all_orders = []
     page = 1
 
     while True:
-        # Только page — единственный параметр, который API принял в предыдущих тестах
         url = f"{base}/v2/resources/orders?page={page}" if page > 1 else f"{base}/v2/resources/orders"
-        print(f"[TC] GET {url}", file=sys.stderr)
         data = _tc_request(url, api_key)
-
-        # Логируем полную структуру первого ответа для диагностики
-        if page == 1:
-            import json as _json
-            sample = {k: (v[:2] if isinstance(v, list) else v) for k, v in data.items()}
-            print(f"[TC] response structure: {_json.dumps(sample, ensure_ascii=False, default=str)[:800]}", file=sys.stderr)
 
         raw_data = data.get("data") or []
         if isinstance(raw_data, list):
             items = raw_data
         elif isinstance(raw_data, dict):
-            # Иногда data — это dict с ключами-id
             items = list(raw_data.values())
         else:
             items = []
 
-        print(f"[TC] page={page} got {len(items)} orders", file=sys.stderr)
-
         # Фильтруем по event_id
-        matched_before = len(all_orders)
         for item in items:
             item_event = item.get("event") or ""
             if isinstance(item_event, dict):
                 item_event = item_event.get("id") or item_event.get("_id") or ""
             if str(item_event).strip() == str(event_id).strip():
                 all_orders.append(item)
-        print(f"[TC] matched for event {event_id}: {len(all_orders) - matched_before} new", file=sys.stderr)
 
         # Пагинация TicketsCloud v2: {"page": N, "page_size": 50, "total": N_pages}
         pagination = data.get("pagination") or data.get("meta") or {}
-        print(f"[TC] pagination: {pagination}", file=sys.stderr)
 
         page_size   = int(pagination.get("page_size") or pagination.get("size") or pagination.get("limit") or 50)
         total_pages = int(pagination.get("total") or pagination.get("pages") or pagination.get("total_pages") or 0)
