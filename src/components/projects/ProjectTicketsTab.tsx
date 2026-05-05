@@ -238,17 +238,18 @@ export default function ProjectTicketsTab({ projectId }: Props) {
             <div className="bg-neon-cyan/5 border border-neon-cyan/20 rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2 mb-1">
                 <Icon name="BookOpen" size={14} className="text-neon-cyan" />
-                <span className="text-neon-cyan text-xs font-semibold">Как получить API-ключ TicketsCloud</span>
+                <span className="text-neon-cyan text-xs font-semibold">Как подключить TicketsCloud</span>
               </div>
               <ol className="space-y-1.5 text-xs text-white/65">
-                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-purple/20 text-neon-purple text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">1</span>Зайдите в личный кабинет TicketsCloud</li>
-                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-purple/20 text-neon-purple text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">2</span>Настройки аккаунта → API → Создать токен</li>
-                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-purple/20 text-neon-purple text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">3</span>ID события — в URL страницы события (числовое значение)</li>
-                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-pink/20 text-neon-pink text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">4</span><span className="text-neon-pink/80">После создания скопируйте URL вебхука и вставьте в настройки события в TicketsCloud</span></li>
+                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-purple/20 text-neon-purple text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">1</span>Зайдите в личный кабинет <b className="text-white/80">ticketscloud.ru</b></li>
+                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-purple/20 text-neon-purple text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">2</span>Профиль → <b className="text-white/80">API-ключи</b> → Создать новый ключ. Скопируйте токен</li>
+                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-purple/20 text-neon-purple text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">3</span>ID события — откройте нужное событие, скопируйте ID из URL или из карточки события (формат: <code className="text-neon-cyan/80 bg-neon-cyan/10 px-1 rounded">5f3c8d2a1e4b7c9d0f123456</code>)</li>
+                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-pink/20 text-neon-pink text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">4</span><span className="text-neon-pink/80">После создания — скопируйте URL вебхука и добавьте его в настройках события: TicketsCloud → Событие → Настройки → Вебхуки</span></li>
+                <li className="flex gap-2"><span className="w-4 h-4 rounded-full bg-neon-green/20 text-neon-green text-[10px] flex items-center justify-center shrink-0 mt-0.5 font-bold">5</span><span className="text-neon-green/80">Нажмите «Синхр.» для ручной загрузки уже существующих заказов</span></li>
               </ol>
-              <a href="https://ticketscloud.com/developers" target="_blank" rel="noopener noreferrer"
+              <a href="https://ticketscloud.readthedocs.io/ru/old/v1/" target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-neon-cyan text-xs hover:underline">
-                <Icon name="ExternalLink" size={11} />Документация TicketsCloud API
+                <Icon name="ExternalLink" size={11} />Документация TicketsCloud API v1
               </a>
             </div>
           )}

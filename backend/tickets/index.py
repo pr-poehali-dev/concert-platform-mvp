@@ -109,76 +109,160 @@ def verify_ticketscloud_signature(payload: bytes, signature: str, secret: str) -
     """Проверяет HMAC-SHA256 подпись от TicketsCloud."""
     if not secret or not signature:
         return True  # если секрет не задан — пропускаем проверку
-    expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+    expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()  # noqa: hmac.new is correct
     return hmac.compare_digest(expected, signature.lower().replace("sha256=", ""))
 
 
 def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
-    """Запрашивает историю заказов из TicketsCloud API."""
-    url = f"https://ticketscloud.com/v1/services/orders?event={event_id}&limit=200"
-    req = urllib.request.Request(
-        url,
-        headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            data = json.loads(resp.read().decode())
-            return data.get("results", data.get("data", []))
-    except Exception as e:
-        raise RuntimeError(f"TicketsCloud API error: {e}")
+    """Запрашивает историю заказов из TicketsCloud API v1.
+    
+    TicketsCloud API:
+      Base: http://ticketscloud.ru/v1
+      Deals: GET /resources/deals?event=<id>&status=accepted&limit=200
+      Auth: Authorization: key <token>
+    """
+    all_orders = []
+    # Запрашиваем оплаченные (accepted) заказы
+    for status in ("accepted",):
+        page = 1
+        while True:
+            url = (
+                f"http://ticketscloud.ru/v1/resources/deals"
+                f"?event={event_id}&status={status}&limit=200&page={page}"
+            )
+            req = urllib.request.Request(
+                url,
+                headers={
+                    "Authorization": f"key {api_key}",
+                    "Accept": "application/json",
+                },
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    raw = resp.read().decode()
+                    data = json.loads(raw)
+            except urllib.error.HTTPError as e:
+                body = ""
+                try:
+                    body = e.read().decode()[:300]
+                except Exception:
+                    pass
+                raise RuntimeError(f"TicketsCloud HTTP {e.code}: {e.reason}. Body: {body}")
+            except Exception as e:
+                raise RuntimeError(f"TicketsCloud API error: {e}")
+
+            # Формат ответа: {"data": [...], "meta": {"total": N, "page": N}}
+            page_data = data.get("data") or data.get("results") or []
+            if isinstance(page_data, list):
+                all_orders.extend(page_data)
+            else:
+                all_orders.append(page_data)
+
+            # Пагинация
+            meta = data.get("meta") or {}
+            total = int(meta.get("total") or 0)
+            current_page = int(meta.get("page") or page)
+            limit = int(meta.get("limit") or 200)
+            if len(all_orders) >= total or len(page_data) < limit or total == 0:
+                break
+            page += 1
+
+    return all_orders
 
 
 def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> list:
-    """Разбирает один заказ TicketsCloud в список записей ticket_sales."""
+    """Разбирает один deal TicketsCloud в список записей ticket_sales.
+    
+    Структура deal (TicketsCloud v1):
+      id, status (accepted/rejected/returned), event (id события),
+      created_at, client {firstname, lastname, email, phone},
+      tickets: [{id, set (название категории), price, serial}, ...]
+      total — итоговая сумма
+    """
     rows = []
     oid = str(order.get("id") or order.get("_id") or "")
-    status_raw = str(order.get("status") or "paid").lower()
-    status = "paid" if status_raw in ("paid", "complete", "completed") else \
-             "refunded" if "refund" in status_raw else "reserved"
-    buyer = order.get("client") or order.get("customer") or {}
-    buyer_name  = f"{buyer.get('firstname','')} {buyer.get('lastname','')}".strip()
-    buyer_email = buyer.get("email", "")
-    sold_at     = order.get("created_at") or order.get("date") or None
+    if not oid:
+        return rows
 
-    tickets = order.get("tickets") or order.get("items") or []
-    if not tickets:
-        # Если нет массива — создаём одну запись из суммы заказа
-        rows.append({
-            "integration_id": integration_id,
-            "project_id":     project_id,
-            "provider":       "ticketscloud",
-            "event_id":       str(order.get("event", "")),
-            "order_id":       oid,
-            "ticket_type":    "Стандарт",
-            "quantity":       1,
-            "price":          float(order.get("amount") or order.get("price") or 0),
-            "total_amount":   float(order.get("amount") or order.get("total") or 0),
-            "status":         status,
-            "buyer_name":     buyer_name,
-            "buyer_email":    buyer_email,
-            "sold_at":        sold_at,
-            "raw_payload":    json.dumps(order, ensure_ascii=False, default=str),
-        })
-    else:
+    status_raw = str(order.get("status") or "accepted").lower()
+    status = "paid"     if status_raw in ("accepted", "paid", "complete", "completed") else \
+             "refunded" if status_raw in ("returned", "refunded", "cancelled") else \
+             "reserved"
+
+    # Покупатель
+    buyer = order.get("client") or order.get("customer") or order.get("buyer") or {}
+    buyer_name  = f"{buyer.get('firstname', '')} {buyer.get('lastname', '')}".strip()
+    buyer_email = buyer.get("email", "")
+
+    sold_at = order.get("created_at") or order.get("date") or None
+
+    # event id — может быть строкой или dict с полем id
+    ev = order.get("event") or ""
+    event_id = str(ev.get("id") if isinstance(ev, dict) else ev)
+
+    raw_str = json.dumps(order, ensure_ascii=False, default=str)
+
+    # Массив билетов
+    tickets = order.get("tickets") or []
+
+    if tickets:
+        # Группируем по типу (set/category) для агрегации
+        groups: dict = {}
         for t in tickets:
-            price = float(t.get("price") or t.get("cost") or 0)
-            qty   = int(t.get("quantity") or t.get("count") or 1)
+            ticket_set = t.get("set") or t.get("name") or t.get("category") or "Стандарт"
+            if isinstance(ticket_set, dict):
+                ticket_set = ticket_set.get("name") or ticket_set.get("id") or "Стандарт"
+            ticket_set = str(ticket_set)
+
+            price = 0.0
+            # price может быть в t.price или t.values.price
+            if t.get("price") is not None:
+                price = float(t["price"])
+            elif isinstance(t.get("values"), dict) and t["values"].get("price") is not None:
+                price = float(t["values"]["price"])
+
+            key = ticket_set
+            if key not in groups:
+                groups[key] = {"count": 0, "price": price, "ids": []}
+            groups[key]["count"] += 1
+            groups[key]["ids"].append(str(t.get("id", "")))
+
+        for set_name, g in groups.items():
             rows.append({
                 "integration_id": integration_id,
                 "project_id":     project_id,
                 "provider":       "ticketscloud",
-                "event_id":       str(order.get("event", "")),
-                "order_id":       f"{oid}_{t.get('id', len(rows))}",
-                "ticket_type":    str(t.get("name") or t.get("category") or "Стандарт"),
-                "quantity":       qty,
-                "price":          price,
-                "total_amount":   price * qty,
+                "event_id":       event_id,
+                "order_id":       f"{oid}_{set_name[:20]}",
+                "ticket_type":    set_name,
+                "quantity":       g["count"],
+                "price":          g["price"],
+                "total_amount":   g["price"] * g["count"],
                 "status":         status,
                 "buyer_name":     buyer_name,
                 "buyer_email":    buyer_email,
                 "sold_at":        sold_at,
-                "raw_payload":    json.dumps(order, ensure_ascii=False, default=str),
+                "raw_payload":    raw_str,
             })
+    else:
+        # Нет списка билетов — одна запись с общей суммой
+        total = float(order.get("total") or order.get("amount") or order.get("price") or 0)
+        rows.append({
+            "integration_id": integration_id,
+            "project_id":     project_id,
+            "provider":       "ticketscloud",
+            "event_id":       event_id,
+            "order_id":       oid,
+            "ticket_type":    "Стандарт",
+            "quantity":       1,
+            "price":          total,
+            "total_amount":   total,
+            "status":         status,
+            "buyer_name":     buyer_name,
+            "buyer_email":    buyer_email,
+            "sold_at":        sold_at,
+            "raw_payload":    raw_str,
+        })
     return rows
 
 
@@ -447,10 +531,16 @@ def handler(event: dict, context) -> dict:
                     conn.close()
                     return err("Неверная подпись вебхука", 403)
 
-            body = json.loads(raw_body or "{}")
-            event_type = body.get("event") or body.get("type") or ""
-            order_data = body.get("data") or body.get("order") or body
+            try:
+                body = json.loads(raw_body or "{}")
+            except Exception:
+                body = {}
 
+            event_type = body.get("event") or body.get("type") or ""
+            # TicketsCloud вебхук: payload это сам deal или обёртка {data: deal}
+            order_data = body.get("data") or body
+
+            inserted = 0
             if provider == "ticketscloud":
                 sales = parse_ticketscloud_order(order_data, int_id, project_id)
                 inserted = upsert_sales(cur, sales)
@@ -463,7 +553,7 @@ def handler(event: dict, context) -> dict:
         finally:
             conn.close()
 
-        return ok({"received": True, "event": event_type, "inserted": inserted if provider == "ticketscloud" else 0})
+        return ok({"received": True, "event": event_type, "inserted": inserted})
 
     # ── POST sync — ручная синхронизация истории заказов ─────────────────
     if method == "POST" and action == "sync":
@@ -483,16 +573,21 @@ def handler(event: dict, context) -> dict:
             if not row:
                 conn.close()
                 return err("Интеграция не найдена", 404)
-            api_key, event_id, project_id, provider = row
+            api_key, event_id_val, project_id, provider = row
+
+            orders = []
+            inserted = 0
+            api_error = ""
 
             if provider == "ticketscloud":
-                orders = fetch_ticketscloud_orders(api_key, event_id)
-                all_sales = []
-                for order in orders:
-                    all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
-                inserted = upsert_sales(cur, all_sales)
-            else:
-                inserted = 0
+                try:
+                    orders = fetch_ticketscloud_orders(api_key, event_id_val)
+                    all_sales = []
+                    for order in orders:
+                        all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
+                    inserted = upsert_sales(cur, all_sales)
+                except RuntimeError as e:
+                    api_error = str(e)
 
             cur.execute(
                 f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
@@ -502,6 +597,9 @@ def handler(event: dict, context) -> dict:
         finally:
             conn.close()
 
-        return ok({"success": True, "inserted": inserted, "ordersProcessed": len(orders) if provider == "ticketscloud" else 0})
+        if api_error:
+            return err(f"Ошибка API провайдера: {api_error}", 422)
+
+        return ok({"success": True, "inserted": inserted, "ordersProcessed": len(orders)})
 
     return err("Not found", 404)
