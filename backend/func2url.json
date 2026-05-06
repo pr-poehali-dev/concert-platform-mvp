@@ -1,4 +1,5 @@
 {
+  "tickets-cron": "https://functions.poehali.dev/f701a36c-010d-434e-b471-afe0f542bc07",
   "tickets": "https://functions.poehali.dev/e8e3c7c9-b452-4e77-8db2-ca0266399006",
   "booking-data": "https://functions.poehali.dev/1ba4879f-6ecb-439f-9932-ebfc403d529a",
   "booking-requests": "https://functions.poehali.dev/c0f0692e-57af-453e-a334-d9619469defc",
