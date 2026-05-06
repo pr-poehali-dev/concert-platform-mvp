@@ -20,7 +20,7 @@ export default function VerifyEmailPage() {
     }
 
     fetch(`${AUTH_URL}?action=verify_email&token=${encodeURIComponent(token)}`)
-      .then(r => r.json())
+      .then(r => { if (!r.ok && r.status >= 500) throw new Error("server"); return r.json(); })
       .then(data => {
         if (data.confirmed) {
           setUserName(data.name || "");

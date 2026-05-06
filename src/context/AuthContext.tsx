@@ -104,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const sessionId = localStorage.getItem(SESSION_KEY);
     if (!sessionId) { setIsLoading(false); return; }
     fetch(`${AUTH_URL}?action=me`, { headers: { "X-Session-Id": sessionId } })
-      .then((r) => r.json())
+      .then((r) => { if (!r.ok) throw new Error(); return r.json(); })
       .then((data) => { if (data.user) setUserWithCache(data.user); })
       .catch(() => {})
       .finally(() => setIsLoading(false));

@@ -18,6 +18,7 @@ export default function ToursPage({ onNavigate }: { onNavigate?: (page: string) 
     setLoading(true);
     try {
       const res = await fetch(`${PROJECTS_URL}?action=list&user_id=${user.id}`);
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setTours((data.projects || []).filter((p: Project) => p.projectType === "tour"));
     } catch { setTours([]); }

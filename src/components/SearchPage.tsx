@@ -166,6 +166,7 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
       if (selectedType !== "Все типы") params.set("type", selectedType);
       if (capacityMin > 0) params.set("capacity_min", String(capacityMin));
       const res = await fetch(`${VENUES_URL}?${params}`);
+      if (!res.ok) throw new Error();
       const data = await res.json();
       setVenues(data.venues || []);
     } catch {
