@@ -241,23 +241,24 @@ def fetch_ticketscloud_event_sets(api_key: str, event_id: str) -> list:
 
 
 def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
-    """Запрашивает заказы из TicketsCloud API v2.
+    """Запрашивает заказы из TicketsCloud API v2 с фильтром по event_id.
 
-    TicketsCloud API v2:
-      Base: https://ticketscloud.com
-      Orders: GET /v2/resources/orders   (без фильтров по event в query)
-      Auth: Authorization: key <token>
-      Response: {"data": [...], "pagination": {"total": N, "page": N, "size": N}}
-
-    Фильтруем заказы по event_id уже на нашей стороне.
+    Использует параметр event= в URL чтобы получать только нужные заказы.
+    Если API его не поддерживает — фильтруем на нашей стороне.
+    Жёсткий лимит: 20 страниц × 50 = 1000 заказов за один sync.
     """
+    import urllib.parse
     base = "https://ticketscloud.com"
     all_orders = []
     page = 1
+    MAX_PAGES = 20      # не более 20 страниц — ~1000 заказов, укладываемся в 25 сек
 
     while True:
-        url = f"{base}/v2/resources/orders?page={page}" if page > 1 else f"{base}/v2/resources/orders"
-        data = _tc_request(url, api_key)
+        params_q = {"page_size": "50", "event": event_id}
+        if page > 1:
+            params_q["page"] = str(page)
+        url = f"{base}/v2/resources/orders?" + urllib.parse.urlencode(params_q)
+        data = _tc_request(url, api_key, timeout=8)
 
         raw_data = data.get("data") or []
         if isinstance(raw_data, list):
@@ -267,22 +268,20 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
         else:
             items = []
 
-        # Фильтруем по event_id
         for item in items:
             item_event = item.get("event") or ""
             if isinstance(item_event, dict):
                 item_event = item_event.get("id") or item_event.get("_id") or ""
-            if str(item_event).strip() == str(event_id).strip():
+            # Принимаем заказ если event совпадает, ИЛИ если API не вернул event-поле (фильтр на стороне TC)
+            if not item_event or str(item_event).strip() == str(event_id).strip():
                 all_orders.append(item)
 
-        # Пагинация TicketsCloud v2: {"page": N, "page_size": 50, "total": N_pages}
+        # Пагинация
         pagination = data.get("pagination") or data.get("meta") or {}
-
         page_size   = int(pagination.get("page_size") or pagination.get("size") or pagination.get("limit") or 50)
         total_pages = int(pagination.get("total") or pagination.get("pages") or pagination.get("total_pages") or 0)
         current     = int(pagination.get("page") or page)
 
-        # Условия выхода
         if len(items) == 0:
             break
         if not pagination:
@@ -291,7 +290,7 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
             break
         if len(items) < page_size:
             break
-        if page >= 100:  # жёсткий лимит
+        if page >= MAX_PAGES:
             break
         page += 1
 
