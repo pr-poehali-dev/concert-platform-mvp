@@ -123,10 +123,26 @@ def handler(event: dict, context) -> dict:
 
     # GET booking_checklist
     if method == "GET" and action == "booking_checklist":
-        booking_id = params.get("booking_id", "")
-        venue_id = params.get("venue_id", "")
+        booking_id   = params.get("booking_id", "")
+        venue_id     = params.get("venue_id", "")
+        requester_id = params.get("requester_id", "") or params.get("user_id", "")
         if not booking_id and not venue_id: return err("booking_id или venue_id required")
+        if not requester_id: return err("requester_id required")
+        # Запрос по venue_id — это должен быть сам пользователь-площадка
+        if venue_id and venue_id != requester_id:
+            return err("Нет доступа", 403)
         conn = get_conn(); cur = conn.cursor()
+        # Запрос по booking_id — проверяем что юзер связан с бронированием
+        if booking_id:
+            cur.execute(
+                f"SELECT venue_user_id, organizer_id FROM {SCHEMA}.venue_bookings WHERE id=%s",
+                (booking_id,)
+            )
+            br = cur.fetchone()
+            if not br: conn.close(); return err("Бронирование не найдено", 404)
+            if requester_id not in (str(br[0]), str(br[1])):
+                conn.close()
+                return err("Нет доступа", 403)
         if booking_id:
             cur.execute(
                 f"SELECT id,booking_id,venue_id,step_key,step_title,is_done,note,sort_order FROM {SCHEMA}.booking_checklist WHERE booking_id=%s ORDER BY sort_order",

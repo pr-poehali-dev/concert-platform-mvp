@@ -33,10 +33,18 @@
       "bodyMatcher": "partial"
     },
     {
-      "name": "Detail not found",
+      "name": "Detail no user_id",
       "method": "GET",
       "path": "/?action=detail&project_id=00000000-0000-0000-0000-000000000000",
-      "expectedStatus": 404,
+      "expectedStatus": 400,
+      "expectedBody": { "error": "string" },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Detail forbidden",
+      "method": "GET",
+      "path": "/?action=detail&project_id=00000000-0000-0000-0000-000000000000&user_id=00000000-0000-0000-0000-000000000099",
+      "expectedStatus": 403,
       "expectedBody": { "error": "string" },
       "bodyMatcher": "partial"
     },

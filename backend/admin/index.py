@@ -232,14 +232,16 @@ def handler(event: dict, context) -> dict:
     # ── GET pending ───────────────────────────────────────────────────────
     if method == "GET" and action == "pending":
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"""SELECT id, name, email, role, city, avatar, avatar_color, created_at
-                FROM {SCHEMA}.users WHERE status = 'pending'
-                ORDER BY created_at ASC"""
-        )
-        rows = cur.fetchall()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id, name, email, role, city, avatar, avatar_color, created_at
+                    FROM {SCHEMA}.users WHERE status = 'pending'
+                    ORDER BY created_at ASC"""
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
         result = [
             {
                 "id": str(r[0]), "name": r[1], "email": r[2], "role": r[3],
@@ -257,14 +259,16 @@ def handler(event: dict, context) -> dict:
         if not uid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {SCHEMA}.users SET status = 'approved', verified = TRUE WHERE id = %s RETURNING name, email",
-            (uid,),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.users SET status = 'approved', verified = TRUE WHERE id = %s RETURNING name, email",
+                (uid,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
         if row:
             send_notification(
                 uid, "system",
@@ -282,14 +286,16 @@ def handler(event: dict, context) -> dict:
         if not uid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {SCHEMA}.users SET status = 'rejected', verified = FALSE WHERE id = %s RETURNING name, email",
-            (uid,),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.users SET status = 'rejected', verified = FALSE WHERE id = %s RETURNING name, email",
+                (uid,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
         if row:
             msg = f"К сожалению, ваша заявка отклонена."
             if reason:
@@ -306,51 +312,53 @@ def handler(event: dict, context) -> dict:
         offset = (page - 1) * PAGE_SIZE
 
         conn = get_conn()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        where = "WHERE 1=1"
-        args = []
-        if search:
-            where += " AND (name ILIKE %s OR email ILIKE %s)"
-            args += [f"%{search}%", f"%{search}%"]
-        if role_filter:
-            where += " AND role = %s"
-            args.append(role_filter)
-        if status_filter:
-            where += " AND status = %s"
-            args.append(status_filter)
+            where = "WHERE 1=1"
+            args = []
+            if search:
+                where += " AND (name ILIKE %s OR email ILIKE %s)"
+                args += [f"%{search}%", f"%{search}%"]
+            if role_filter:
+                where += " AND role = %s"
+                args.append(role_filter)
+            if status_filter:
+                where += " AND status = %s"
+                args.append(status_filter)
 
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users {where}", args)
-        total = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.users {where}", args)
+            total = cur.fetchone()[0]
 
-        cur.execute(
-            f"""SELECT id, name, email, role, city, verified, is_admin, avatar, avatar_color, created_at, status
-                FROM {SCHEMA}.users {where}
-                ORDER BY created_at DESC LIMIT %s OFFSET %s""",
-            args + [PAGE_SIZE, offset],
-        )
-        rows = cur.fetchall()
-
-        user_ids = [str(r[0]) for r in rows]
-        venue_counts = {}
-        last_seen_map = {}
-        if user_ids:
-            placeholders = ",".join(["%s"] * len(user_ids))
             cur.execute(
-                f"SELECT user_id, COUNT(*) FROM {SCHEMA}.venues WHERE user_id IN ({placeholders}) GROUP BY user_id",
-                user_ids,
+                f"""SELECT id, name, email, role, city, verified, is_admin, avatar, avatar_color, created_at, status
+                    FROM {SCHEMA}.users {where}
+                    ORDER BY created_at DESC LIMIT %s OFFSET %s""",
+                args + [PAGE_SIZE, offset],
             )
-            for vc in cur.fetchall():
-                venue_counts[str(vc[0])] = vc[1]
-            # Последний онлайн — максимум по сессиям пользователя
-            cur.execute(
-                f"SELECT user_id, MAX(last_seen) FROM {SCHEMA}.sessions "
-                f"WHERE user_id IN ({placeholders}) GROUP BY user_id",
-                user_ids,
-            )
-            for ls in cur.fetchall():
-                last_seen_map[str(ls[0])] = str(ls[1]) if ls[1] else ""
-        conn.close()
+            rows = cur.fetchall()
+
+            user_ids = [str(r[0]) for r in rows]
+            venue_counts = {}
+            last_seen_map = {}
+            if user_ids:
+                placeholders = ",".join(["%s"] * len(user_ids))
+                cur.execute(
+                    f"SELECT user_id, COUNT(*) FROM {SCHEMA}.venues WHERE user_id IN ({placeholders}) GROUP BY user_id",
+                    user_ids,
+                )
+                for vc in cur.fetchall():
+                    venue_counts[str(vc[0])] = vc[1]
+                # Последний онлайн — максимум по сессиям пользователя
+                cur.execute(
+                    f"SELECT user_id, MAX(last_seen) FROM {SCHEMA}.sessions "
+                    f"WHERE user_id IN ({placeholders}) GROUP BY user_id",
+                    user_ids,
+                )
+                for ls in cur.fetchall():
+                    last_seen_map[str(ls[0])] = str(ls[1]) if ls[1] else ""
+        finally:
+            conn.close()
 
         users = []
         for r in rows:
@@ -374,28 +382,30 @@ def handler(event: dict, context) -> dict:
         offset = (page - 1) * PAGE_SIZE
 
         conn = get_conn()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        where = "WHERE 1=1"
-        args = []
-        if search:
-            where += " AND (v.name ILIKE %s OR v.city ILIKE %s)"
-            args += [f"%{search}%", f"%{search}%"]
+            where = "WHERE 1=1"
+            args = []
+            if search:
+                where += " AND (v.name ILIKE %s OR v.city ILIKE %s)"
+                args += [f"%{search}%", f"%{search}%"]
 
-        cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues v {where}", args)
-        total = cur.fetchone()[0]
+            cur.execute(f"SELECT COUNT(*) FROM {SCHEMA}.venues v {where}", args)
+            total = cur.fetchone()[0]
 
-        cur.execute(
-            f"""SELECT v.id, v.name, v.city, v.venue_type, v.capacity, v.price_from,
-                       v.verified, v.rating, v.reviews_count, v.created_at,
-                       u.name, u.email
-                FROM {SCHEMA}.venues v
-                LEFT JOIN {SCHEMA}.users u ON u.id = v.user_id
-                {where} ORDER BY v.created_at DESC LIMIT %s OFFSET %s""",
-            args + [PAGE_SIZE, offset],
-        )
-        rows = cur.fetchall()
-        conn.close()
+            cur.execute(
+                f"""SELECT v.id, v.name, v.city, v.venue_type, v.capacity, v.price_from,
+                           v.verified, v.rating, v.reviews_count, v.created_at,
+                           u.name, u.email
+                    FROM {SCHEMA}.venues v
+                    LEFT JOIN {SCHEMA}.users u ON u.id = v.user_id
+                    {where} ORDER BY v.created_at DESC LIMIT %s OFFSET %s""",
+                args + [PAGE_SIZE, offset],
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
 
         venues = [
             {"id": str(r[0]), "name": r[1], "city": r[2], "venueType": r[3],
@@ -414,14 +424,16 @@ def handler(event: dict, context) -> dict:
         if not uid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {SCHEMA}.users SET verified = NOT verified WHERE id = %s RETURNING verified",
-            (uid,),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.users SET verified = NOT verified WHERE id = %s RETURNING verified",
+                (uid,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"verified": row[0] if row else False})
 
     # ── POST verify_venue ─────────────────────────────────────────────────
@@ -431,14 +443,16 @@ def handler(event: dict, context) -> dict:
         if not vid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {SCHEMA}.venues SET verified = NOT verified WHERE id = %s RETURNING verified",
-            (vid,),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.venues SET verified = NOT verified WHERE id = %s RETURNING verified",
+                (vid,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"verified": row[0] if row else False})
 
     # ── POST toggle_admin ─────────────────────────────────────────────────
@@ -448,14 +462,16 @@ def handler(event: dict, context) -> dict:
         if not uid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        cur.execute(
-            f"UPDATE {SCHEMA}.users SET is_admin = NOT is_admin WHERE id = %s RETURNING is_admin",
-            (uid,),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"UPDATE {SCHEMA}.users SET is_admin = NOT is_admin WHERE id = %s RETURNING is_admin",
+                (uid,),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"isAdmin": row[0] if row else False})
 
     # ── POST delete_user ──────────────────────────────────────────────────
@@ -465,50 +481,52 @@ def handler(event: dict, context) -> dict:
         if not uid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        # Площадки пользователя — удаляем вместе со всеми зависимостями
-        cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE user_id = %s", (uid,))
-        venue_ids = [str(r[0]) for r in cur.fetchall()]
-        for vid in venue_ids:
-            # Бронирования площадки — задачи, чеклист, файлы
-            cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
+        try:
+            cur = conn.cursor()
+            # Площадки пользователя — удаляем вместе со всеми зависимостями
+            cur.execute(f"SELECT id FROM {SCHEMA}.venues WHERE user_id = %s", (uid,))
+            venue_ids = [str(r[0]) for r in cur.fetchall()]
+            for vid in venue_ids:
+                # Бронирования площадки — задачи, чеклист, файлы
+                cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
+                bids = [str(r[0]) for r in cur.fetchall()]
+                for bid in bids:
+                    cur.execute(f"DELETE FROM {SCHEMA}.booking_tasks WHERE booking_id = %s", (bid,))
+                    cur.execute(f"DELETE FROM {SCHEMA}.booking_checklist WHERE booking_id = %s", (bid,))
+                    cur.execute(f"DELETE FROM {SCHEMA}.booking_files WHERE booking_id = %s", (bid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (vid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (vid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (vid,))
+            # Бронирования как организатора
+            cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
             bids = [str(r[0]) for r in cur.fetchall()]
             for bid in bids:
                 cur.execute(f"DELETE FROM {SCHEMA}.booking_tasks WHERE booking_id = %s", (bid,))
                 cur.execute(f"DELETE FROM {SCHEMA}.booking_checklist WHERE booking_id = %s", (bid,))
                 cur.execute(f"DELETE FROM {SCHEMA}.booking_files WHERE booking_id = %s", (bid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (vid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (vid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (vid,))
-        # Бронирования как организатора
-        cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
-        bids = [str(r[0]) for r in cur.fetchall()]
-        for bid in bids:
-            cur.execute(f"DELETE FROM {SCHEMA}.booking_tasks WHERE booking_id = %s", (bid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.booking_checklist WHERE booking_id = %s", (bid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.booking_files WHERE booking_id = %s", (bid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
-        # Диалоги и сообщения
-        cur.execute(f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
-        conv_ids = [str(r[0]) for r in cur.fetchall()]
-        for cid in conv_ids:
-            cur.execute(f"DELETE FROM {SCHEMA}.messages WHERE conversation_id = %s", (cid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
-        # Уведомления и сотрудники
-        cur.execute(f"DELETE FROM {SCHEMA}.notifications WHERE user_id = %s", (uid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.employees WHERE company_user_id = %s", (uid,))
-        # Проекты пользователя
-        cur.execute(f"SELECT id FROM {SCHEMA}.projects WHERE user_id = %s", (uid,))
-        project_ids = [str(r[0]) for r in cur.fetchall()]
-        for pid in project_ids:
-            cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE project_id = %s", (pid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE project_id = %s", (pid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id = %s", (pid,))
-        # Удаляем пользователя
-        cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = %s", (uid,))
-        conn.commit()
-        conn.close()
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
+            # Диалоги и сообщения
+            cur.execute(f"SELECT id FROM {SCHEMA}.conversations WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
+            conv_ids = [str(r[0]) for r in cur.fetchall()]
+            for cid in conv_ids:
+                cur.execute(f"DELETE FROM {SCHEMA}.messages WHERE conversation_id = %s", (cid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE organizer_id = %s OR venue_user_id = %s", (uid, uid))
+            # Уведомления и сотрудники
+            cur.execute(f"DELETE FROM {SCHEMA}.notifications WHERE user_id = %s", (uid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.employees WHERE company_user_id = %s", (uid,))
+            # Проекты пользователя
+            cur.execute(f"SELECT id FROM {SCHEMA}.projects WHERE user_id = %s", (uid,))
+            project_ids = [str(r[0]) for r in cur.fetchall()]
+            for pid in project_ids:
+                cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE project_id = %s", (pid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE project_id = %s", (pid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id = %s", (pid,))
+            # Удаляем пользователя
+            cur.execute(f"DELETE FROM {SCHEMA}.users WHERE id = %s", (uid,))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"deleted": True})
 
     # ── POST send_notification ────────────────────────────────────────────
@@ -528,102 +546,102 @@ def handler(event: dict, context) -> dict:
         if not uid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
+        try:
+            cur = conn.cursor()
 
-        # Базовые данные пользователя
-        cur.execute(
-            f"""SELECT id, name, email, role, city, verified, is_admin, avatar, avatar_color,
-                       created_at, status, phone, legal_name, inn, company_type
-                FROM {SCHEMA}.users WHERE id = %s""",
-            (uid,),
-        )
-        row = cur.fetchone()
-        if not row:
+            # Базовые данные пользователя
+            cur.execute(
+                f"""SELECT id, name, email, role, city, verified, is_admin, avatar, avatar_color,
+                           created_at, status, phone, legal_name, inn, company_type
+                    FROM {SCHEMA}.users WHERE id = %s""",
+                (uid,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return err("Пользователь не найден", 404)
+
+            user = {
+                "id": str(row[0]), "name": row[1], "email": row[2], "role": row[3],
+                "city": row[4], "verified": row[5], "isAdmin": row[6],
+                "avatar": row[7], "avatarColor": row[8], "createdAt": str(row[9]),
+                "status": row[10] or "approved", "phone": row[11] or "",
+                "legalName": row[12] or "", "inn": row[13] or "", "companyType": row[14] or "",
+            }
+
+            # Проекты с финансами
+            cur.execute(
+                f"""SELECT id, title, artist, status, city, date_start,
+                           total_income_plan, total_income_fact,
+                           total_expenses_plan, total_expenses_fact, created_at
+                    FROM {SCHEMA}.projects WHERE user_id = %s
+                    ORDER BY created_at DESC""",
+                (uid,),
+            )
+            projects = []
+            for p in cur.fetchall():
+                projects.append({
+                    "id": str(p[0]), "title": p[1], "artist": p[2], "status": p[3],
+                    "city": p[4], "dateStart": str(p[5]) if p[5] else "",
+                    "incomePlan": float(p[6] or 0), "incomeFact": float(p[7] or 0),
+                    "expensesPlan": float(p[8] or 0), "expensesFact": float(p[9] or 0),
+                    "createdAt": str(p[10]),
+                })
+
+            # Сводные финансы по всем проектам
+            total_income_plan = sum(p["incomePlan"] for p in projects)
+            total_income_fact = sum(p["incomeFact"] for p in projects)
+            total_expenses_plan = sum(p["expensesPlan"] for p in projects)
+            total_expenses_fact = sum(p["expensesFact"] for p in projects)
+
+            # Сотрудники
+            cur.execute(
+                f"""SELECT id, name, email, role_in_company, is_active, created_at
+                    FROM {SCHEMA}.employees WHERE company_user_id = %s
+                    ORDER BY created_at DESC""",
+                (uid,),
+            )
+            employees = [
+                {
+                    "id": str(e[0]), "name": e[1], "email": e[2],
+                    "roleInCompany": e[3], "isActive": e[4], "createdAt": str(e[5]),
+                }
+                for e in cur.fetchall()
+            ]
+
+            # Площадки (для venue-пользователей)
+            cur.execute(
+                f"""SELECT id, name, city, venue_type, capacity, price_from, verified, rating
+                    FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
+                (uid,),
+            )
+            venues = [
+                {
+                    "id": str(v[0]), "name": v[1], "city": v[2], "venueType": v[3],
+                    "capacity": v[4], "priceFrom": float(v[5] or 0),
+                    "verified": v[6], "rating": float(v[7] or 0),
+                }
+                for v in cur.fetchall()
+            ]
+
+            # Бронирования площадок (как организатор)
+            cur.execute(
+                f"""SELECT vb.id, vb.status, v.name, vb.event_date, vb.rental_amount
+                    FROM {SCHEMA}.venue_bookings vb
+                    LEFT JOIN {SCHEMA}.venues v ON v.id = vb.venue_id
+                    WHERE vb.organizer_id = %s
+                    ORDER BY vb.created_at DESC LIMIT 10""",
+                (uid,),
+            )
+            bookings = [
+                {
+                    "id": str(b[0]), "status": b[1], "venueName": b[2] or "—",
+                    "eventDate": str(b[3]) if b[3] else "",
+                    "rentalAmount": float(b[4]) if b[4] else None,
+                }
+                for b in cur.fetchall()
+            ]
+        finally:
             conn.close()
-            return err("Пользователь не найден", 404)
-
-        user = {
-            "id": str(row[0]), "name": row[1], "email": row[2], "role": row[3],
-            "city": row[4], "verified": row[5], "isAdmin": row[6],
-            "avatar": row[7], "avatarColor": row[8], "createdAt": str(row[9]),
-            "status": row[10] or "approved", "phone": row[11] or "",
-            "legalName": row[12] or "", "inn": row[13] or "", "companyType": row[14] or "",
-        }
-
-        # Проекты с финансами
-        cur.execute(
-            f"""SELECT id, title, artist, status, city, date_start,
-                       total_income_plan, total_income_fact,
-                       total_expenses_plan, total_expenses_fact, created_at
-                FROM {SCHEMA}.projects WHERE user_id = %s
-                ORDER BY created_at DESC""",
-            (uid,),
-        )
-        projects = []
-        for p in cur.fetchall():
-            projects.append({
-                "id": str(p[0]), "title": p[1], "artist": p[2], "status": p[3],
-                "city": p[4], "dateStart": str(p[5]) if p[5] else "",
-                "incomePlan": float(p[6] or 0), "incomeFact": float(p[7] or 0),
-                "expensesPlan": float(p[8] or 0), "expensesFact": float(p[9] or 0),
-                "createdAt": str(p[10]),
-            })
-
-        # Сводные финансы по всем проектам
-        total_income_plan = sum(p["incomePlan"] for p in projects)
-        total_income_fact = sum(p["incomeFact"] for p in projects)
-        total_expenses_plan = sum(p["expensesPlan"] for p in projects)
-        total_expenses_fact = sum(p["expensesFact"] for p in projects)
-
-        # Сотрудники
-        cur.execute(
-            f"""SELECT id, name, email, role_in_company, is_active, created_at
-                FROM {SCHEMA}.employees WHERE company_user_id = %s
-                ORDER BY created_at DESC""",
-            (uid,),
-        )
-        employees = [
-            {
-                "id": str(e[0]), "name": e[1], "email": e[2],
-                "roleInCompany": e[3], "isActive": e[4], "createdAt": str(e[5]),
-            }
-            for e in cur.fetchall()
-        ]
-
-        # Площадки (для venue-пользователей)
-        cur.execute(
-            f"""SELECT id, name, city, venue_type, capacity, price_from, verified, rating
-                FROM {SCHEMA}.venues WHERE user_id = %s ORDER BY created_at DESC""",
-            (uid,),
-        )
-        venues = [
-            {
-                "id": str(v[0]), "name": v[1], "city": v[2], "venueType": v[3],
-                "capacity": v[4], "priceFrom": float(v[5] or 0),
-                "verified": v[6], "rating": float(v[7] or 0),
-            }
-            for v in cur.fetchall()
-        ]
-
-        # Бронирования площадок (как организатор)
-        cur.execute(
-            f"""SELECT vb.id, vb.status, v.name, vb.event_date, vb.rental_amount
-                FROM {SCHEMA}.venue_bookings vb
-                LEFT JOIN {SCHEMA}.venues v ON v.id = vb.venue_id
-                WHERE vb.organizer_id = %s
-                ORDER BY vb.created_at DESC LIMIT 10""",
-            (uid,),
-        )
-        bookings = [
-            {
-                "id": str(b[0]), "status": b[1], "venueName": b[2] or "—",
-                "eventDate": str(b[3]) if b[3] else "",
-                "rentalAmount": float(b[4]) if b[4] else None,
-            }
-            for b in cur.fetchall()
-        ]
-
-        conn.close()
         return ok({
             "user": user,
             "projects": projects,
@@ -648,26 +666,28 @@ def handler(event: dict, context) -> dict:
         if not vid:
             return err("id required")
         conn = get_conn()
-        cur = conn.cursor()
-        # Бронирования площадки — сначала все зависимости
-        cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
-        bids = [str(r[0]) for r in cur.fetchall()]
-        for bid in bids:
-            cur.execute(f"DELETE FROM {SCHEMA}.booking_tasks WHERE booking_id = %s", (bid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.booking_checklist WHERE booking_id = %s", (bid,))
-            cur.execute(f"DELETE FROM {SCHEMA}.booking_files WHERE booking_id = %s", (bid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
-        # Диалоги площадки
-        cur.execute(f"SELECT id FROM {SCHEMA}.conversations WHERE venue_id = %s", (vid,))
-        conv_ids = [str(r[0]) for r in cur.fetchall()]
-        for cid in conv_ids:
-            cur.execute(f"DELETE FROM {SCHEMA}.messages WHERE conversation_id = %s", (cid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE venue_id = %s", (vid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (vid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (vid,))
-        cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (vid,))
-        conn.commit()
-        conn.close()
+        try:
+            cur = conn.cursor()
+            # Бронирования площадки — сначала все зависимости
+            cur.execute(f"SELECT id FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
+            bids = [str(r[0]) for r in cur.fetchall()]
+            for bid in bids:
+                cur.execute(f"DELETE FROM {SCHEMA}.booking_tasks WHERE booking_id = %s", (bid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.booking_checklist WHERE booking_id = %s", (bid,))
+                cur.execute(f"DELETE FROM {SCHEMA}.booking_files WHERE booking_id = %s", (bid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_bookings WHERE venue_id = %s", (vid,))
+            # Диалоги площадки
+            cur.execute(f"SELECT id FROM {SCHEMA}.conversations WHERE venue_id = %s", (vid,))
+            conv_ids = [str(r[0]) for r in cur.fetchall()]
+            for cid in conv_ids:
+                cur.execute(f"DELETE FROM {SCHEMA}.messages WHERE conversation_id = %s", (cid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.conversations WHERE venue_id = %s", (vid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_busy_dates WHERE venue_id = %s", (vid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.venue_photos WHERE venue_id = %s", (vid,))
+            cur.execute(f"DELETE FROM {SCHEMA}.venues WHERE id = %s", (vid,))
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"deleted": True})
 
     # ── POST support_send — пользователь или админ отправляет сообщение ────

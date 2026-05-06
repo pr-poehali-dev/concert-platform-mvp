@@ -37,6 +37,27 @@ def err(msg, status=400):
             "body": json.dumps({"error": msg}, ensure_ascii=False)}
 
 
+def has_project_access(cur, project_id: str, user_id: str, require_owner: bool = False) -> bool:
+    """Проверяет доступ пользователя к проекту.
+    require_owner=True — только владелец.
+    require_owner=False — владелец ИЛИ участник (project_members с role != 'removed')."""
+    if not project_id or not user_id:
+        return False
+    cur.execute(f"SELECT user_id FROM {SCHEMA}.projects WHERE id=%s", (project_id,))
+    row = cur.fetchone()
+    if not row:
+        return False
+    if str(row[0]) == str(user_id):
+        return True
+    if require_owner:
+        return False
+    cur.execute(
+        f"SELECT 1 FROM {SCHEMA}.project_members WHERE project_id=%s AND user_id=%s AND role != 'removed' LIMIT 1",
+        (project_id, user_id)
+    )
+    return cur.fetchone() is not None
+
+
 def handler(event: dict, context) -> dict:
     if event.get("httpMethod") == "OPTIONS":
         return {"statusCode": 200, "headers": cors(), "body": ""}
@@ -112,17 +133,21 @@ def handler(event: dict, context) -> dict:
     # GET detail
     if method == "GET" and action == "detail":
         pid = params.get("project_id", "")
+        uid = params.get("user_id", "")
         if not pid: return err("project_id required")
+        if not uid: return err("user_id required")
         conn = get_conn()
         try:
             cur = conn.cursor()
+            if not has_project_access(cur, pid, uid):
+                return err("Нет доступа к проекту", 403)
             cur.execute(
                 f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
                            city,venue_name,description,tax_system,total_expenses_plan,
                            total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
                     FROM {SCHEMA}.projects WHERE id=%s""", (pid,))
             row = cur.fetchone()
-            if not row: conn.close(); return err("Проект не найден", 404)
+            if not row: return err("Проект не найден", 404)
             project = row_to_project(row)
             cur.execute(
                 f"SELECT id,category,title,amount_plan,amount_fact,note,sort_order FROM {SCHEMA}.project_expenses WHERE project_id=%s ORDER BY sort_order,created_at",
@@ -176,16 +201,30 @@ def handler(event: dict, context) -> dict:
     if method == "POST" and action == "update":
         b = json.loads(event.get("body") or "{}")
         pid = b.get("projectId","")
+        uid = b.get("userId","")
         if not pid: return err("projectId required")
+        if not uid: return err("userId required")
         key_map = {"title":"title","artist":"artist","projectType":"project_type","status":"status",
                    "dateStart":"date_start","dateEnd":"date_end","city":"city","venueName":"venue_name",
                    "description":"description","taxSystem":"tax_system"}
         fields = {col: (b[fk] or None if fk in ("dateStart","dateEnd") else b[fk]) for fk,col in key_map.items() if fk in b}
         if fields:
-            set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
             conn = get_conn()
             try:
                 cur = conn.cursor()
+                # Редактировать может владелец ИЛИ участник с ролью partner (не viewer)
+                cur.execute(f"SELECT user_id FROM {SCHEMA}.projects WHERE id=%s", (pid,))
+                pr = cur.fetchone()
+                if not pr: return err("Проект не найден", 404)
+                if str(pr[0]) != uid:
+                    cur.execute(
+                        f"SELECT role FROM {SCHEMA}.project_members WHERE project_id=%s AND user_id=%s",
+                        (pid, uid)
+                    )
+                    mr = cur.fetchone()
+                    if not mr or mr[0] not in ("partner",):
+                        return err("Нет прав на редактирование", 403)
+                set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
                 cur.execute(f"UPDATE {SCHEMA}.projects SET {set_clause} WHERE id=%s", list(fields.values())+[pid])
                 conn.commit()
             finally:
@@ -196,10 +235,14 @@ def handler(event: dict, context) -> dict:
     if method == "POST" and action == "delete":
         b = json.loads(event.get("body") or "{}")
         pid = b.get("projectId","")
+        uid = b.get("userId","")
         if not pid: return err("projectId required")
+        if not uid: return err("userId required")
         conn = get_conn()
         try:
             cur = conn.cursor()
+            if not has_project_access(cur, pid, uid, require_owner=True):
+                return err("Удалять проект может только владелец", 403)
             cur.execute(f"DELETE FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
             cur.execute(f"DELETE FROM {SCHEMA}.project_income_lines WHERE project_id=%s",(pid,))
             cur.execute(f"DELETE FROM {SCHEMA}.projects WHERE id=%s",(pid,))
@@ -322,10 +365,27 @@ def handler(event: dict, context) -> dict:
 
     # GET booking_checklist — чеклист площадки по бронированию
     if method == "GET" and action == "booking_checklist":
-        booking_id   = params.get("booking_id", "")
-        venue_id     = params.get("venue_id", "")      # venue_user_id площадки
+        booking_id    = params.get("booking_id", "")
+        venue_id      = params.get("venue_id", "")      # venue_user_id площадки
+        requester_id  = params.get("requester_id", "") or params.get("user_id", "")
         if not booking_id and not venue_id: return err("booking_id или venue_id required")
+        if not requester_id: return err("user_id required")
         conn = get_conn(); cur = conn.cursor()
+        # Если запрашивают по venue_id — это должен быть сам пользователь-площадка
+        if venue_id and venue_id != requester_id:
+            conn.close()
+            return err("Нет доступа", 403)
+        # Если запрашивают по booking_id — проверим что юзер связан с бронированием
+        if booking_id:
+            cur.execute(
+                f"""SELECT venue_user_id, organizer_id FROM {SCHEMA}.venue_bookings WHERE id=%s""",
+                (booking_id,)
+            )
+            br = cur.fetchone()
+            if not br: conn.close(); return err("Бронирование не найдено", 404)
+            if requester_id not in (str(br[0]), str(br[1])):
+                conn.close()
+                return err("Нет доступа", 403)
         if booking_id:
             cur.execute(
                 f"SELECT id,booking_id,venue_id,step_key,step_title,is_done,note,sort_order FROM {SCHEMA}.booking_checklist WHERE booking_id=%s ORDER BY sort_order",

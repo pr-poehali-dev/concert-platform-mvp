@@ -70,7 +70,7 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(`${BOOKING_TASKS_URL}?action=booking_checklist&venue_id=${user.id}`);
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=booking_checklist&venue_id=${user.id}&requester_id=${user.id}`);
       const data = await res.json();
       setProjects(data.bookings || []);
     } catch {

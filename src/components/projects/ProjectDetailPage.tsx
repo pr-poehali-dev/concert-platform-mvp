@@ -31,7 +31,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${PROJECTS_URL}?action=detail&project_id=${projectId}`);
+      const res = await fetch(`${PROJECTS_URL}?action=detail&project_id=${projectId}&user_id=${user?.id || ""}`);
       if (!res.ok) throw new Error();
       const data = await res.json();
       setProject(data.project || null);
@@ -40,13 +40,13 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
     } finally {
       setLoading(false);
     }
-  }, [projectId]);
+  }, [projectId, user?.id]);
 
   useEffect(()=>{load();},[load]);
 
   const api = async (action:string, body:object) => {
     setSaving(action);
-    const res = await fetch(`${PROJECTS_URL}?action=${action}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    const res = await fetch(`${PROJECTS_URL}?action=${action}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId: user?.id, ...body})});
     const data = await res.json();
     setSaving(null);
     return data;
@@ -59,7 +59,7 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
 
   const handleDelete = async () => {
     setDeleting(true);
-    await fetch(`${PROJECTS_URL}?action=delete`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({projectId})});
+    await fetch(`${PROJECTS_URL}?action=delete`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({projectId, userId: user?.id})});
     setDeleting(false);
     onBack();
   };

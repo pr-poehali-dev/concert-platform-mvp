@@ -46,10 +46,11 @@ export default function DashboardBarTab() {
       const data = await res.json();
       const list: Integration[] = (data.integrations || []).filter((i: Integration) => i.isActive);
       setIntegrations(list);
-      if (list.length > 0 && !activeIntId) setActiveIntId(list[0].id);
+      // Авто-выбор первой интеграции — функционально через setState без зависимости от activeIntId
+      setActiveIntId(prev => prev ?? (list[0]?.id ?? null));
     } catch { setIntegrations([]); }
     finally { setLoading(false); }
-  }, [user, activeIntId]);
+  }, [user]);
 
   const loadEvents = useCallback(async () => {
     if (!user) return;
@@ -60,7 +61,11 @@ export default function DashboardBarTab() {
     } catch { setEvents([]); }
   }, [user]);
 
-  useEffect(() => { loadIntegrations(); loadEvents(); }, []);
+  useEffect(() => {
+    if (!user) return;
+    loadIntegrations();
+    loadEvents();
+  }, [user, loadIntegrations, loadEvents]);
 
   const activeInt = integrations.find(i => i.id === activeIntId) ?? null;
 
