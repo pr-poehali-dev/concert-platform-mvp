@@ -1723,6 +1723,85 @@ def handler(event: dict, context) -> dict:
         } if g else {}
         return ok({"projects": projects, "group": group_info})
 
+    # ── GET group_members — список участников группы ──────────────────────────
+    if method == "GET" and action == "group_members":
+        group_id = params.get("group_id", "")
+        user_id  = params.get("user_id", "")
+        if not group_id or not user_id: return err("group_id и user_id обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            # Проверяем что запрашивающий — владелец группы
+            cur.execute(f"SELECT id FROM {SCHEMA}.project_groups WHERE id=%s AND user_id=%s", (group_id, user_id))
+            if not cur.fetchone(): return err("Группа не найдена или нет прав", 404)
+
+            cur.execute(
+                f"""SELECT gm.id, gm.user_id, gm.role, gm.created_at,
+                           u.name, u.email,
+                           COALESCE(u.legal_name, '') as company,
+                           COALESCE(u.logo_url, '') as logo_url,
+                           COALESCE(u.avatar, '') as avatar
+                    FROM {SCHEMA}.group_members gm
+                    JOIN {SCHEMA}.users u ON u.id = gm.user_id
+                    WHERE gm.group_id=%s
+                    ORDER BY gm.created_at""",
+                (group_id,)
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return ok({"members": [
+            {
+                "id":        str(r[0]),
+                "userId":    str(r[1]),
+                "role":      r[2],
+                "invitedAt": r[3].isoformat() if r[3] else "",
+                "name":      r[4] or "",
+                "email":     r[5] or "",
+                "company":   r[6],
+                "logoUrl":   r[7],
+                "avatar":    r[8],
+            }
+            for r in rows
+        ]})
+
+    # ── POST remove_group_member — удалить партнёра из группы и всех её проектов ──
+    if method == "POST" and action == "remove_group_member":
+        b          = json.loads(event.get("body") or "{}")
+        group_id   = b.get("groupId", "")
+        owner_id   = b.get("userId", "")
+        member_id  = b.get("memberId", "")   # id строки в group_members
+        if not group_id or not owner_id or not member_id: return err("groupId, userId, memberId обязательны")
+
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            # Только владелец группы может удалять
+            cur.execute(f"SELECT id FROM {SCHEMA}.project_groups WHERE id=%s AND user_id=%s", (group_id, owner_id))
+            if not cur.fetchone(): return err("Группа не найдена или нет прав", 404)
+
+            # Получаем partner_user_id из group_members
+            cur.execute(f"SELECT user_id FROM {SCHEMA}.group_members WHERE id=%s AND group_id=%s", (member_id, group_id))
+            row = cur.fetchone()
+            if not row: return err("Участник не найден", 404)
+            partner_user_id = str(row[0])
+
+            # Удаляем из всех проектов группы
+            cur.execute(
+                f"""DELETE FROM {SCHEMA}.project_members
+                    WHERE user_id=%s AND project_id IN (
+                        SELECT id FROM {SCHEMA}.projects WHERE group_id=%s AND user_id=%s
+                    )""",
+                (partner_user_id, group_id, owner_id)
+            )
+            removed_projects = cur.rowcount
+
+            # Удаляем из group_members
+            cur.execute(f"DELETE FROM {SCHEMA}.group_members WHERE id=%s", (member_id,))
+            conn.commit()
+        finally:
+            conn.close()
+
+        return ok({"removed": True, "removedFromProjects": removed_projects})
+
     # ── POST invite_group_member — пригласить партнёра сразу в все проекты группы ──
     if method == "POST" and action == "invite_group_member":
         b             = json.loads(event.get("body") or "{}")
