@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 import VenueStepContent, { type VenueForm, type PhotoItem } from "@/components/venue-setup/VenueStepContent";
 import { useAuth } from "@/context/AuthContext";
+import VenueEditStepMedia from "@/components/venue-edit/VenueEditStepMedia";
+import VenueEditStepContract from "@/components/venue-edit/VenueEditStepContract";
+import VenueEditDeleteConfirm from "@/components/venue-edit/VenueEditDeleteConfirm";
 
 const VENUES_URL = "https://functions.poehali.dev/9f704d9c-5798-4fde-8263-7e036dae1545";
 
@@ -266,12 +269,6 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
     }
   };
 
-  // Для VenueStepContent на шаге медиа показываем новые фото + превью существующих
-  const allPhotosForStep: PhotoItem[] = [
-    ...existingPhotos.map(url => ({ file: new File([], ""), preview: url, id: url })),
-    ...newPhotos,
-  ];
-
   return (
     <div className="fixed inset-0 z-[100]" style={{ top: "304px" }}>
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
@@ -332,170 +329,41 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
 
         {/* Шаг 4 — Медиа */}
         {step === 4 && (
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-            {error && (
-              <div className="flex items-center gap-2 text-neon-pink text-sm bg-neon-pink/10 border border-neon-pink/20 rounded-xl px-3 py-2">
-                <Icon name="AlertCircle" size={14} />{error}
-              </div>
-            )}
-
-            {/* Существующие фото */}
-            {existingPhotos.length > 0 && (
-              <div>
-                <p className="text-white/50 text-xs uppercase tracking-wider mb-3">Текущие фотографии</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {existingPhotos.map((url, i) => (
-                    <div key={url} className="relative group rounded-xl overflow-hidden aspect-video bg-white/5">
-                      <img src={url} alt="" className="w-full h-full object-cover" />
-                      {i === 0 && <span className="absolute top-1.5 left-1.5 text-[10px] bg-neon-cyan/80 text-background px-1.5 py-0.5 rounded font-bold">Главное</span>}
-                      <button
-                        onClick={() => removeExistingPhoto(url)}
-                        className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/60 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-neon-pink"
-                      >
-                        <Icon name="X" size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Добавить новые фото */}
-            <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-3">Добавить фотографии</p>
-              {newPhotos.length > 0 && (
-                <div className="grid grid-cols-3 gap-3 mb-3">
-                  {newPhotos.map((p, i) => (
-                    <div key={p.id} className="relative group rounded-xl overflow-hidden aspect-video bg-white/5">
-                      <img src={p.preview} alt="" className="w-full h-full object-cover" />
-                      <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {i > 0 && <button onClick={() => moveNewPhoto(p.id, -1)} className="w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white"><Icon name="ChevronLeft" size={10} /></button>}
-                        {i < newPhotos.length - 1 && <button onClick={() => moveNewPhoto(p.id, 1)} className="w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-white"><Icon name="ChevronRight" size={10} /></button>}
-                        <button onClick={() => removeNewPhoto(p.id)} className="w-5 h-5 bg-black/60 rounded-full flex items-center justify-center text-neon-pink"><Icon name="X" size={10} /></button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <label className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-white/15 rounded-xl py-6 cursor-pointer hover:border-neon-purple/40 transition-colors">
-                <Icon name="ImagePlus" size={24} className="text-white/20" />
-                <span className="text-white/40 text-sm">Выберите фотографии</span>
-                <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddPhotos} />
-              </label>
-            </div>
-
-            {/* Текущие файлы */}
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-white/50 text-xs uppercase tracking-wider mb-2">Технический райдер</p>
-                {(riderUrl || riderFile) && (
-                  <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 mb-2 border border-white/10">
-                    <Icon name="FileText" size={14} className="text-neon-cyan shrink-0" />
-                    <span className="text-white/60 text-xs truncate flex-1">{riderFile?.name || riderName || "Текущий райдер"}</span>
-                    <button onClick={() => { setRiderFile(null); setRiderUrl(""); setRiderName(""); }} className="text-neon-pink hover:opacity-80">
-                      <Icon name="X" size={12} />
-                    </button>
-                  </div>
-                )}
-                <label className="flex items-center gap-2 px-3 py-2 border border-white/10 rounded-xl cursor-pointer hover:border-neon-purple/40 transition-colors text-white/40 hover:text-white/60 text-xs">
-                  <Icon name="Upload" size={14} />{riderFile ? riderFile.name : "Загрузить новый"}
-                  <input type="file" accept=".pdf,.doc,.docx" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setRiderFile(f); setRiderUrl(""); } e.target.value = ""; }} />
-                </label>
-              </div>
-              <div>
-                <p className="text-white/50 text-xs uppercase tracking-wider mb-2">Схема площадки</p>
-                {(schemaUrl || schemaFile) && (
-                  <div className="flex items-center gap-2 bg-white/5 rounded-xl px-3 py-2 mb-2 border border-white/10">
-                    <Icon name="Map" size={14} className="text-neon-purple shrink-0" />
-                    <span className="text-white/60 text-xs truncate flex-1">{schemaFile?.name || schemaName || "Текущая схема"}</span>
-                    <button onClick={() => { setSchemaFile(null); setSchemaUrl(""); setSchemaName(""); }} className="text-neon-pink hover:opacity-80">
-                      <Icon name="X" size={12} />
-                    </button>
-                  </div>
-                )}
-                <label className="flex items-center gap-2 px-3 py-2 border border-white/10 rounded-xl cursor-pointer hover:border-neon-purple/40 transition-colors text-white/40 hover:text-white/60 text-xs">
-                  <Icon name="Upload" size={14} />{schemaFile ? schemaFile.name : "Загрузить новую"}
-                  <input type="file" accept=".pdf,.jpg,.png" className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) { setSchemaFile(f); setSchemaUrl(""); } e.target.value = ""; }} />
-                </label>
-              </div>
-            </div>
-          </div>
+          <VenueEditStepMedia
+            error={error}
+            existingPhotos={existingPhotos}
+            newPhotos={newPhotos}
+            riderUrl={riderUrl}
+            riderFile={riderFile}
+            riderName={riderName}
+            schemaUrl={schemaUrl}
+            schemaFile={schemaFile}
+            schemaName={schemaName}
+            onAddPhotos={handleAddPhotos}
+            onRemoveNewPhoto={removeNewPhoto}
+            onMoveNewPhoto={moveNewPhoto}
+            onRemoveExistingPhoto={removeExistingPhoto}
+            onSetRiderFile={f => { setRiderFile(f); setRiderUrl(""); }}
+            onClearRider={() => { setRiderFile(null); setRiderUrl(""); setRiderName(""); }}
+            onSetSchemaFile={f => { setSchemaFile(f); setSchemaUrl(""); }}
+            onClearSchema={() => { setSchemaFile(null); setSchemaUrl(""); setSchemaName(""); }}
+          />
         )}
 
         {/* Шаг 5 — Договор и передача */}
         {step === 5 && (
-          <div className="flex-1 overflow-y-auto px-6 py-4 space-y-6">
-            {/* Предмет договора */}
-            <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-2">Предмет договора</p>
-              <input
-                value={contractSubject}
-                onChange={e => setContractSubject(e.target.value)}
-                placeholder="Предоставление в аренду концертной площадки..."
-                className="w-full glass rounded-xl px-4 py-3 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm"
-              />
-              <p className="text-white/30 text-xs mt-1">Используется в заголовке договора при бронировании.</p>
-            </div>
-
-            {/* Шаблон договора */}
-            <div>
-              <p className="text-white/50 text-xs uppercase tracking-wider mb-2">Шаблон договора</p>
-              <p className="text-white/30 text-xs mb-2">Доступны переменные: <code className="text-neon-cyan bg-neon-cyan/10 px-1 rounded">{"{venue_name}"}</code> <code className="text-neon-cyan bg-neon-cyan/10 px-1 rounded">{"{event_date}"}</code> <code className="text-neon-cyan bg-neon-cyan/10 px-1 rounded">{"{rental_amount}"}</code> <code className="text-neon-cyan bg-neon-cyan/10 px-1 rounded">{"{organizer_name}"}</code></p>
-              <textarea
-                value={contractTemplate}
-                onChange={e => setContractTemplate(e.target.value)}
-                rows={12}
-                placeholder={"ДОГОВОР АРЕНДЫ ПЛОЩАДКИ\n\nПредмет договора: Арендодатель предоставляет Арендатору площадку {venue_name} на дату {event_date}.\n\nСтоимость: {rental_amount} рублей.\n\n..."}
-                className="w-full glass rounded-xl px-4 py-3 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 transition-colors text-sm font-mono resize-y"
-              />
-              <p className="text-white/30 text-xs mt-1">Шаблон применяется ко всем проектам, использующим эту площадку.</p>
-            </div>
-
-            {/* Передача площадки */}
-            <div className="border-t border-white/10 pt-5">
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-xl bg-neon-pink/15 flex items-center justify-center shrink-0">
-                  <Icon name="ArrowRightLeft" size={16} className="text-neon-pink" />
-                </div>
-                <div>
-                  <p className="text-white font-semibold text-sm">Передать площадку</p>
-                  <p className="text-white/40 text-xs">Безвозвратная передача другому кабинету площадки</p>
-                </div>
-              </div>
-              <div className="bg-neon-pink/5 border border-neon-pink/20 rounded-xl p-3 mb-3">
-                <p className="text-neon-pink/80 text-xs">Площадка будет безвозвратно передана другому кабинету. Вы потеряете к ней доступ. Введите ID кабинета получателя (число из профиля).</p>
-              </div>
-              {transferSuccess ? (
-                <div className="flex items-center gap-2 text-neon-green text-sm bg-neon-green/10 border border-neon-green/20 rounded-xl px-3 py-2">
-                  <Icon name="CheckCircle" size={16} />Передача выполнена! Площадка переходит к новому владельцу.
-                </div>
-              ) : (
-                <div className="flex gap-2">
-                  <input
-                    value={transferId}
-                    onChange={e => setTransferId(e.target.value)}
-                    placeholder="ID кабинета получателя (например: 12345)"
-                    className="flex-1 glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-pink/50 transition-colors text-sm"
-                  />
-                  <button
-                    onClick={handleTransfer}
-                    disabled={transferring || !transferId.trim()}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-neon-pink/20 hover:bg-neon-pink/30 border border-neon-pink/40 text-neon-pink font-semibold rounded-xl transition-all text-sm disabled:opacity-50"
-                  >
-                    {transferring ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="ArrowRightLeft" size={14} />}
-                    Передать
-                  </button>
-                </div>
-              )}
-              {transferError && (
-                <p className="text-neon-pink text-xs mt-2 flex items-center gap-1">
-                  <Icon name="AlertCircle" size={12} />{transferError}
-                </p>
-              )}
-            </div>
-          </div>
+          <VenueEditStepContract
+            contractSubject={contractSubject}
+            contractTemplate={contractTemplate}
+            transferId={transferId}
+            transferring={transferring}
+            transferError={transferError}
+            transferSuccess={transferSuccess}
+            onContractSubjectChange={setContractSubject}
+            onContractTemplateChange={setContractTemplate}
+            onTransferIdChange={setTransferId}
+            onTransfer={handleTransfer}
+          />
         )}
 
         {/* Footer */}
@@ -533,48 +401,13 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
 
       {/* Подтверждение удаления */}
       {confirmDelete && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => !deleting && setConfirmDelete(false)} />
-          <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl overflow-hidden animate-scale-in">
-            <div className="p-6">
-              <div className="flex items-start gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-neon-pink/15 flex items-center justify-center shrink-0">
-                  <Icon name="AlertTriangle" size={20} className="text-neon-pink" />
-                </div>
-                <div>
-                  <h3 className="font-oswald font-bold text-lg text-white">Удалить площадку?</h3>
-                  <p className="text-white/50 text-sm mt-1">
-                    Площадка «{venue.name}» и все её данные (фото, занятые даты, райдер, схема) будут удалены навсегда. Это действие нельзя отменить.
-                  </p>
-                </div>
-              </div>
-              {error && (
-                <div className="mb-3 flex items-center gap-2 text-neon-pink text-xs bg-neon-pink/10 rounded-xl px-3 py-2 border border-neon-pink/20">
-                  <Icon name="AlertCircle" size={13} className="shrink-0" />
-                  {error}
-                </div>
-              )}
-              <div className="flex items-center justify-end gap-2 mt-5">
-                <button
-                  onClick={() => setConfirmDelete(false)}
-                  disabled={deleting}
-                  className="px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm disabled:opacity-50"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="flex items-center gap-2 px-5 py-2 bg-neon-pink/90 hover:bg-neon-pink text-white font-oswald font-semibold rounded-xl transition-colors text-sm disabled:opacity-50"
-                >
-                  {deleting
-                    ? <><Icon name="Loader2" size={14} className="animate-spin" />Удаляем...</>
-                    : <><Icon name="Trash2" size={14} />Удалить</>}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <VenueEditDeleteConfirm
+          venueName={venue.name}
+          error={error}
+          deleting={deleting}
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmDelete(false)}
+        />
       )}
       </div>
     </div>
