@@ -11,11 +11,13 @@ const FOLDER_LABELS: Record<string, { label: string; icon: string; color: string
 
 export function folderInfo(name: string) {
   const upper = name.toUpperCase();
-  if (upper === "INBOX")                                       return FOLDER_LABELS.INBOX;
-  if (upper.includes("SENT"))                                  return FOLDER_LABELS.Sent;
-  if (upper.includes("DRAFT"))                                 return FOLDER_LABELS.Drafts;
-  if (upper.includes("SPAM") || upper.includes("JUNK"))        return FOLDER_LABELS.Spam;
-  if (upper.includes("TRASH") || upper.includes("DELETE"))     return FOLDER_LABELS.Trash;
+  const trimmed = name.trim();
+  // Стандартные ASCII-имена и русские декодированные имена (Yandex, Mail.ru, Gmail)
+  if (upper === "INBOX" || trimmed === "Входящие")                                        return FOLDER_LABELS.INBOX;
+  if (upper.includes("SENT") || trimmed === "Отправленные" || trimmed === "Sent Items")   return FOLDER_LABELS.Sent;
+  if (upper.includes("DRAFT") || trimmed === "Черновики")                                 return FOLDER_LABELS.Drafts;
+  if (upper.includes("SPAM") || upper.includes("JUNK") || trimmed === "Спам")             return FOLDER_LABELS.Spam;
+  if (upper.includes("TRASH") || upper.includes("DELETE") || trimmed === "Корзина" || trimmed === "Удалённые") return FOLDER_LABELS.Trash;
   return { label: name, icon: "Folder", color: "text-white/65" };
 }
 

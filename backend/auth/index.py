@@ -341,35 +341,42 @@ def handler(event: dict, context) -> dict:
         pw_hash      = hash_pw(password)
 
         conn = get_conn()
-        cur  = conn.cursor()
-        cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email = %s", (email,))
-        if cur.fetchone():
+        try:
+            cur = conn.cursor()
+            # Проверяем уникальность email (SELECT + UNIQUE constraint в БД — двойная защита)
+            cur.execute(f"SELECT id FROM {SCHEMA}.users WHERE email = %s", (email,))
+            if cur.fetchone():
+                return err("Пользователь с таким email уже существует")
+
+            try:
+                cur.execute(
+                    f"""INSERT INTO {SCHEMA}.users
+                        (name, email, password_hash, role, city, avatar, avatar_color, status,
+                         company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone)
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,'pending',%s,%s,%s,%s,%s,%s,%s,%s)
+                        RETURNING id, display_id""",
+                    (name, email, pw_hash, role, city, avatar, avatar_color,
+                     company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone),
+                )
+            except Exception as e:
+                if "users_email_unique" in str(e) or "unique" in str(e).lower():
+                    return err("Пользователь с таким email уже существует")
+                raise
+
+            reg_row = cur.fetchone()
+            user_id = str(reg_row[0])
+            display_id = str(reg_row[1]) if reg_row[1] else None
+
+            # Создаём токен подтверждения и отправляем письмо
+            token = create_verification_token(conn, user_id, email)
+            conn.commit()
+
+            email_sent = send_verification_email(email, name, token)
+            role_label = "Организатор" if role == "organizer" else "Площадка"
+            notify_admins(conn, "Новая заявка на регистрацию",
+                          f"{role_label} — {name} ({email})")
+        finally:
             conn.close()
-            return err("Пользователь с таким email уже существует")
-
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.users
-                (name, email, password_hash, role, city, avatar, avatar_color, status,
-                 company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone)
-                VALUES (%s,%s,%s,%s,%s,%s,%s,'pending',%s,%s,%s,%s,%s,%s,%s,%s)
-                RETURNING id, display_id""",
-            (name, email, pw_hash, role, city, avatar, avatar_color,
-             company_type, legal_name, inn, kpp, ogrn, legal_address, actual_address, phone),
-        )
-        reg_row = cur.fetchone()
-        user_id = str(reg_row[0])
-        display_id = str(reg_row[1]) if reg_row[1] else None
-
-        # Создаём токен подтверждения и отправляем письмо
-        token = create_verification_token(conn, user_id, email)
-        conn.commit()
-
-        email_sent = send_verification_email(email, name, token)
-
-        role_label = "Организатор" if role == "organizer" else "Площадка"
-        notify_admins(conn, "Новая заявка на регистрацию",
-                      f"{role_label} — {name} ({email})")
-        conn.close()
 
         user_data = {
             "id": user_id, "name": name, "email": email,
@@ -385,9 +392,11 @@ def handler(event: dict, context) -> dict:
         session_id = secrets.token_hex(32)
         _sessions[session_id] = user_data
         conn2 = get_conn()
-        save_session_db(conn2, session_id, user_id, user_data)
-        conn2.commit()
-        conn2.close()
+        try:
+            save_session_db(conn2, session_id, user_id, user_data)
+            conn2.commit()
+        finally:
+            conn2.close()
         return ok({
             "sessionId": session_id,
             "user": user_data,

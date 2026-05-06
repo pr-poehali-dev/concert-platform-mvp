@@ -96,6 +96,44 @@ def decode_header_str(value) -> str:
         return str(value)
 
 
+def decode_imap_folder(raw_name: str) -> str:
+    """Декодирует имя IMAP-папки из Modified UTF-7 (RFC 3501) в Unicode.
+    Серверы типа Yandex/Mail.ru возвращают русские папки в формате &BCEEPgQ,..."""
+    if not raw_name:
+        return raw_name
+    if "&" not in raw_name:
+        return raw_name  # чистый ASCII — возвращаем как есть
+    try:
+        result = []
+        i = 0
+        while i < len(raw_name):
+            if raw_name[i] == "&" and (i + 1) < len(raw_name):
+                j = raw_name.find("-", i + 1)
+                if j == -1:
+                    result.append(raw_name[i:])
+                    break
+                b64 = raw_name[i + 1:j]
+                if b64 == "":
+                    # &- — это экранированный символ &
+                    result.append("&")
+                else:
+                    # Дополняем base64 до кратного 4
+                    pad = (4 - len(b64) % 4) % 4
+                    b64_padded = b64 + "=" * pad
+                    # Modified UTF-7 использует "," вместо "/"
+                    b64_standard = b64_padded.replace(",", "/")
+                    decoded_bytes = base64.b64decode(b64_standard)
+                    # Это UTF-16-BE
+                    result.append(decoded_bytes.decode("utf-16-be"))
+                i = j + 1
+            else:
+                result.append(raw_name[i])
+                i += 1
+        return "".join(result)
+    except Exception:
+        return raw_name  # при ошибке — возвращаем оригинал
+
+
 def parse_address(raw: str) -> tuple:
     """Возвращает (имя, email) из заголовка From."""
     if not raw:
@@ -380,14 +418,22 @@ def handler(event: dict, context) -> dict:
         result = []
         for f in folders_raw or []:
             try:
-                line = f.decode() if isinstance(f, bytes) else str(f)
-                # Формат: (\HasNoChildren) "/" "INBOX"
+                line = f.decode("utf-8", errors="replace") if isinstance(f, bytes) else str(f)
+                # Формат IMAP LIST: (\HasNoChildren) "/" "INBOX" или (\HasNoChildren) "/" INBOX
                 parts = line.rsplit(" ", 1)
                 name = parts[-1].strip().strip('"') if parts else ""
                 if name:
-                    result.append(name)
+                    result.append(decode_imap_folder(name))
             except Exception:
                 pass
+        # Сортируем: стандартные папки вперёд
+        order = ["INBOX", "Входящие", "Sent", "Отправленные", "Drafts", "Черновики", "Spam", "Спам", "Trash", "Корзина"]
+        def folder_sort_key(n):
+            try:
+                return order.index(n)
+            except ValueError:
+                return len(order)
+        result.sort(key=folder_sort_key)
         return ok({"folders": result})
 
     # ── GET list ───────────────────────────────────────────────────────────
