@@ -9,6 +9,114 @@ import ProjectDetailPage from "./ProjectDetailPage";
 import TcImportModal from "./TcImportModal";
 import GroupModal from "./GroupModal";
 
+const TICKETS_URL = "https://functions.poehali.dev/e8e3c7c9-b452-4e77-8db2-ca0266399006";
+
+// ── Модал шаринга группы ──────────────────────────────────────────────────────
+function GroupShareModal({ groupId, groupTitle, userId, projectCount, onClose }: {
+  groupId: string; groupTitle: string; userId: string; projectCount: number; onClose: () => void;
+}) {
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("partner");
+  const [saving, setSaving] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const handleInvite = async () => {
+    if (!email.trim() || !email.includes("@")) return;
+    setSaving(true); setResult(null);
+    try {
+      const res = await fetch(`${PROJECTS_URL}?action=invite_group_member`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, userId, email: email.trim().toLowerCase(), role }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Ошибка");
+      setResult({ ok: true, msg: `${data.partnerName} добавлен в ${data.added} проект(ов) группы` });
+      setEmail("");
+    } catch (e: unknown) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : "Ошибка" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative z-10 w-full max-w-md glass-strong rounded-2xl overflow-hidden animate-scale-in">
+        <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-neon-cyan to-transparent" />
+        <div className="flex items-center justify-between px-6 pt-5 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-neon-cyan/10 border border-neon-cyan/20 flex items-center justify-center">
+              <Icon name="UserPlus" size={18} className="text-neon-cyan" />
+            </div>
+            <div>
+              <h2 className="font-oswald font-bold text-xl text-white">Поделиться группой</h2>
+              <p className="text-white/40 text-xs">«{groupTitle}» · {projectCount} проект(ов)</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition-colors">
+            <Icon name="X" size={16} />
+          </button>
+        </div>
+
+        <div className="px-6 pb-6 space-y-4">
+          <p className="text-white/50 text-sm">
+            Партнёр получит доступ сразу ко всем {projectCount} проектам в этой группе.
+          </p>
+
+          <div>
+            <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Email партнёра</label>
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && handleInvite()}
+              placeholder="partner@example.com"
+              autoFocus
+              className="w-full glass rounded-xl px-4 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-cyan/50 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-white/50 text-xs uppercase tracking-wider mb-1.5 block">Уровень доступа</label>
+            <div className="flex gap-2">
+              {[
+                { val: "partner", label: "Партнёр", desc: "Полный просмотр" },
+                { val: "viewer", label: "Наблюдатель", desc: "Только чтение" },
+              ].map(r => (
+                <button key={r.val} onClick={() => setRole(r.val)}
+                  className={`flex-1 px-3 py-2.5 rounded-xl border text-left transition-all ${role === r.val ? "border-neon-cyan/50 bg-neon-cyan/10" : "border-white/10 glass hover:border-white/20"}`}>
+                  <p className={`text-sm font-medium ${role === r.val ? "text-neon-cyan" : "text-white/60"}`}>{r.label}</p>
+                  <p className="text-white/30 text-xs mt-0.5">{r.desc}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {result && (
+            <div className={`flex items-center gap-2 text-sm px-3 py-2.5 rounded-xl border ${result.ok ? "text-neon-green bg-neon-green/10 border-neon-green/20" : "text-neon-pink bg-neon-pink/10 border-neon-pink/20"}`}>
+              <Icon name={result.ok ? "CheckCircle" : "AlertCircle"} size={14} />{result.msg}
+            </div>
+          )}
+
+          <div className="flex gap-3 pt-1">
+            <button onClick={onClose} className="flex-1 py-2.5 glass border border-white/10 rounded-xl text-white/50 hover:text-white text-sm transition-colors">
+              {result?.ok ? "Закрыть" : "Отмена"}
+            </button>
+            {!result?.ok && (
+              <button onClick={handleInvite} disabled={saving || !email.includes("@")}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-cyan/20 hover:bg-neon-cyan/30 border border-neon-cyan/40 text-neon-cyan font-semibold rounded-xl text-sm disabled:opacity-40 transition-all">
+                {saving ? <><Icon name="Loader2" size={14} className="animate-spin" />Отправляю...</> : <><Icon name="UserPlus" size={14} />Пригласить</>}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Карточка проекта ──────────────────────────────────────────────────────────
 function ProjectCard({ p, onClick, bookingBadge }: {
   p: Project; onClick: () => void; bookingBadge?: number;
@@ -165,8 +273,9 @@ function GroupCard({ g, onClick, onEdit }: {
 }
 
 // ── Экран внутри группы ───────────────────────────────────────────────────────
-function GroupDetailScreen({ group, projects, onBack, onOpenProject, onEditGroup, onReload }: {
+function GroupDetailScreen({ group, userId, projects, onBack, onOpenProject, onEditGroup, onReload }: {
   group: ProjectGroup;
+  userId: string;
   projects: Project[];
   onBack: () => void;
   onOpenProject: (id: string) => void;
@@ -175,9 +284,43 @@ function GroupDetailScreen({ group, projects, onBack, onOpenProject, onEditGroup
 }) {
   const color = group.color || "neon-purple";
   const f = group.finance;
+  const [showShare, setShowShare] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<string | null>(null);
+
+  const handleSyncAll = async () => {
+    setSyncing(true); setSyncResult(null);
+    try {
+      const res = await fetch(`${TICKETS_URL}?action=sync_all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult(`Синхронизировано ${data.synced} из ${data.total} интеграций`);
+        onReload();
+      } else {
+        setSyncResult("Ошибка синхронизации");
+      }
+    } catch {
+      setSyncResult("Ошибка соединения");
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   return (
     <div className="min-h-screen pt-2">
+      {showShare && (
+        <GroupShareModal
+          groupId={group.id}
+          groupTitle={group.title}
+          userId={userId}
+          projectCount={projects.length}
+          onClose={() => setShowShare(false)}
+        />
+      )}
       {/* Header */}
       <div className="relative py-4 overflow-hidden">
         <div className={`absolute inset-0 opacity-20`} style={{ background: `radial-gradient(ellipse at 50% 0%, var(--tw-gradient-stops))` }} />
@@ -198,11 +341,27 @@ function GroupDetailScreen({ group, projects, onBack, onOpenProject, onEditGroup
                 {group.description && <p className="text-white/40 text-sm">{group.description}</p>}
               </div>
             </div>
-            <button onClick={onEditGroup}
-              className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-white/25 text-white/50 hover:text-white rounded-lg text-sm transition-all">
-              <Icon name="Settings" size={15} />Редактировать группу
-            </button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={handleSyncAll} disabled={syncing}
+                className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-neon-cyan/40 text-white/50 hover:text-neon-cyan rounded-lg text-sm transition-all disabled:opacity-50">
+                <Icon name={syncing ? "Loader2" : "RefreshCw"} size={15} className={syncing ? "animate-spin" : ""} />
+                {syncing ? "Синхр...." : "Синхр. все"}
+              </button>
+              <button onClick={() => setShowShare(true)}
+                className="flex items-center gap-2 px-4 py-2 glass border border-neon-cyan/30 hover:border-neon-cyan/60 bg-neon-cyan/8 hover:bg-neon-cyan/15 text-neon-cyan rounded-lg text-sm transition-all">
+                <Icon name="UserPlus" size={15} />Поделиться
+              </button>
+              <button onClick={onEditGroup}
+                className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-white/25 text-white/50 hover:text-white rounded-lg text-sm transition-all">
+                <Icon name="Settings" size={15} />Настройки
+              </button>
+            </div>
           </div>
+          {syncResult && (
+            <p className="text-neon-cyan text-xs mt-2 flex items-center gap-1.5">
+              <Icon name="CheckCircle" size={12} />{syncResult}
+            </p>
+          )}
 
           {/* Сводка */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mt-4">
@@ -258,6 +417,8 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
   const [openProjectId, setOpenProjectId] = useState<string | null>(null);
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
+  const [syncingAll, setSyncingAll] = useState(false);
+  const [syncAllResult, setSyncAllResult] = useState<{ synced: number; total: number; failed: number } | null>(null);
 
   const load = async () => {
     if (!user) return;
@@ -278,7 +439,25 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
     }
   };
 
-  useEffect(() => { load(); }, [user]);
+  useEffect(() => { load(); }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSyncAll = async () => {
+    if (!user) return;
+    setSyncingAll(true); setSyncAllResult(null);
+    try {
+      const res = await fetch(`${TICKETS_URL}?action=sync_all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncAllResult({ synced: data.synced, total: data.total, failed: data.failed });
+        load();
+      }
+    } catch { /* silent */ }
+    finally { setSyncingAll(false); }
+  };
 
   // Открытый проект
   if (openProjectId) return (
@@ -297,6 +476,7 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
     <>
       <GroupDetailScreen
         group={openGroup}
+        userId={user!.id}
         projects={groupProjects}
         onBack={() => { setOpenGroupId(null); load(); }}
         onOpenProject={id => setOpenProjectId(id)}
@@ -348,6 +528,12 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                 <span className="text-base leading-none">🎫</span>
                 <span className="hidden sm:inline">Импорт из TC</span>
               </button>
+              <button onClick={handleSyncAll} disabled={syncingAll}
+                className="flex items-center gap-2 px-3 py-2 glass border border-white/10 hover:border-neon-green/40 text-white/50 hover:text-neon-green rounded-lg text-sm transition-all disabled:opacity-50"
+                title="Синхронизировать все интеграции с TicketsCloud">
+                <Icon name={syncingAll ? "Loader2" : "RefreshCw"} size={15} className={syncingAll ? "animate-spin" : ""} />
+                <span className="hidden sm:inline">{syncingAll ? "Синхр...." : "Синхр. все"}</span>
+              </button>
               <button onClick={() => { setEditingGroup(null); setShowGroupModal(true); }}
                 className="flex items-center gap-2 px-3 py-2 glass border border-white/10 hover:border-neon-purple/40 text-white/50 hover:text-neon-purple rounded-lg text-sm transition-all">
                 <Icon name="FolderPlus" size={15} />
@@ -359,6 +545,22 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
               </button>
             </div>
           </div>
+
+          {/* Результат синхронизации */}
+          {syncAllResult && (
+            <div className="mt-2 flex items-center gap-2 text-xs">
+              <Icon name="CheckCircle" size={12} className="text-neon-green" />
+              <span className="text-neon-green">
+                Синхронизировано {syncAllResult.synced} из {syncAllResult.total} интеграций
+              </span>
+              {syncAllResult.failed > 0 && (
+                <span className="text-neon-pink">· {syncAllResult.failed} с ошибкой</span>
+              )}
+              <button onClick={() => setSyncAllResult(null)} className="text-white/20 hover:text-white/50 ml-1">
+                <Icon name="X" size={11} />
+              </button>
+            </div>
+          )}
 
           {/* Сводка */}
           {projects.length > 0 && (

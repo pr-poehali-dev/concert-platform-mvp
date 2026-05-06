@@ -1077,4 +1077,74 @@ def handler(event: dict, context) -> dict:
             "eventDiff": event_diff,
         })
 
+    # ── POST sync_all — синхронизация всех интеграций пользователя ──────────
+    if method == "POST" and action == "sync_all":
+        b       = json.loads(event.get("body") or "{}")
+        user_id = b.get("userId", "")
+        if not user_id:
+            return err("userId required")
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id, api_key, event_id, project_id, provider
+                    FROM {SCHEMA}.ticket_integrations
+                    WHERE user_id=%s AND is_active=TRUE
+                    ORDER BY created_at""",
+                (user_id,)
+            )
+            integrations = cur.fetchall()
+        finally:
+            conn.close()
+
+        results = []
+        for int_row in integrations:
+            int_id, api_key, event_id_val, project_id, provider = (
+                str(int_row[0]), int_row[1], int_row[2], int_row[3], int_row[4]
+            )
+            if provider != "ticketscloud":
+                results.append({"integrationId": int_id, "ok": False, "error": "Неизвестный провайдер"})
+                continue
+
+            conn2 = get_conn()
+            try:
+                cur2 = conn2.cursor()
+                try:
+                    orders = fetch_ticketscloud_orders(api_key, event_id_val)
+                    all_sales = []
+                    for order in orders:
+                        all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
+                    upsert_sales(cur2, all_sales)
+
+                    event_sets = []
+                    if project_id:
+                        event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
+                        sync_income_lines(cur2, str(project_id), int_id, event_sets)
+
+                    cur2.execute(
+                        f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
+                        (int_id,)
+                    )
+                    conn2.commit()
+                    results.append({
+                        "integrationId": int_id,
+                        "ok": True,
+                        "ordersProcessed": len(orders),
+                    })
+                except RuntimeError as e:
+                    results.append({"integrationId": int_id, "ok": False, "error": str(e)})
+            finally:
+                conn2.close()
+
+        ok_count  = sum(1 for r in results if r["ok"])
+        err_count = len(results) - ok_count
+        return ok({
+            "success": True,
+            "total": len(results),
+            "synced": ok_count,
+            "failed": err_count,
+            "results": results,
+        })
+
     return err("Not found", 404)

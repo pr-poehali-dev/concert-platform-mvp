@@ -1671,5 +1671,84 @@ def handler(event: dict, context) -> dict:
         } if g else {}
         return ok({"projects": projects, "group": group_info})
 
+    # ── POST invite_group_member — пригласить партнёра сразу в все проекты группы ──
+    if method == "POST" and action == "invite_group_member":
+        b             = json.loads(event.get("body") or "{}")
+        group_id      = b.get("groupId", "")
+        inviter_id    = b.get("userId", "")
+        partner_email = (b.get("email") or "").strip().lower()
+        partner_role  = b.get("role", "partner")
+
+        if not group_id or not inviter_id: return err("groupId и userId обязательны")
+        if "@" not in partner_email: return err("Некорректный email")
+
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            # Проверяем что группа принадлежит inviter_id
+            cur.execute(
+                f"SELECT title FROM {SCHEMA}.project_groups WHERE id=%s AND user_id=%s",
+                (group_id, inviter_id)
+            )
+            group_row = cur.fetchone()
+            if not group_row: conn.close(); return err("Группа не найдена или нет прав", 404)
+            group_title = group_row[0]
+
+            # Ищем партнёра
+            cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE LOWER(email)=%s", (partner_email,))
+            partner = cur.fetchone()
+            if not partner: conn.close(); return err("Пользователь с таким email не найден на платформе", 404)
+            partner_id, partner_name = str(partner[0]), partner[1]
+            if partner_id == inviter_id: conn.close(); return err("Нельзя пригласить самого себя")
+
+            # Имя пригласившего
+            cur.execute(f"SELECT name FROM {SCHEMA}.users WHERE id=%s", (inviter_id,))
+            inviter_row = cur.fetchone()
+            inviter_name = inviter_row[0] if inviter_row else "Организатор"
+
+            # Все проекты группы
+            cur.execute(
+                f"SELECT id, title FROM {SCHEMA}.projects WHERE group_id=%s AND user_id=%s",
+                (group_id, inviter_id)
+            )
+            group_projects = cur.fetchall()
+
+            added = 0
+            skipped = 0
+            for proj_id, proj_title in group_projects:
+                proj_id = str(proj_id)
+                # Пропускаем если уже участник
+                cur.execute(
+                    f"SELECT id FROM {SCHEMA}.project_members WHERE project_id=%s AND user_id=%s",
+                    (proj_id, partner_id)
+                )
+                if cur.fetchone():
+                    skipped += 1
+                    continue
+                cur.execute(
+                    f"""INSERT INTO {SCHEMA}.project_members (project_id, user_id, role, invited_by)
+                        VALUES (%s, %s, %s, %s)""",
+                    (proj_id, partner_id, partner_role, inviter_id)
+                )
+                added += 1
+
+            # Одно уведомление на всю группу
+            if added > 0:
+                cur.execute(
+                    f"""INSERT INTO {SCHEMA}.notifications (user_id, type, title, body, link_page)
+                        VALUES (%s, 'system', %s, %s, 'projects')""",
+                    (partner_id,
+                     f"Вас добавили в группу «{group_title}»",
+                     f"{inviter_name} открыл вам доступ к {added} проектам группы «{group_title}»")
+                )
+            conn.commit()
+        finally:
+            conn.close()
+
+        return ok({
+            "success": True,
+            "partnerName": partner_name,
+            "added": added,
+            "skipped": skipped,
+        })
 
     return err("Not found", 404)
