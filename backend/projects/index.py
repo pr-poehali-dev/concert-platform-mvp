@@ -62,11 +62,12 @@ def handler(event: dict, context) -> dict:
             own_rows = cur.fetchall()
             own_ids = {str(r[0]) for r in own_rows}
 
-            # Проекты где пользователь — партнёр
+            # Проекты где пользователь — партнёр (включаем group_id чтобы группировать)
             cur.execute(
                 f"""SELECT p.id,p.user_id,p.title,p.artist,p.project_type,p.status,p.date_start,p.date_end,
                            p.city,p.venue_name,p.description,p.tax_system,p.total_expenses_plan,
-                           p.total_expenses_fact,p.total_income_plan,p.total_income_fact,p.created_at,p.updated_at
+                           p.total_expenses_fact,p.total_income_plan,p.total_income_fact,p.created_at,p.updated_at,
+                           p.group_id
                     FROM {SCHEMA}.projects p
                     JOIN {SCHEMA}.project_members pm ON pm.project_id = p.id
                     WHERE pm.user_id=%s AND pm.role != 'removed'
@@ -104,7 +105,7 @@ def handler(event: dict, context) -> dict:
             p["hasOverdueTasks"] = False
             p["isPartner"] = True
             p["ownerName"] = owner_names.get(str(r[1]), "")
-            p["groupId"] = None  # партнёрские проекты не показываем в группах владельца
+            p["groupId"] = str(r[18]) if len(r) > 18 and r[18] else None
             projects.append(p)
         return ok({"projects": projects})
 
@@ -1519,11 +1520,26 @@ def handler(event: dict, context) -> dict:
         if not uid: return err("user_id required")
         conn = get_conn(); cur = conn.cursor()
         try:
+            # Свои группы
             cur.execute(
-                f"""SELECT id, title, description, color, created_at
+                f"""SELECT id, title, description, color, created_at, user_id
                     FROM {SCHEMA}.project_groups
                     WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
-            groups_raw = cur.fetchall()
+            own_groups_raw = cur.fetchall()
+
+            # Группы, в которые пользователь приглашён как партнёр
+            cur.execute(
+                f"""SELECT pg.id, pg.title, pg.description, pg.color, pg.created_at, pg.user_id
+                    FROM {SCHEMA}.project_groups pg
+                    JOIN {SCHEMA}.group_members gm ON gm.group_id = pg.id
+                    WHERE gm.user_id=%s ORDER BY pg.created_at DESC""", (uid,))
+            partner_groups_raw = cur.fetchall()
+
+            own_group_ids = {str(r[0]) for r in own_groups_raw}
+            # Объединяем, избегая дублей
+            groups_raw = list(own_groups_raw) + [r for r in partner_groups_raw if str(r[0]) not in own_group_ids]
+
+            # Агрегаты для своих групп (по своим проектам)
             cur.execute(
                 f"""SELECT p.group_id,
                            COUNT(*) as cnt,
@@ -1536,13 +1552,45 @@ def handler(event: dict, context) -> dict:
                     FROM {SCHEMA}.projects p
                     WHERE p.user_id=%s AND p.group_id IS NOT NULL
                     GROUP BY p.group_id""", (uid,))
-            agg = {str(r[0]): r[1:] for r in cur.fetchall()}
+            agg_own = {str(r[0]): r[1:] for r in cur.fetchall()}
+
+            # Агрегаты для партнёрских групп (по всем проектам группы)
+            if partner_groups_raw:
+                partner_gids = [str(r[0]) for r in partner_groups_raw if str(r[0]) not in own_group_ids]
+                if partner_gids:
+                    placeholders = ",".join(["%s"] * len(partner_gids))
+                    cur.execute(
+                        f"""SELECT p.group_id,
+                                   COUNT(*) as cnt,
+                                   SUM(p.total_income_plan) as ip,
+                                   SUM(p.total_income_fact) as iF,
+                                   SUM(p.total_expenses_plan) as ep,
+                                   SUM(p.total_expenses_fact) as ef,
+                                   MIN(p.date_start) as date_start,
+                                   MAX(p.date_end) as date_end
+                            FROM {SCHEMA}.projects p
+                            WHERE p.group_id IN ({placeholders})
+                            GROUP BY p.group_id""", partner_gids)
+                    for row in cur.fetchall():
+                        gid_str = str(row[0])
+                        if gid_str not in agg_own:
+                            agg_own[gid_str] = row[1:]
+
+            # Имена владельцев партнёрских групп
+            owner_ids = list({str(r[5]) for r in partner_groups_raw if str(r[0]) not in own_group_ids})
+            owner_names = {}
+            if owner_ids:
+                placeholders = ",".join(["%s"] * len(owner_ids))
+                cur.execute(f"SELECT id, name FROM {SCHEMA}.users WHERE id IN ({placeholders})", owner_ids)
+                for row in cur.fetchall():
+                    owner_names[str(row[0])] = row[1]
         finally:
             conn.close()
+
         groups = []
         for r in groups_raw:
             gid = str(r[0])
-            a = agg.get(gid)
+            a = agg_own.get(gid)
             cnt = int(a[0]) if a else 0
             ip  = float(a[1] or 0) if a else 0.0
             iF  = float(a[2] or 0) if a else 0.0
@@ -1550,6 +1598,7 @@ def handler(event: dict, context) -> dict:
             ef  = float(a[4] or 0) if a else 0.0
             ds  = str(a[5]) if a and a[5] else None
             de  = str(a[6]) if a and a[6] else None
+            is_partner_group = gid not in own_group_ids
             groups.append({
                 "id": gid, "title": r[1], "description": r[2],
                 "color": r[3], "createdAt": str(r[4]),
@@ -1558,6 +1607,8 @@ def handler(event: dict, context) -> dict:
                 "totalExpensesPlan": ep, "totalExpensesFact": ef,
                 "dateStart": ds, "dateEnd": de,
                 "finance": calc_finance(ip, iF, ep, ef, "none"),
+                "isPartner": is_partner_group,
+                "ownerName": owner_names.get(str(r[5]), "") if is_partner_group else None,
             })
         return ok({"groups": groups})
 
@@ -1731,6 +1782,14 @@ def handler(event: dict, context) -> dict:
                     (proj_id, partner_id, partner_role, inviter_id)
                 )
                 added += 1
+
+            # Сохраняем партнёра в group_members (для обратного отображения группы у партнёра)
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.group_members (group_id, user_id, invited_by, role)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (group_id, user_id) DO UPDATE SET role=EXCLUDED.role""",
+                (group_id, partner_id, inviter_id, partner_role)
+            )
 
             # Одно уведомление на всю группу
             if added > 0:

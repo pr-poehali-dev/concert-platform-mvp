@@ -53,6 +53,8 @@ export interface ProjectGroup {
   dateStart: string | null;
   dateEnd: string | null;
   finance: Finance;
+  isPartner?: boolean;
+  ownerName?: string | null;
 }
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {

@@ -97,27 +97,39 @@ export function GroupCard({ g, onClick, onEdit }: {
 
       <div className="flex items-start justify-between mb-3 gap-2">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <div className={`w-7 h-7 rounded-lg bg-${color}/15 border border-${color}/25 flex items-center justify-center shrink-0`}>
               <Icon name="FolderOpen" size={14} className={`text-${color}`} />
             </div>
             <span className={`text-[11px] px-2 py-0.5 rounded border border-${color}/30 bg-${color}/10 text-${color} font-medium`}>
               {g.projectCount} {g.projectCount === 1 ? "проект" : g.projectCount < 5 ? "проекта" : "проектов"}
             </span>
+            {g.isPartner && (
+              <span className="flex items-center gap-1 text-neon-cyan text-[10px] border border-neon-cyan/25 bg-neon-cyan/8 px-1.5 py-0.5 rounded">
+                <Icon name="Handshake" size={10} />Партнёрская
+              </span>
+            )}
           </div>
           <h3 className={`font-oswald font-bold text-xl text-white group-hover:text-${color} transition-colors truncate mt-1`}>
             {g.title}
           </h3>
           {g.description && <p className="text-white/35 text-xs mt-0.5 truncate">{g.description}</p>}
+          {g.isPartner && g.ownerName && (
+            <p className="text-white/30 text-xs mt-0.5">
+              <span className="text-white/20">Владелец:</span> {g.ownerName}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0 mt-1">
-          <button
-            onClick={onEdit}
-            className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/30 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
-            title="Редактировать"
-          >
-            <Icon name="Settings" size={13} />
-          </button>
+          {!g.isPartner && (
+            <button
+              onClick={onEdit}
+              className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/5 hover:bg-white/10 text-white/30 hover:text-white transition-colors opacity-0 group-hover:opacity-100"
+              title="Редактировать"
+            >
+              <Icon name="Settings" size={13} />
+            </button>
+          )}
           <Icon name="ChevronRight" size={16} className="text-white/20 group-hover:text-white/50 transition-colors" />
         </div>
       </div>

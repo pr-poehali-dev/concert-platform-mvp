@@ -77,19 +77,28 @@ export default function GroupDetailScreen({ group, userId, projects, onBack, onO
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {group.isPartner && group.ownerName && (
+                <span className="flex items-center gap-1.5 text-neon-cyan/70 text-xs border border-neon-cyan/20 bg-neon-cyan/5 px-3 py-1.5 rounded-lg">
+                  <Icon name="Handshake" size={13} />Владелец: {group.ownerName}
+                </span>
+              )}
               <button onClick={handleSyncAll} disabled={syncing}
                 className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-neon-cyan/40 text-white/50 hover:text-neon-cyan rounded-lg text-sm transition-all disabled:opacity-50">
                 <Icon name={syncing ? "Loader2" : "RefreshCw"} size={15} className={syncing ? "animate-spin" : ""} />
                 {syncing ? "Синхр...." : "Синхр. все"}
               </button>
-              <button onClick={() => setShowShare(true)}
-                className="flex items-center gap-2 px-4 py-2 glass border border-neon-cyan/30 hover:border-neon-cyan/60 bg-neon-cyan/8 hover:bg-neon-cyan/15 text-neon-cyan rounded-lg text-sm transition-all">
-                <Icon name="UserPlus" size={15} />Поделиться
-              </button>
-              <button onClick={onEditGroup}
-                className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-white/25 text-white/50 hover:text-white rounded-lg text-sm transition-all">
-                <Icon name="Settings" size={15} />Настройки
-              </button>
+              {!group.isPartner && (
+                <>
+                  <button onClick={() => setShowShare(true)}
+                    className="flex items-center gap-2 px-4 py-2 glass border border-neon-cyan/30 hover:border-neon-cyan/60 bg-neon-cyan/8 hover:bg-neon-cyan/15 text-neon-cyan rounded-lg text-sm transition-all">
+                    <Icon name="UserPlus" size={15} />Поделиться
+                  </button>
+                  <button onClick={onEditGroup}
+                    className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-white/25 text-white/50 hover:text-white rounded-lg text-sm transition-all">
+                    <Icon name="Settings" size={15} />Настройки
+                  </button>
+                </>
+              )}
             </div>
           </div>
           {syncResult && (
