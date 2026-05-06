@@ -196,7 +196,6 @@ export default function VenueSetupModal({ open, onClose, onCreated }: VenueSetup
       const msg = raw.includes("Failed to fetch")
         ? "Не удалось отправить файлы — проверьте интернет или уменьшите количество/размер фото"
         : raw || "Ошибка при сохранении";
-      console.error("[VenueSetupModal] submit error:", e);
       setError(msg);
     } finally {
       setLoading(false);

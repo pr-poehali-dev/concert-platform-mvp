@@ -260,14 +260,18 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         try:
             cur = conn.cursor()
-            cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_expenses WHERE project_id=%s",(pid,))
-            order = cur.fetchone()[0]
             def _f(v):
                 try: return float(v)
                 except (TypeError, ValueError): return 0.0
+            # Атомарный INSERT с подзапросом MAX(sort_order)+1 — защищает от race condition
             cur.execute(
-                f"INSERT INTO {SCHEMA}.project_expenses (project_id,category,title,amount_plan,amount_fact,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                (pid,b.get("category","Прочее"),title,_f(b.get("amountPlan")),_f(b.get("amountFact")),b.get("note",""),order))
+                f"""INSERT INTO {SCHEMA}.project_expenses
+                    (project_id,category,title,amount_plan,amount_fact,note,sort_order)
+                    SELECT %s,%s,%s,%s,%s,%s, COALESCE(MAX(sort_order),0)+1
+                    FROM {SCHEMA}.project_expenses WHERE project_id=%s
+                    RETURNING id""",
+                (pid, b.get("category","Прочее"), title, _f(b.get("amountPlan")),
+                 _f(b.get("amountFact")), b.get("note",""), pid))
             eid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit()
         finally:
             conn.close()
@@ -317,11 +321,15 @@ def handler(event: dict, context) -> dict:
         conn = get_conn()
         try:
             cur = conn.cursor()
-            cur.execute(f"SELECT COALESCE(MAX(sort_order),0)+1 FROM {SCHEMA}.project_income_lines WHERE project_id=%s",(pid,))
-            order = cur.fetchone()[0]
+            # Атомарный INSERT с подзапросом — защита от race condition
             cur.execute(
-                f"INSERT INTO {SCHEMA}.project_income_lines (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order) VALUES (%s,%s,%s,%s,%s,%s,%s) RETURNING id",
-                (pid,b.get("category","Стандарт"),int(b.get("ticketCount",0)),float(b.get("ticketPrice",0)),int(b.get("soldCount",0)),b.get("note",""),order))
+                f"""INSERT INTO {SCHEMA}.project_income_lines
+                    (project_id,category,ticket_count,ticket_price,sold_count,note,sort_order)
+                    SELECT %s,%s,%s,%s,%s,%s, COALESCE(MAX(sort_order),0)+1
+                    FROM {SCHEMA}.project_income_lines WHERE project_id=%s
+                    RETURNING id""",
+                (pid, b.get("category","Стандарт"), int(b.get("ticketCount",0)),
+                 float(b.get("ticketPrice",0)), int(b.get("soldCount",0)), b.get("note",""), pid))
             iid = str(cur.fetchone()[0]); recalc_totals(cur, pid); conn.commit()
         finally:
             conn.close()

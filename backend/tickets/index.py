@@ -107,9 +107,13 @@ def generate_webhook_secret() -> str:
 
 
 def verify_ticketscloud_signature(payload: bytes, signature: str, secret: str) -> bool:
-    """Проверяет HMAC-SHA256 подпись от TicketsCloud."""
-    if not secret or not signature:
-        return True  # если секрет не задан — пропускаем проверку
+    """Проверяет HMAC-SHA256 подпись от TicketsCloud.
+    Если secret задан — подпись ОБЯЗАТЕЛЬНА и должна совпадать.
+    Если secret не задан — отвергаем (закрытая интеграция должна иметь секрет)."""
+    if not secret:
+        return False
+    if not signature:
+        return False
     expected = hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()  # noqa: hmac.new is correct
     return hmac.compare_digest(expected, signature.lower().replace("sha256=", ""))
 

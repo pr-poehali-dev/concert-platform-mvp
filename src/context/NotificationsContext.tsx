@@ -64,22 +64,42 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   }, [user, refresh]);
 
   const markRead = async (id: string) => {
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
-    await fetch(`${NOTIF_URL}?action=read`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id }),
+    // Сохраняем предыдущее состояние для возможного роллбэка
+    let prevSnapshot: Notification[] = [];
+    setNotifications(prev => {
+      prevSnapshot = prev;
+      return prev.map(n => n.id === id ? { ...n, isRead: true } : n);
     });
+    try {
+      const res = await fetch(`${NOTIF_URL}?action=read`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      // Роллбэк при ошибке
+      setNotifications(prevSnapshot);
+    }
   };
 
   const markAllRead = async () => {
     if (!user) return;
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-    await fetch(`${NOTIF_URL}?action=read_all`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId: user.id }),
+    let prevSnapshot: Notification[] = [];
+    setNotifications(prev => {
+      prevSnapshot = prev;
+      return prev.map(n => ({ ...n, isRead: true }));
     });
+    try {
+      const res = await fetch(`${NOTIF_URL}?action=read_all`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      if (!res.ok) throw new Error();
+    } catch {
+      setNotifications(prevSnapshot);
+    }
   };
 
   const sendNotification = async (
@@ -103,14 +123,23 @@ export function NotificationsProvider({ children }: { children: ReactNode }) {
   const markReadByPage = async (page: string) => {
     const ids = notifications.filter(n => !n.isRead && n.linkPage === page).map(n => n.id);
     if (!ids.length) return;
-    setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, isRead: true } : n));
-    await Promise.all(ids.map(id =>
-      fetch(`${NOTIF_URL}?action=read`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id }),
-      })
-    ));
+    let prevSnapshot: Notification[] = [];
+    setNotifications(prev => {
+      prevSnapshot = prev;
+      return prev.map(n => ids.includes(n.id) ? { ...n, isRead: true } : n);
+    });
+    try {
+      const results = await Promise.all(ids.map(id =>
+        fetch(`${NOTIF_URL}?action=read`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id }),
+        })
+      ));
+      if (results.some(r => !r.ok)) throw new Error();
+    } catch {
+      setNotifications(prevSnapshot);
+    }
   };
 
   return (

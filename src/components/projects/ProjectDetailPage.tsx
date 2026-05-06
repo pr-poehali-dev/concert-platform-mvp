@@ -46,10 +46,18 @@ export default function ProjectDetailPage({ projectId, onBack, onOpenChat }: Pro
 
   const api = async (action:string, body:object) => {
     setSaving(action);
-    const res = await fetch(`${PROJECTS_URL}?action=${action}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId: user?.id, ...body})});
-    const data = await res.json();
-    setSaving(null);
-    return data;
+    try {
+      const res = await fetch(`${PROJECTS_URL}?action=${action}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId: user?.id, ...body})});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        return { error: data.error || `Ошибка ${res.status}`, _failed: true };
+      }
+      return data;
+    } catch {
+      return { error: "Нет соединения", _failed: true };
+    } finally {
+      setSaving(null);
+    }
   };
 
   const updateField = async (key:string, val:unknown) => {
