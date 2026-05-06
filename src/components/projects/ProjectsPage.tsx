@@ -29,6 +29,7 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
   const [openGroupId, setOpenGroupId] = useState<string | null>(null);
   const [filter, setFilter] = useState("all");
   const [syncingAll, setSyncingAll] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [syncAllResult, setSyncAllResult] = useState<{ synced: number; total: number; failed: number } | null>(null);
 
   const load = async () => {
@@ -54,23 +55,34 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
 
   const handleSyncAll = async () => {
     if (!user) return;
-    setSyncingAll(true); setSyncAllResult(null);
+    setSyncingAll(true); setSyncAllResult(null); setSyncProgress(null);
     try {
-      const res = await fetch(`${TICKETS_URL}?action=sync_all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: user.id }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSyncAllResult({ synced: data.synced, total: data.total, failed: data.failed });
-        load();
-      } else {
-        setSyncAllResult({ synced: 0, total: 0, failed: 1 });
+      // 1. Получаем список интеграций
+      const listRes = await fetch(`${TICKETS_URL}?action=list_for_sync&user_id=${user.id}`);
+      const listData = await listRes.json();
+      const integrations: { id: string; name: string }[] = listData.integrations || [];
+      if (integrations.length === 0) {
+        setSyncAllResult({ synced: 0, total: 0, failed: 0 });
+        return;
       }
+      // 2. Синхронизируем каждую поочерёдно — каждый вызов ≤ 30 сек
+      let synced = 0; let failed = 0;
+      for (let i = 0; i < integrations.length; i++) {
+        setSyncProgress({ current: i + 1, total: integrations.length });
+        try {
+          const res = await fetch(`${TICKETS_URL}?action=sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ integrationId: integrations[i].id }),
+          });
+          if (res.ok) synced++; else failed++;
+        } catch { failed++; }
+      }
+      setSyncAllResult({ synced, total: integrations.length, failed });
+      load();
     } catch {
       setSyncAllResult({ synced: 0, total: 0, failed: 1 });
-    } finally { setSyncingAll(false); }
+    } finally { setSyncingAll(false); setSyncProgress(null); }
   };
 
   // Открытый проект
@@ -146,7 +158,9 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
                 className="flex items-center gap-2 px-3 py-2 glass border border-white/10 hover:border-neon-green/40 text-white/50 hover:text-neon-green rounded-lg text-sm transition-all disabled:opacity-50"
                 title="Синхронизировать все интеграции с TicketsCloud">
                 <Icon name={syncingAll ? "Loader2" : "RefreshCw"} size={15} className={syncingAll ? "animate-spin" : ""} />
-                <span className="hidden sm:inline">{syncingAll ? "Синхр...." : "Синхр. все"}</span>
+                <span className="hidden sm:inline">
+                  {syncProgress ? `${syncProgress.current}/${syncProgress.total}` : syncingAll ? "Синхр..." : "Синхр. все"}
+                </span>
               </button>
               <button onClick={() => { setEditingGroup(null); setShowGroupModal(true); }}
                 className="flex items-center gap-2 px-3 py-2 glass border border-white/10 hover:border-neon-purple/40 text-white/50 hover:text-neon-purple rounded-lg text-sm transition-all">

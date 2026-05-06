@@ -21,27 +21,38 @@ export default function GroupDetailScreen({ group, userId, projects, onBack, onO
   const f = group.finance;
   const [showShare, setShowShare] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncProgress, setSyncProgress] = useState<{ current: number; total: number } | null>(null);
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
   const handleSyncAll = async () => {
-    setSyncing(true); setSyncResult(null);
+    setSyncing(true); setSyncResult(null); setSyncProgress(null);
     try {
-      const res = await fetch(`${TICKETS_URL}?action=sync_all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setSyncResult(`Синхронизировано ${data.synced} из ${data.total} интеграций`);
-        onReload();
-      } else {
-        setSyncResult("Ошибка синхронизации");
+      // Получаем интеграции всего пользователя и синхронизируем поочерёдно
+      const listRes = await fetch(`${TICKETS_URL}?action=list_for_sync&user_id=${userId}`);
+      const listData = await listRes.json();
+      const integrations: { id: string; name: string }[] = listData.integrations || [];
+      if (integrations.length === 0) {
+        setSyncResult("Нет активных интеграций");
+        return;
       }
+      let synced = 0; let failed = 0;
+      for (let i = 0; i < integrations.length; i++) {
+        setSyncProgress({ current: i + 1, total: integrations.length });
+        try {
+          const res = await fetch(`${TICKETS_URL}?action=sync`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ integrationId: integrations[i].id }),
+          });
+          if (res.ok) synced++; else failed++;
+        } catch { failed++; }
+      }
+      setSyncResult(`Синхронизировано ${synced} из ${integrations.length} интеграций${failed > 0 ? ` · ${failed} с ошибкой` : ""}`);
+      onReload();
     } catch {
       setSyncResult("Ошибка соединения");
     } finally {
-      setSyncing(false);
+      setSyncing(false); setSyncProgress(null);
     }
   };
 
@@ -85,7 +96,7 @@ export default function GroupDetailScreen({ group, userId, projects, onBack, onO
               <button onClick={handleSyncAll} disabled={syncing}
                 className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-neon-cyan/40 text-white/50 hover:text-neon-cyan rounded-lg text-sm transition-all disabled:opacity-50">
                 <Icon name={syncing ? "Loader2" : "RefreshCw"} size={15} className={syncing ? "animate-spin" : ""} />
-                {syncing ? "Синхр...." : "Синхр. все"}
+                {syncProgress ? `${syncProgress.current}/${syncProgress.total}` : syncing ? "Синхр..." : "Синхр. все"}
               </button>
               {!group.isPartner && (
                 <>

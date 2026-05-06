@@ -116,8 +116,6 @@ def verify_ticketscloud_signature(payload: bytes, signature: str, secret: str) -
 
 def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
     """Выполняет GET-запрос к TicketsCloud API, возвращает распарсенный JSON."""
-    import sys
-    print(f"[TC] GET {url}", file=sys.stderr)
     req = urllib.request.Request(
         url,
         headers={
@@ -128,19 +126,15 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode()
-            print(f"[TC] status={resp.status} body_preview={raw[:300]}", file=sys.stderr)
-            return json.loads(raw)
+            return json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
         body = ""
         try:
             body = e.read().decode()[:400]
         except Exception:
             pass
-        print(f"[TC] HTTPError {e.code}: {body[:300]}", file=sys.stderr)
         raise RuntimeError(f"TicketsCloud HTTP {e.code}: {e.reason}. Response: {body[:200]}")
     except Exception as e:
-        print(f"[TC] Exception: {e}", file=sys.stderr)
         raise RuntimeError(f"TicketsCloud connection error: {e}")
 
 
@@ -1090,10 +1084,35 @@ def handler(event: dict, context) -> dict:
             "eventDiff": event_diff,
         })
 
+    # ── GET list_for_sync — список интеграций пользователя для пофронтовой синхронизации ──
+    if method == "GET" and action == "list_for_sync":
+        uid = params.get("user_id", "")
+        if not uid:
+            return err("user_id required")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+            cur.execute(
+                f"""SELECT id, event_id, provider, name
+                    FROM {SCHEMA}.ticket_integrations
+                    WHERE user_id=%s AND is_active=TRUE
+                    ORDER BY created_at""",
+                (uid,)
+            )
+            rows = cur.fetchall()
+        finally:
+            conn.close()
+        return ok({"integrations": [
+            {"id": str(r[0]), "eventId": r[1], "provider": r[2], "name": r[3]}
+            for r in rows
+        ]})
+
     # ── POST sync_all — синхронизация всех интеграций пользователя ──────────
-    # Оптимизация: загружаем все заказы аккаунта ОДИН РАЗ (один api_key),
-    # группируем по event_id и раздаём каждой интеграции — экономим N-1 полных обходов TC.
+    # Оптимизация: заказы грузим ОДИН РАЗ, /sets — параллельно через threading.
     if method == "POST" and action == "sync_all":
+        import threading
+        from collections import defaultdict
+
         b       = json.loads(event.get("body") or "{}")
         user_id = b.get("userId", "")
         if not user_id:
@@ -1118,8 +1137,7 @@ def handler(event: dict, context) -> dict:
 
         results = []
 
-        # Группируем интеграции по api_key — у одного пользователя обычно один ключ
-        from collections import defaultdict
+        # Группируем по api_key
         by_api_key: dict = defaultdict(list)
         for int_row in integrations:
             int_id, api_key, event_id_val, project_id, provider = (
@@ -1131,7 +1149,7 @@ def handler(event: dict, context) -> dict:
             by_api_key[api_key].append((int_id, event_id_val, project_id))
 
         for api_key, int_list in by_api_key.items():
-            # Загружаем ВСЕ заказы по этому ключу один раз
+            # 1. Загружаем ВСЕ заказы один раз
             try:
                 all_orders_raw = fetch_ticketscloud_orders(api_key, "__ALL__")
             except RuntimeError as e:
@@ -1147,7 +1165,29 @@ def handler(event: dict, context) -> dict:
                     ev = ev.get("id") or ev.get("_id") or ""
                 orders_by_event[str(ev).strip()].append(order)
 
-            # Обрабатываем каждую интеграцию
+            # 2. Параллельно запрашиваем /sets для всех event_id
+            sets_by_event: dict = {}
+            sets_lock = threading.Lock()
+
+            def fetch_sets_worker(eid):
+                try:
+                    s = fetch_ticketscloud_event_sets(api_key, eid)
+                    with sets_lock:
+                        sets_by_event[eid] = s
+                except Exception:
+                    with sets_lock:
+                        sets_by_event[eid] = []
+
+            threads = []
+            for _, event_id_val, project_id in int_list:
+                if project_id:
+                    t = threading.Thread(target=fetch_sets_worker, args=(event_id_val,))
+                    t.start()
+                    threads.append(t)
+            for t in threads:
+                t.join(timeout=10)
+
+            # 3. Сохраняем данные по каждой интеграции
             for int_id, event_id_val, project_id in int_list:
                 orders = orders_by_event.get(str(event_id_val).strip(), [])
                 conn2 = get_conn()
@@ -1160,7 +1200,7 @@ def handler(event: dict, context) -> dict:
                         upsert_sales(cur2, all_sales)
 
                         if project_id:
-                            event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
+                            event_sets = sets_by_event.get(event_id_val, [])
                             sync_income_lines(cur2, str(project_id), int_id, event_sets)
 
                         cur2.execute(
@@ -1169,8 +1209,8 @@ def handler(event: dict, context) -> dict:
                         )
                         conn2.commit()
                         results.append({"integrationId": int_id, "ok": True, "ordersProcessed": len(orders)})
-                    except RuntimeError as e:
-                        results.append({"integrationId": int_id, "ok": False, "error": str(e)})
+                    except Exception as e:
+                        results.append({"integrationId": int_id, "ok": False, "error": str(e)[:200]})
                 finally:
                     conn2.close()
 
