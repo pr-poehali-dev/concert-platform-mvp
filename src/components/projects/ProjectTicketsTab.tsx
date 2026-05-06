@@ -342,19 +342,25 @@ export default function ProjectTicketsTab({ projectId }: Props) {
   const applyEventDiff = async () => {
     if (!pendingIntId || !eventDiff) return;
     setApplying(true);
-    // Для дат передаём raw (YYYY-MM-DD), для остальных — new (читаемое значение)
     const fields: Record<string, string> = {};
     Object.entries(eventDiff).forEach(([k, v]) => {
       fields[k] = v.raw ?? v.new;
     });
     try {
-      await fetch(`${TICKETS_URL}?action=apply_event_info`, {
+      const res = await fetch(`${TICKETS_URL}?action=apply_event_info`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ integrationId: pendingIntId, fields }),
       });
-    } catch { /* ignore */ }
-    finally {
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setSyncMsg(`Ошибка обновления данных: ${d.error || res.status}`);
+      } else {
+        setSyncMsg("Данные проекта обновлены из TicketsCloud");
+      }
+    } catch {
+      setSyncMsg("Ошибка соединения при обновлении данных");
+    } finally {
       setApplying(false);
       setEventDiff(null);
       setPendingIntId(null);

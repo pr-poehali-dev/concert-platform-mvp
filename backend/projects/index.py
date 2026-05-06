@@ -104,6 +104,7 @@ def handler(event: dict, context) -> dict:
             p["hasOverdueTasks"] = False
             p["isPartner"] = True
             p["ownerName"] = owner_names.get(str(r[1]), "")
+            p["groupId"] = None  # партнёрские проекты не показываем в группах владельца
             projects.append(p)
         return ok({"projects": projects})
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Icon from "@/components/ui/icon";
 
 const TICKETS_URL = "https://functions.poehali.dev/e8e3c7c9-b452-4e77-8db2-ca0266399006";
@@ -56,9 +56,11 @@ export default function StepTickets({ userId, value, onChange }: Props) {
   // Загружаем прошлые ключи из интеграций пользователя
   useEffect(() => {
     if (!userId) return;
+    let cancelled = false;
     fetch(`${TICKETS_URL}?action=list&user_id=${userId}`)
       .then(r => r.json())
       .then(data => {
+        if (cancelled) return;
         const ints = data.integrations || [];
         const seen = new Set<string>();
         const keys: SavedApiKey[] = [];
@@ -70,16 +72,17 @@ export default function StepTickets({ userId, value, onChange }: Props) {
         }
         setSavedKeys(keys);
         setHasSavedKey(keys.length > 0);
-        // Если есть сохранённый ключ — подставляем автоматически
-        if (keys.length > 0 && !value.apiKey) {
+        // Если есть сохранённый ключ и поле ещё пустое — подставляем
+        if (keys.length > 0) {
           set({ apiKey: keys[0].apiKey });
         }
       })
       .catch(() => {})
-      .finally(() => setKeysLoading(false));
-  }, [userId]);
+      .finally(() => { if (!cancelled) setKeysLoading(false); });
+    return () => { cancelled = true; };
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Когда apiKey заполнен — загружаем события
+  // Когда apiKey заполнен — загружаем события (только при монтировании с ключом)
   const loadEvents = async (key: string) => {
     if (!key.trim()) return;
     setEventsLoading(true);
@@ -97,12 +100,14 @@ export default function StepTickets({ userId, value, onChange }: Props) {
     }
   };
 
-  // При автоподстановке ключа — сразу загружаем события
+  // При автоподстановке ключа — загружаем события один раз
+  const prevApiKeyRef = useRef("");
   useEffect(() => {
-    if (value.apiKey && !value.skip && tcEvents.length === 0 && !eventsLoading) {
+    if (value.apiKey && !value.skip && value.apiKey !== prevApiKeyRef.current) {
+      prevApiKeyRef.current = value.apiKey;
       loadEvents(value.apiKey);
     }
-  }, [value.apiKey, value.skip]);
+  }, [value.apiKey, value.skip]);  
 
   const filteredEvents = tcEvents.filter(e =>
     !eventSearch || e.title.toLowerCase().includes(eventSearch.toLowerCase()) ||

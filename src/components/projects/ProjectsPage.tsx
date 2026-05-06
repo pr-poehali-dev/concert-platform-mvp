@@ -454,9 +454,12 @@ export default function ProjectsPage({ onNavigate }: { onNavigate?: (page: strin
       if (res.ok) {
         setSyncAllResult({ synced: data.synced, total: data.total, failed: data.failed });
         load();
+      } else {
+        setSyncAllResult({ synced: 0, total: 0, failed: 1 });
       }
-    } catch { /* silent */ }
-    finally { setSyncingAll(false); }
+    } catch {
+      setSyncAllResult({ synced: 0, total: 0, failed: 1 });
+    } finally { setSyncingAll(false); }
   };
 
   // Открытый проект

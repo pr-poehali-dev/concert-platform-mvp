@@ -705,13 +705,18 @@ def handler(event: dict, context) -> dict:
             # чтобы первый же sync их нашёл и корректно обновил
             for i, s in enumerate(event_sets):
                 note_key = f"ticketscloud:{integration_id}:{s['id']}"
+                # Проверяем существование перед вставкой (нет уникального constraint на note)
                 cur.execute(
-                    f"""INSERT INTO {SCHEMA}.project_income_lines
-                        (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
-                        VALUES (%s,%s,%s,%s,%s,%s,%s)
-                        ON CONFLICT DO NOTHING""",
-                    (project_id, s["name"], s["total"], s["price"], 0, note_key, i)
+                    f"SELECT id FROM {SCHEMA}.project_income_lines WHERE project_id=%s AND note=%s LIMIT 1",
+                    (project_id, note_key)
                 )
+                if not cur.fetchone():
+                    cur.execute(
+                        f"""INSERT INTO {SCHEMA}.project_income_lines
+                            (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
+                            VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+                        (project_id, s["name"], s["total"], s["price"], 0, note_key, i)
+                    )
 
             # Пересчитываем план (sold_count=0 пока — факт придёт после sync)
             cur.execute(

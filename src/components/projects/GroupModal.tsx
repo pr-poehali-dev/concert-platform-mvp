@@ -11,6 +11,61 @@ const COLORS = [
   { key: "white",       label: "Белый",      cls: "bg-white" },
 ];
 
+// Статичные классы Tailwind (динамические не работают в JIT)
+const COLOR_CLASSES: Record<string, {
+  header: string; icon: string; text: string; btn: string;
+  selectedBorder: string; selectedBg: string;
+}> = {
+  "neon-purple": {
+    header: "via-neon-purple",
+    icon: "bg-neon-purple/15 border-neon-purple/25",
+    text: "text-neon-purple",
+    btn: "bg-neon-purple/80 hover:bg-neon-purple/100",
+    selectedBorder: "border-neon-purple/40",
+    selectedBg: "bg-neon-purple/10",
+  },
+  "neon-cyan": {
+    header: "via-neon-cyan",
+    icon: "bg-neon-cyan/15 border-neon-cyan/25",
+    text: "text-neon-cyan",
+    btn: "bg-neon-cyan/80 hover:bg-neon-cyan/100",
+    selectedBorder: "border-neon-cyan/40",
+    selectedBg: "bg-neon-cyan/10",
+  },
+  "neon-green": {
+    header: "via-neon-green",
+    icon: "bg-neon-green/15 border-neon-green/25",
+    text: "text-neon-green",
+    btn: "bg-neon-green/80 hover:bg-neon-green/100",
+    selectedBorder: "border-neon-green/40",
+    selectedBg: "bg-neon-green/10",
+  },
+  "neon-pink": {
+    header: "via-neon-pink",
+    icon: "bg-neon-pink/15 border-neon-pink/25",
+    text: "text-neon-pink",
+    btn: "bg-neon-pink/80 hover:bg-neon-pink/100",
+    selectedBorder: "border-neon-pink/40",
+    selectedBg: "bg-neon-pink/10",
+  },
+  "neon-yellow": {
+    header: "via-neon-yellow",
+    icon: "bg-neon-yellow/15 border-neon-yellow/25",
+    text: "text-neon-yellow",
+    btn: "bg-neon-yellow/80 hover:bg-neon-yellow/100",
+    selectedBorder: "border-neon-yellow/40",
+    selectedBg: "bg-neon-yellow/10",
+  },
+  "white": {
+    header: "via-white",
+    icon: "bg-white/10 border-white/20",
+    text: "text-white",
+    btn: "bg-white/20 hover:bg-white/30",
+    selectedBorder: "border-white/40",
+    selectedBg: "bg-white/10",
+  },
+};
+
 interface Props {
   userId: string;
   projects: Project[];            // все проекты пользователя (без группы и текущей)
@@ -82,18 +137,19 @@ export default function GroupModal({ userId, projects, group, groupProjects = []
   );
 
   const colorCfg = COLORS.find(c => c.key === color) || COLORS[0];
+  const cc = COLOR_CLASSES[color] || COLOR_CLASSES["neon-purple"];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative z-10 w-full max-w-lg glass-strong rounded-2xl overflow-hidden flex flex-col max-h-[90vh] animate-scale-in">
-        <div className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-${color} to-transparent`} />
+        <div className={`absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent ${cc.header} to-transparent`} />
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-5 pb-4 shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-xl bg-${color}/15 border border-${color}/25 flex items-center justify-center`}>
-              <Icon name="FolderOpen" size={20} className={`text-${color}`} />
+            <div className={`w-10 h-10 rounded-xl ${cc.icon} flex items-center justify-center`}>
+              <Icon name="FolderOpen" size={20} className={cc.text} />
             </div>
             <h2 className="font-oswald font-bold text-xl text-white">
               {isEdit ? "Редактировать группу" : "Новая группа"}
@@ -177,7 +233,7 @@ export default function GroupModal({ userId, projects, group, groupProjects = []
                       onClick={() => toggle(p.id)}
                       className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all flex items-center gap-3 ${
                         isSelected
-                          ? `border-${colorCfg.key}/40 bg-${colorCfg.key}/8 text-white`
+                          ? `${cc.selectedBorder} ${cc.selectedBg} text-white`
                           : "border-white/8 glass text-white/55 hover:text-white/80 hover:border-white/15"
                       }`}
                     >
@@ -221,7 +277,7 @@ export default function GroupModal({ userId, projects, group, groupProjects = []
           <button
             onClick={handleSave}
             disabled={saving || !title.trim()}
-            className={`flex items-center gap-2 px-6 py-2.5 bg-${color}/80 hover:bg-${color} text-white font-oswald font-semibold rounded-xl disabled:opacity-40 text-sm transition-all`}
+            className={`flex items-center gap-2 px-6 py-2.5 ${cc.btn} text-white font-oswald font-semibold rounded-xl disabled:opacity-40 text-sm transition-all`}
           >
             {saving
               ? <><Icon name="Loader2" size={15} className="animate-spin" />Сохраняю...</>
