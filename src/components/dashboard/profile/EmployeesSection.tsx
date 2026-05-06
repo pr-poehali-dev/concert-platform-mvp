@@ -1,47 +1,9 @@
 import { useState } from "react";
 import Icon from "@/components/ui/icon";
-import { Badge } from "@/components/ui/badge";
-import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, ROLE_LABELS, EMPLOYEES_URL, formatEmployeeLastSeen, type SectionId } from "./types";
-import EmployeeDocuments from "@/components/dashboard/company/EmployeeDocuments";
-
-// Разделы, которыми можно управлять через интерфейс
-const SECTION_ITEMS: { id: SectionId; label: string; icon: string; color: string }[] = [
-  { id: "tours",         label: "Мои туры",       icon: "Route",          color: "text-neon-purple" },
-  { id: "history",       label: "История",         icon: "Clock",          color: "text-neon-cyan"   },
-  { id: "documents",     label: "Документы",       icon: "FileArchive",    color: "text-neon-cyan"   },
-  { id: "signing",       label: "Подписание",      icon: "PenLine",        color: "text-neon-purple" },
-  { id: "notifications", label: "Уведомления",     icon: "Bell",           color: "text-neon-pink"   },
-  { id: "company",       label: "Компания",        icon: "Building2",      color: "text-neon-green"  },
-  { id: "crm",           label: "CRM",             icon: "Kanban",         color: "text-neon-purple" },
-  { id: "ai_help",       label: "ИИ-помощник",     icon: "Sparkles",       color: "text-neon-pink"   },
-  { id: "ai_lawyer",     label: "ИИ-юрист",        icon: "Scale",          color: "text-neon-cyan"   },
-  { id: "chat",          label: "Чат",             icon: "MessageCircle",  color: "text-neon-green"  },
-  { id: "mail",          label: "Почта",           icon: "Mail",           color: "text-neon-cyan"   },
-  { id: "projects",      label: "Проекты",         icon: "FolderOpen",     color: "text-neon-purple" },
-];
-
-function SectionToggle({
-  item, allowed, onChange,
-}: { item: typeof SECTION_ITEMS[number]; allowed: SectionId[]; onChange: (sections: SectionId[]) => void }) {
-  const checked = allowed.includes(item.id);
-  return (
-    <div
-      className={`flex items-center justify-between px-3 py-2 rounded-xl border transition-all cursor-pointer ${checked ? "bg-white/5 border-white/10" : "bg-black/20 border-white/5 opacity-60"}`}
-      onClick={() => onChange(checked ? allowed.filter(s => s !== item.id) : [...allowed, item.id])}
-    >
-      <div className="flex items-center gap-2">
-        <Icon name={item.icon as never} size={13} className={checked ? item.color : "text-white/25"} />
-        <span className="text-white/80 text-xs font-medium">{item.label}</span>
-      </div>
-      <button
-        type="button"
-        className={`w-9 h-5 rounded-full transition-all relative shrink-0 ${checked ? "bg-neon-purple" : "bg-white/15"}`}
-      >
-        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${checked ? "left-4" : "left-0.5"}`} />
-      </button>
-    </div>
-  );
-}
+import { type Employee, type AccessPermissions, DEFAULT_ACCESS_PERMISSIONS, EMPLOYEES_URL } from "./types";
+import EmployeeAddForm from "./employees/EmployeeAddForm";
+import EmployeePermissionsModal from "./employees/EmployeePermissionsModal";
+import EmployeeListItem from "./employees/EmployeeListItem";
 
 interface EditForm { name: string; email: string; roleInCompany: string }
 
@@ -50,36 +12,6 @@ interface Props {
   employees: Employee[];
   empLoading: boolean;
   onReload: () => void;
-}
-
-interface PermToggleProps {
-  label: string;
-  description: string;
-  value: boolean;
-  onChange: (v: boolean) => void;
-  icon: string;
-  color: string;
-}
-
-function PermToggle({ label, description, value, onChange, icon, color }: PermToggleProps) {
-  return (
-    <div className={`flex items-center justify-between p-3 rounded-xl border transition-all ${value ? "bg-white/5 border-white/10" : "bg-black/20 border-white/5 opacity-60"}`}>
-      <div className="flex items-center gap-2.5">
-        <Icon name={icon} size={14} className={value ? color : "text-white/25"} />
-        <div>
-          <p className="text-white/80 text-xs font-medium">{label}</p>
-          <p className="text-white/60 text-[10px]">{description}</p>
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={() => onChange(!value)}
-        className={`w-9 h-5 rounded-full transition-all relative shrink-0 ${value ? "bg-neon-purple" : "bg-white/15"}`}
-      >
-        <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all ${value ? "left-4" : "left-0.5"}`} />
-      </button>
-    </div>
-  );
 }
 
 export default function EmployeesSection({ userId, employees, empLoading, onReload }: Props) {
@@ -138,7 +70,7 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
       if (!res.ok) { setProfileError(data.error || "Ошибка"); return; }
       setEditProfileId(null);
       onReload();
-    } catch (e) {
+    } catch {
       setProfileError("Сеть недоступна");
     } finally {
       setSavingProfile(false);
@@ -201,15 +133,6 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
     onReload();
   };
 
-  const PERM_ITEMS: { key: keyof AccessPermissions; label: string; description: string; icon: string; color: string }[] = [
-    { key: "canViewExpenses", label: "Видит расходы",       description: "Вкладка «Бюджет расходов»",       icon: "TrendingDown", color: "text-neon-pink"   },
-    { key: "canViewIncome",   label: "Видит доходы",        description: "Вкладка «Доходы»",                icon: "TrendingUp",   color: "text-neon-green" },
-    { key: "canViewSummary",  label: "Видит P&L",           description: "Итоговый отчёт прибыли",          icon: "BarChart3",    color: "text-neon-cyan"  },
-    { key: "canEditExpenses", label: "Редактирует расходы", description: "Добавлять/изменять/удалять",       icon: "Pencil",       color: "text-neon-pink"  },
-    { key: "canEditIncome",   label: "Редактирует доходы",  description: "Добавлять/изменять/удалять",       icon: "Pencil",       color: "text-neon-green" },
-    { key: "canViewSalary",   label: "Видит свою зарплату", description: "Раздел «Зарплаты» в Компании",    icon: "Banknote",     color: "text-neon-cyan"  },
-  ];
-
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -225,170 +148,28 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
 
       {/* Форма добавления */}
       {showAddEmp && (
-        <div className="glass rounded-2xl p-5 border border-neon-purple/20 space-y-4">
-          <h4 className="font-oswald font-bold text-white text-base">Новый сотрудник</h4>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-white/65 mb-1 block">Имя</label>
-              <input value={empForm.name} onChange={e => setEmpForm(f => ({ ...f, name: e.target.value }))} placeholder="Иван Иванов"
-                className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-white/65 mb-1 block">Email</label>
-              <input type="email" value={empForm.email} onChange={e => setEmpForm(f => ({ ...f, email: e.target.value }))} placeholder="emp@company.ru"
-                className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-white/65 mb-1 block">Пароль</label>
-              <input type="password" value={empForm.password} onChange={e => setEmpForm(f => ({ ...f, password: e.target.value }))} placeholder="Минимум 6 символов"
-                className="w-full glass rounded-xl px-3 py-2.5 text-white placeholder:text-white/25 outline-none border border-white/10 focus:border-neon-purple/50 text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-white/65 mb-1 block">Роль</label>
-              <select value={empForm.roleInCompany} onChange={e => setEmpForm(f => ({ ...f, roleInCompany: e.target.value }))}
-                className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 text-sm appearance-none bg-transparent">
-                {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-gray-900">{l}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Доступные разделы */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-white/65 uppercase tracking-wider flex items-center gap-1.5">
-                <Icon name="Layout" size={12} className="text-neon-cyan" />
-                Доступные разделы
-              </p>
-              <div className="flex gap-1.5">
-                <button type="button" onClick={() => setPerms(p => ({ ...p, allowedSections: SECTION_ITEMS.map(s => s.id) }))}
-                  className="text-[10px] text-neon-cyan hover:underline">все</button>
-                <span className="text-white/30 text-[10px]">/</span>
-                <button type="button" onClick={() => setPerms(p => ({ ...p, allowedSections: [] }))}
-                  className="text-[10px] text-neon-pink hover:underline">ни один</button>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {SECTION_ITEMS.map(item => (
-                <SectionToggle
-                  key={item.id}
-                  item={item}
-                  allowed={perms.allowedSections}
-                  onChange={sections => setPerms(p => ({ ...p, allowedSections: sections }))}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Настройка доступа к финансам */}
-          <div>
-            <p className="text-xs text-white/65 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-              <Icon name="ShieldCheck" size={12} className="text-neon-purple" />
-              Доступ к финансовой информации
-            </p>
-            <div className="space-y-1.5">
-              {PERM_ITEMS.map(item => (
-                <PermToggle
-                  key={item.key}
-                  label={item.label}
-                  description={item.description}
-                  icon={item.icon}
-                  color={item.color}
-                  value={perms[item.key as keyof Omit<AccessPermissions, 'allowedSections'>] as boolean}
-                  onChange={v => setPerms(p => ({ ...p, [item.key]: v }))}
-                />
-              ))}
-            </div>
-          </div>
-
-          {empError && <p className="text-neon-pink text-xs flex items-center gap-1"><Icon name="AlertCircle" size={12} />{empError}</p>}
-          <div className="flex gap-2">
-            <button onClick={() => { setShowAddEmp(false); setEmpError(""); setPerms({ ...DEFAULT_ACCESS_PERMISSIONS }); }}
-              className="flex-1 py-2 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white">Отмена</button>
-            <button onClick={addEmployee} disabled={empSaving}
-              className="flex-1 flex items-center justify-center gap-2 py-2 bg-neon-purple text-white rounded-xl text-sm hover:opacity-90 disabled:opacity-50">
-              {empSaving ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="UserPlus" size={14} />}Добавить
-            </button>
-          </div>
-        </div>
+        <EmployeeAddForm
+          empForm={empForm}
+          perms={perms}
+          empError={empError}
+          empSaving={empSaving}
+          onFormChange={patch => setEmpForm(f => ({ ...f, ...patch }))}
+          onPermsChange={setPerms}
+          onAdd={addEmployee}
+          onCancel={() => { setShowAddEmp(false); setEmpError(""); setPerms({ ...DEFAULT_ACCESS_PERMISSIONS }); }}
+        />
       )}
 
       {/* Модалка редактирования прав */}
       {editPermId && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditPermId(null)} />
-          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-purple/20 animate-scale-in">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-oswald font-bold text-white flex items-center gap-2">
-                <Icon name="ShieldCheck" size={16} className="text-neon-purple" />
-                Права доступа
-              </h4>
-              <button onClick={() => setEditPermId(null)} className="text-white/55 hover:text-white transition-colors">
-                <Icon name="X" size={16} />
-              </button>
-            </div>
-            <p className="text-white/65 text-xs mb-4">
-              Сотрудник: <span className="text-white font-semibold">{employees.find(e => e.id === editPermId)?.name}</span>
-            </p>
-            <div className="space-y-4 max-h-[60vh] overflow-y-auto scrollbar-thin pr-1 mb-5">
-              {/* Разделы */}
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[11px] text-white/55 uppercase tracking-wider flex items-center gap-1.5">
-                    <Icon name="Layout" size={11} className="text-neon-cyan" />
-                    Доступные разделы
-                  </p>
-                  <div className="flex gap-1.5">
-                    <button type="button" onClick={() => setEditPerms(p => ({ ...p, allowedSections: SECTION_ITEMS.map(s => s.id) }))}
-                      className="text-[10px] text-neon-cyan hover:underline">все</button>
-                    <span className="text-white/30 text-[10px]">/</span>
-                    <button type="button" onClick={() => setEditPerms(p => ({ ...p, allowedSections: [] }))}
-                      className="text-[10px] text-neon-pink hover:underline">ни один</button>
-                  </div>
-                </div>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {SECTION_ITEMS.map(item => (
-                    <SectionToggle
-                      key={item.id}
-                      item={item}
-                      allowed={editPerms.allowedSections}
-                      onChange={sections => setEditPerms(p => ({ ...p, allowedSections: sections }))}
-                    />
-                  ))}
-                </div>
-              </div>
-              {/* Финансы */}
-              <div>
-                <p className="text-[11px] text-white/55 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <Icon name="ShieldCheck" size={11} className="text-neon-purple" />
-                  Финансовая информация
-                </p>
-                <div className="space-y-1.5">
-                  {PERM_ITEMS.map(item => (
-                    <PermToggle
-                      key={item.key}
-                      label={item.label}
-                      description={item.description}
-                      icon={item.icon}
-                      color={item.color}
-                      value={editPerms[item.key as keyof Omit<AccessPermissions, 'allowedSections'>] as boolean}
-                      onChange={v => setEditPerms(p => ({ ...p, [item.key]: v }))}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={() => setEditPermId(null)}
-                className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
-                Отмена
-              </button>
-              <button onClick={savePermissions} disabled={savingPerms}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-purple text-white rounded-xl text-sm font-oswald font-semibold hover:opacity-90 disabled:opacity-50">
-                {savingPerms ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Check" size={14} />}Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
+        <EmployeePermissionsModal
+          employeeName={employees.find(e => e.id === editPermId)?.name}
+          editPerms={editPerms}
+          savingPerms={savingPerms}
+          onClose={() => setEditPermId(null)}
+          onEditPerms={setEditPerms}
+          onSave={savePermissions}
+        />
       )}
 
       {/* Список сотрудников */}
@@ -402,169 +183,30 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
         </div>
       ) : (
         <div className="space-y-2">
-          {employees.map(emp => {
-            const p = emp.accessPermissions || DEFAULT_ACCESS_PERMISSIONS;
-            const deniedFinance = (["canViewExpenses","canViewIncome","canViewSummary","canEditExpenses","canEditIncome"] as const).filter(k => !p[k]).length;
-            const deniedSections = SECTION_ITEMS.length - (p.allowedSections?.length ?? SECTION_ITEMS.length);
-            const deniedCount = deniedFinance + (deniedSections > 0 ? 1 : 0);
-            return (
-              <div key={emp.id} className="space-y-0">
-              <div className={`glass rounded-2xl p-4 flex items-center gap-4 ${!emp.isActive ? "opacity-50" : ""}`}>
-                <div className="relative shrink-0">
-                  <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${emp.avatarColor} flex items-center justify-center font-oswald font-bold text-white text-sm`}>
-                    {emp.avatar}
-                  </div>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-white font-bold text-sm">{emp.name}</span>
-                    {emp.displayId && (
-                      <span className="text-white/30 text-[10px] font-mono">{emp.displayId}</span>
-                    )}
-                    <Badge className="text-xs bg-white/5 text-white/65 border-white/10">{ROLE_LABELS[emp.roleInCompany] || emp.roleInCompany}</Badge>
-                    {!emp.isActive && <Badge className="text-xs bg-neon-pink/10 text-neon-pink border-neon-pink/20">Заблокирован</Badge>}
-                    {deniedCount > 0 && (
-                      <Badge className="text-xs bg-neon-pink/10 text-neon-pink border-neon-pink/20">
-                        <Icon name="EyeOff" size={10} className="mr-1" />{deniedCount} ограничений
-                      </Badge>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3 mt-0.5 flex-wrap">
-                    <p className="text-white/65 text-xs">{emp.email}</p>
-                    {emp.salaryAmount != null && (
-                      <span className="flex items-center gap-1 text-xs text-neon-green/80">
-                        <Icon name="Banknote" size={11} />
-                        {emp.salaryAmount.toLocaleString("ru")} ₽/мес
-                      </span>
-                    )}
-                    {(() => {
-                      const ls = formatEmployeeLastSeen(emp.lastSeen);
-                      return (
-                        <span className="flex items-center gap-1.5 text-xs">
-                          <span className={`w-1.5 h-1.5 rounded-full ${ls.dot} ${ls.isOnline ? "animate-pulse" : ""}`} />
-                          <span className={ls.color}>{ls.text}</span>
-                        </span>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 shrink-0">
-                  <button onClick={() => openEditProfile(emp)} title="Редактировать"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-cyan hover:bg-neon-cyan/10 transition-colors">
-                    <Icon name="Pencil" size={15} />
-                  </button>
-                  <button onClick={() => openEditPerms(emp)} title="Настроить доступ"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-purple hover:bg-neon-purple/10 transition-colors">
-                    <Icon name="ShieldCheck" size={15} />
-                  </button>
-                  <button onClick={() => setDocsEmpId(emp.id)} title="Документы"
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${docsEmpId === emp.id ? "text-neon-cyan bg-neon-cyan/10" : "text-white/55 hover:text-neon-cyan hover:bg-neon-cyan/10"}`}>
-                    <Icon name="FolderOpen" size={15} />
-                  </button>
-                  <button onClick={() => toggleEmployee(emp)}
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${emp.isActive ? "text-white/55 hover:text-neon-pink hover:bg-neon-pink/10" : "text-neon-green hover:bg-neon-green/10"}`}
-                    title={emp.isActive ? "Заблокировать" : "Восстановить"}>
-                    <Icon name={emp.isActive ? "UserX" : "UserCheck"} size={15} />
-                  </button>
-                  <button onClick={() => setDeleteId(emp.id)} title="Удалить из БД"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white/55 hover:text-neon-pink hover:bg-neon-pink/10 transition-colors">
-                    <Icon name="Trash2" size={15} />
-                  </button>
-                </div>
-              </div>
-              {/* Блок документов — раскрывается под карточкой */}
-              {docsEmpId === emp.id && (
-                <div className="mt-2 glass rounded-2xl border border-neon-cyan/15 p-4 animate-fade-in">
-                  <EmployeeDocuments
-                    employeeId={emp.id}
-                    employeeName={emp.name}
-                    employeeEmail={emp.email}
-                    companyId={userId}
-                  />
-                </div>
-              )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Модалка редактирования профиля сотрудника */}
-      {editProfileId && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setEditProfileId(null)} />
-          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-cyan/20 animate-scale-in">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="font-oswald font-bold text-white flex items-center gap-2">
-                <Icon name="Pencil" size={16} className="text-neon-cyan" />
-                Редактировать сотрудника
-              </h4>
-              <button onClick={() => setEditProfileId(null)} className="text-white/55 hover:text-white transition-colors">
-                <Icon name="X" size={16} />
-              </button>
-            </div>
-            <div className="space-y-3 mb-4">
-              <div>
-                <label className="text-xs text-white/65 mb-1 block">Имя</label>
-                <input value={editProfile.name} onChange={e => setEditProfile(f => ({ ...f, name: e.target.value }))}
-                  className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-white/65 mb-1 block">Email</label>
-                <input type="email" value={editProfile.email} onChange={e => setEditProfile(f => ({ ...f, email: e.target.value }))}
-                  className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 focus:border-neon-cyan/50 text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-white/65 mb-1 block">Роль</label>
-                <select value={editProfile.roleInCompany} onChange={e => setEditProfile(f => ({ ...f, roleInCompany: e.target.value }))}
-                  className="w-full glass rounded-xl px-3 py-2.5 text-white outline-none border border-white/10 text-sm appearance-none bg-transparent">
-                  {Object.entries(ROLE_LABELS).map(([v, l]) => <option key={v} value={v} className="bg-gray-900">{l}</option>)}
-                </select>
-              </div>
-            </div>
-            {profileError && <p className="text-neon-pink text-xs flex items-center gap-1 mb-3"><Icon name="AlertCircle" size={12} />{profileError}</p>}
-            <div className="flex gap-2">
-              <button onClick={() => setEditProfileId(null)}
-                className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors">
-                Отмена
-              </button>
-              <button onClick={saveProfile} disabled={savingProfile}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-cyan text-black rounded-xl text-sm font-oswald font-semibold hover:opacity-90 disabled:opacity-50">
-                {savingProfile ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Check" size={14} />}Сохранить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Модалка подтверждения удаления */}
-      {deleteId && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !deleting && setDeleteId(null)} />
-          <div className="relative z-10 w-full max-w-sm glass-strong rounded-2xl p-6 border border-neon-pink/30 animate-scale-in">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-neon-pink/15 flex items-center justify-center shrink-0">
-                <Icon name="AlertTriangle" size={18} className="text-neon-pink" />
-              </div>
-              <h4 className="font-oswald font-bold text-white">Удалить сотрудника?</h4>
-            </div>
-            <p className="text-white/60 text-sm mb-2">
-              <span className="text-white">{employees.find(e => e.id === deleteId)?.name}</span> будет полностью удалён из базы данных.
-            </p>
-            <p className="text-white/65 text-xs mb-5">
-              Это действие нельзя отменить. Будут также удалены все его сообщения в чате компании и личной переписке.
-            </p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeleteId(null)} disabled={deleting}
-                className="flex-1 py-2.5 glass text-white/70 rounded-xl border border-white/10 text-sm hover:text-white transition-colors disabled:opacity-50">
-                Отмена
-              </button>
-              <button onClick={confirmDelete} disabled={deleting}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-neon-pink text-white rounded-xl text-sm font-oswald font-semibold hover:opacity-90 disabled:opacity-50">
-                {deleting ? <Icon name="Loader2" size={14} className="animate-spin" /> : <Icon name="Trash2" size={14} />}Удалить
-              </button>
-            </div>
-          </div>
+          {employees.map(emp => (
+            <EmployeeListItem
+              key={emp.id}
+              emp={emp}
+              userId={userId}
+              docsEmpId={docsEmpId}
+              editProfileId={editProfileId}
+              editProfile={editProfile}
+              profileError={profileError}
+              savingProfile={savingProfile}
+              deleteId={deleteId}
+              deleting={deleting}
+              onToggleEmployee={toggleEmployee}
+              onOpenEditPerms={openEditPerms}
+              onOpenEditProfile={openEditProfile}
+              onDocsToggle={id => setDocsEmpId(docsEmpId === id ? null : id)}
+              onEditProfileChange={patch => setEditProfile(f => ({ ...f, ...patch }))}
+              onSaveProfile={saveProfile}
+              onCancelEditProfile={() => setEditProfileId(null)}
+              onSetDeleteId={setDeleteId}
+              onCancelDelete={() => setDeleteId(null)}
+              onConfirmDelete={confirmDelete}
+            />
+          ))}
         </div>
       )}
     </div>
