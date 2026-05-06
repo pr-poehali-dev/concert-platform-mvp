@@ -275,12 +275,15 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
             items = []
 
         for item in items:
-            item_event = item.get("event") or ""
-            if isinstance(item_event, dict):
-                item_event = item_event.get("id") or item_event.get("_id") or ""
-            # Фильтруем на нашей стороне — TC v2 не поддерживает фильтр по event в query
-            if str(item_event).strip() == str(event_id).strip():
+            if event_id == "__ALL__":
                 all_orders.append(item)
+            else:
+                item_event = item.get("event") or ""
+                if isinstance(item_event, dict):
+                    item_event = item_event.get("id") or item_event.get("_id") or ""
+                # Фильтруем на нашей стороне — TC v2 не поддерживает фильтр по event в query
+                if str(item_event).strip() == str(event_id).strip():
+                    all_orders.append(item)
 
         # Пагинация
         pagination = data.get("pagination") or data.get("meta") or {}
@@ -1088,6 +1091,8 @@ def handler(event: dict, context) -> dict:
         })
 
     # ── POST sync_all — синхронизация всех интеграций пользователя ──────────
+    # Оптимизация: загружаем все заказы аккаунта ОДИН РАЗ (один api_key),
+    # группируем по event_id и раздаём каждой интеграции — экономим N-1 полных обходов TC.
     if method == "POST" and action == "sync_all":
         b       = json.loads(event.get("body") or "{}")
         user_id = b.get("userId", "")
@@ -1108,7 +1113,14 @@ def handler(event: dict, context) -> dict:
         finally:
             conn.close()
 
+        if not integrations:
+            return ok({"success": True, "total": 0, "synced": 0, "failed": 0, "results": []})
+
         results = []
+
+        # Группируем интеграции по api_key — у одного пользователя обычно один ключ
+        from collections import defaultdict
+        by_api_key: dict = defaultdict(list)
         for int_row in integrations:
             int_id, api_key, event_id_val, project_id, provider = (
                 str(int_row[0]), int_row[1], int_row[2], int_row[3], int_row[4]
@@ -1116,36 +1128,51 @@ def handler(event: dict, context) -> dict:
             if provider != "ticketscloud":
                 results.append({"integrationId": int_id, "ok": False, "error": "Неизвестный провайдер"})
                 continue
+            by_api_key[api_key].append((int_id, event_id_val, project_id))
 
-            conn2 = get_conn()
+        for api_key, int_list in by_api_key.items():
+            # Загружаем ВСЕ заказы по этому ключу один раз
             try:
-                cur2 = conn2.cursor()
-                try:
-                    orders = fetch_ticketscloud_orders(api_key, event_id_val)
-                    all_sales = []
-                    for order in orders:
-                        all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
-                    upsert_sales(cur2, all_sales)
-
-                    event_sets = []
-                    if project_id:
-                        event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
-                        sync_income_lines(cur2, str(project_id), int_id, event_sets)
-
-                    cur2.execute(
-                        f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
-                        (int_id,)
-                    )
-                    conn2.commit()
-                    results.append({
-                        "integrationId": int_id,
-                        "ok": True,
-                        "ordersProcessed": len(orders),
-                    })
-                except RuntimeError as e:
+                all_orders_raw = fetch_ticketscloud_orders(api_key, "__ALL__")
+            except RuntimeError as e:
+                for int_id, _, _ in int_list:
                     results.append({"integrationId": int_id, "ok": False, "error": str(e)})
-            finally:
-                conn2.close()
+                continue
+
+            # Группируем заказы по event_id
+            orders_by_event: dict = defaultdict(list)
+            for order in all_orders_raw:
+                ev = order.get("event") or ""
+                if isinstance(ev, dict):
+                    ev = ev.get("id") or ev.get("_id") or ""
+                orders_by_event[str(ev).strip()].append(order)
+
+            # Обрабатываем каждую интеграцию
+            for int_id, event_id_val, project_id in int_list:
+                orders = orders_by_event.get(str(event_id_val).strip(), [])
+                conn2 = get_conn()
+                try:
+                    cur2 = conn2.cursor()
+                    try:
+                        all_sales = []
+                        for order in orders:
+                            all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
+                        upsert_sales(cur2, all_sales)
+
+                        if project_id:
+                            event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
+                            sync_income_lines(cur2, str(project_id), int_id, event_sets)
+
+                        cur2.execute(
+                            f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
+                            (int_id,)
+                        )
+                        conn2.commit()
+                        results.append({"integrationId": int_id, "ok": True, "ordersProcessed": len(orders)})
+                    except RuntimeError as e:
+                        results.append({"integrationId": int_id, "ok": False, "error": str(e)})
+                finally:
+                    conn2.close()
 
         ok_count  = sum(1 for r in results if r["ok"])
         err_count = len(results) - ok_count
