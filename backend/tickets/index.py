@@ -260,7 +260,7 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
     MAX_PAGES = 20      # не более 20 страниц — ~1000 заказов, укладываемся в 25 сек
 
     while True:
-        params_q = {"page_size": "50", "event": event_id}
+        params_q = {"page_size": "50"}
         if page > 1:
             params_q["page"] = str(page)
         url = f"{base}/v2/resources/orders?" + urllib.parse.urlencode(params_q)
@@ -278,8 +278,8 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
             item_event = item.get("event") or ""
             if isinstance(item_event, dict):
                 item_event = item_event.get("id") or item_event.get("_id") or ""
-            # Принимаем заказ если event совпадает, ИЛИ если API не вернул event-поле (фильтр на стороне TC)
-            if not item_event or str(item_event).strip() == str(event_id).strip():
+            # Фильтруем на нашей стороне — TC v2 не поддерживает фильтр по event в query
+            if str(item_event).strip() == str(event_id).strip():
                 all_orders.append(item)
 
         # Пагинация
