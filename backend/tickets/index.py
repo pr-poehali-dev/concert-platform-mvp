@@ -19,6 +19,7 @@ import uuid
 import hmac
 import hashlib
 import urllib.request
+import urllib.parse
 import psycopg2
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
@@ -115,6 +116,8 @@ def verify_ticketscloud_signature(payload: bytes, signature: str, secret: str) -
 
 def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
     """Выполняет GET-запрос к TicketsCloud API, возвращает распарсенный JSON."""
+    import sys
+    print(f"[TC] GET {url}", file=sys.stderr)
     req = urllib.request.Request(
         url,
         headers={
@@ -125,15 +128,19 @@ def _tc_request(url: str, api_key: str, timeout: int = 20) -> dict:
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return json.loads(resp.read().decode())
+            raw = resp.read().decode()
+            print(f"[TC] status={resp.status} body_preview={raw[:300]}", file=sys.stderr)
+            return json.loads(raw)
     except urllib.error.HTTPError as e:
         body = ""
         try:
             body = e.read().decode()[:400]
         except Exception:
             pass
+        print(f"[TC] HTTPError {e.code}: {body[:300]}", file=sys.stderr)
         raise RuntimeError(f"TicketsCloud HTTP {e.code}: {e.reason}. Response: {body[:200]}")
     except Exception as e:
+        print(f"[TC] Exception: {e}", file=sys.stderr)
         raise RuntimeError(f"TicketsCloud connection error: {e}")
 
 
@@ -247,7 +254,6 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
     Если API его не поддерживает — фильтруем на нашей стороне.
     Жёсткий лимит: 20 страниц × 50 = 1000 заказов за один sync.
     """
-    import urllib.parse
     base = "https://ticketscloud.com"
     all_orders = []
     page = 1
