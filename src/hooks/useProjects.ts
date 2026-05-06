@@ -36,6 +36,23 @@ export interface Project {
   hasOverdueTasks?: boolean;
   isPartner?: boolean;
   ownerName?: string | null;
+  groupId?: string | null;
+}
+
+export interface ProjectGroup {
+  id: string;
+  title: string;
+  description: string;
+  color: string;
+  createdAt: string;
+  projectCount: number;
+  totalIncomePlan: number;
+  totalIncomeFact: number;
+  totalExpensesPlan: number;
+  totalExpensesFact: number;
+  dateStart: string | null;
+  dateEnd: string | null;
+  finance: Finance;
 }
 
 export const STATUS_CONFIG: Record<string, { label: string; color: string }> = {

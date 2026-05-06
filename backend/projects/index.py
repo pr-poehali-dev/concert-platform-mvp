@@ -4,7 +4,7 @@ import os
 import uuid
 import urllib.request
 from helpers import (
-    get_conn, cors, serial, recalc_totals, row_to_project,
+    get_conn, cors, serial, recalc_totals, row_to_project, calc_finance,
     SCHEMA, DEFAULT_EXPENSE_CATEGORIES
 )
 from booking_emails import confirm_email, reject_email
@@ -56,7 +56,8 @@ def handler(event: dict, context) -> dict:
             cur.execute(
                 f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
                            city,venue_name,description,tax_system,total_expenses_plan,
-                           total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
+                           total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at,
+                           group_id
                     FROM {SCHEMA}.projects WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
             own_rows = cur.fetchall()
             own_ids = {str(r[0]) for r in own_rows}
@@ -94,6 +95,7 @@ def handler(event: dict, context) -> dict:
             p["hasOverdueTasks"] = p["id"] in overdue_ids
             p["isPartner"] = False
             p["ownerName"] = None
+            p["groupId"] = str(r[18]) if len(r) > 18 and r[18] else None
             projects.append(p)
         for r in partner_rows:
             if str(r[0]) in own_ids:
@@ -1509,5 +1511,165 @@ def handler(event: dict, context) -> dict:
             cur.execute(f"UPDATE {SCHEMA}.contracts SET status='paid', updated_at=NOW() WHERE id=%s", (row[0],))
         conn.commit(); conn.close()
         return ok({"success": True})
+
+    # ── GET groups_list ───────────────────────────────────────────────────
+    if method == "GET" and action == "groups_list":
+        uid = params.get("user_id", "")
+        if not uid: return err("user_id required")
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            cur.execute(
+                f"""SELECT id, title, description, color, created_at
+                    FROM {SCHEMA}.project_groups
+                    WHERE user_id=%s ORDER BY created_at DESC""", (uid,))
+            groups_raw = cur.fetchall()
+            cur.execute(
+                f"""SELECT p.group_id,
+                           COUNT(*) as cnt,
+                           SUM(p.total_income_plan) as ip,
+                           SUM(p.total_income_fact) as iF,
+                           SUM(p.total_expenses_plan) as ep,
+                           SUM(p.total_expenses_fact) as ef,
+                           MIN(p.date_start) as date_start,
+                           MAX(p.date_end) as date_end
+                    FROM {SCHEMA}.projects p
+                    WHERE p.user_id=%s AND p.group_id IS NOT NULL
+                    GROUP BY p.group_id""", (uid,))
+            agg = {str(r[0]): r[1:] for r in cur.fetchall()}
+        finally:
+            conn.close()
+        groups = []
+        for r in groups_raw:
+            gid = str(r[0])
+            a = agg.get(gid)
+            cnt = int(a[0]) if a else 0
+            ip  = float(a[1] or 0) if a else 0.0
+            iF  = float(a[2] or 0) if a else 0.0
+            ep  = float(a[3] or 0) if a else 0.0
+            ef  = float(a[4] or 0) if a else 0.0
+            ds  = str(a[5]) if a and a[5] else None
+            de  = str(a[6]) if a and a[6] else None
+            groups.append({
+                "id": gid, "title": r[1], "description": r[2],
+                "color": r[3], "createdAt": str(r[4]),
+                "projectCount": cnt,
+                "totalIncomePlan": ip, "totalIncomeFact": iF,
+                "totalExpensesPlan": ep, "totalExpensesFact": ef,
+                "dateStart": ds, "dateEnd": de,
+                "finance": calc_finance(ip, iF, ep, ef, "none"),
+            })
+        return ok({"groups": groups})
+
+    # ── POST group_create ─────────────────────────────────────────────────
+    if method == "POST" and action == "group_create":
+        b = json.loads(event.get("body") or "{}")
+        uid   = b.get("userId", "")
+        title = (b.get("title") or "").strip()
+        if not uid or not title: return err("userId и title обязательны")
+        color = b.get("color", "neon-purple")
+        desc  = b.get("description", "")
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            cur.execute(
+                f"""INSERT INTO {SCHEMA}.project_groups (user_id, title, description, color)
+                    VALUES (%s,%s,%s,%s) RETURNING id""",
+                (uid, title, desc, color))
+            gid = str(cur.fetchone()[0])
+            for pid in (b.get("projectIds") or []):
+                cur.execute(
+                    f"UPDATE {SCHEMA}.projects SET group_id=%s WHERE id=%s AND user_id=%s",
+                    (gid, pid, uid))
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"id": gid}, 201)
+
+    # ── POST group_update ─────────────────────────────────────────────────
+    if method == "POST" and action == "group_update":
+        b   = json.loads(event.get("body") or "{}")
+        gid = b.get("id", "")
+        uid = b.get("userId", "")
+        if not gid or not uid: return err("id и userId обязательны")
+        fmap = {"title": "title", "description": "description", "color": "color"}
+        fields = {col: b[fk] for fk, col in fmap.items() if fk in b and b[fk] is not None}
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            if fields:
+                set_clause = ", ".join(f"{c}=%s" for c in fields) + ", updated_at=NOW()"
+                cur.execute(
+                    f"UPDATE {SCHEMA}.project_groups SET {set_clause} WHERE id=%s AND user_id=%s",
+                    list(fields.values()) + [gid, uid])
+            if "projectIds" in b:
+                cur.execute(
+                    f"UPDATE {SCHEMA}.projects SET group_id=NULL WHERE group_id=%s AND user_id=%s",
+                    (gid, uid))
+                for pid in (b["projectIds"] or []):
+                    cur.execute(
+                        f"UPDATE {SCHEMA}.projects SET group_id=%s WHERE id=%s AND user_id=%s",
+                        (gid, pid, uid))
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True})
+
+    # ── POST group_delete ─────────────────────────────────────────────────
+    if method == "POST" and action == "group_delete":
+        b   = json.loads(event.get("body") or "{}")
+        gid = b.get("id", "")
+        uid = b.get("userId", "")
+        if not gid or not uid: return err("id и userId обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            cur.execute(
+                f"UPDATE {SCHEMA}.projects SET group_id=NULL WHERE group_id=%s AND user_id=%s",
+                (gid, uid))
+            cur.execute(
+                f"UPDATE {SCHEMA}.project_groups SET title='' WHERE id=%s AND user_id=%s",
+                (gid, uid))
+            conn.commit()
+        finally:
+            conn.close()
+        return ok({"success": True})
+
+    # ── GET group_projects ────────────────────────────────────────────────
+    if method == "GET" and action == "group_projects":
+        gid = params.get("group_id", "")
+        uid = params.get("user_id", "")
+        if not gid or not uid: return err("group_id и user_id обязательны")
+        conn = get_conn(); cur = conn.cursor()
+        try:
+            cur.execute(
+                f"""SELECT id,user_id,title,artist,project_type,status,date_start,date_end,
+                           city,venue_name,description,tax_system,total_expenses_plan,
+                           total_expenses_fact,total_income_plan,total_income_fact,created_at,updated_at
+                    FROM {SCHEMA}.projects
+                    WHERE group_id=%s AND user_id=%s
+                    ORDER BY date_start, created_at""", (gid, uid))
+            rows = cur.fetchall()
+            cur.execute(
+                f"""SELECT DISTINCT project_id FROM {SCHEMA}.project_tasks
+                    WHERE status NOT IN ('done') AND due_date IS NOT NULL AND due_date < CURRENT_DATE
+                      AND project_id IN (SELECT id FROM {SCHEMA}.projects WHERE group_id=%s)""", (gid,))
+            overdue_ids = {str(r[0]) for r in cur.fetchall()}
+            cur.execute(
+                f"SELECT id, title, description, color FROM {SCHEMA}.project_groups WHERE id=%s", (gid,))
+            g = cur.fetchone()
+        finally:
+            conn.close()
+        projects = []
+        for r in rows:
+            p = row_to_project(r)
+            p["hasOverdueTasks"] = p["id"] in overdue_ids
+            p["isPartner"] = False
+            p["ownerName"] = None
+            projects.append(p)
+        group_info = {
+            "id": gid,
+            "title": g[1] if g else "",
+            "description": g[2] if g else "",
+            "color": g[3] if g else "neon-purple",
+        } if g else {}
+        return ok({"projects": projects, "group": group_info})
+
 
     return err("Not found", 404)
