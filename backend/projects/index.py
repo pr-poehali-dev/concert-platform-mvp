@@ -1017,17 +1017,43 @@ def handler(event: dict, context) -> dict:
         if not all([project_id, user_id, member_id]): return err("projectId, userId, memberId required")
 
         conn = get_conn(); cur = conn.cursor()
-        cur.execute(f"SELECT user_id FROM {SCHEMA}.projects WHERE id=%s", (project_id,))
-        proj_row = cur.fetchone()
-        if not proj_row: conn.close(); return err("Проект не найден", 404)
-        owner_id = str(proj_row[0])
-        if owner_id != user_id: conn.close(); return err("Только владелец может удалять участников", 403)
+        try:
+            # Проверяем что запрашивающий — владелец проекта
+            cur.execute(f"SELECT user_id, group_id FROM {SCHEMA}.projects WHERE id=%s", (project_id,))
+            proj_row = cur.fetchone()
+            if not proj_row: return err("Проект не найден", 404)
+            owner_id = str(proj_row[0])
+            group_id = str(proj_row[1]) if proj_row[1] else None
+            if owner_id != user_id: return err("Только владелец может удалять участников", 403)
 
-        cur.execute(
-            f"UPDATE {SCHEMA}.project_members SET role='removed' WHERE id=%s AND project_id=%s",
-            (member_id, project_id)
-        )
-        conn.commit(); conn.close()
+            # Получаем partner_user_id перед удалением
+            cur.execute(f"SELECT user_id FROM {SCHEMA}.project_members WHERE id=%s AND project_id=%s", (member_id, project_id))
+            pm_row = cur.fetchone()
+            if not pm_row: return err("Участник не найден", 404)
+            partner_user_id = str(pm_row[0])
+
+            # Реальное удаление из project_members
+            cur.execute(f"DELETE FROM {SCHEMA}.project_members WHERE id=%s AND project_id=%s", (member_id, project_id))
+
+            # Если проект входит в группу — проверяем остались ли у партнёра ещё проекты этой группы
+            if group_id:
+                cur.execute(
+                    f"""SELECT COUNT(*) FROM {SCHEMA}.project_members pm
+                        JOIN {SCHEMA}.projects p ON p.id = pm.project_id
+                        WHERE pm.user_id=%s AND p.group_id=%s AND pm.role != 'removed'""",
+                    (partner_user_id, group_id)
+                )
+                remaining = cur.fetchone()[0]
+                # Если больше нет доступных проектов группы — удаляем из group_members
+                if remaining == 0:
+                    cur.execute(
+                        f"DELETE FROM {SCHEMA}.group_members WHERE group_id=%s AND user_id=%s",
+                        (group_id, partner_user_id)
+                    )
+
+            conn.commit()
+        finally:
+            conn.close()
         return ok({"removed": True})
 
     # ── Подзадачи ──────────────────────────────────────────────────────────

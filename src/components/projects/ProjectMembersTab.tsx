@@ -80,7 +80,7 @@ export default function ProjectMembersTab({ projectId, isOwner }: { projectId: s
     try {
       const r = await fetch(`${PROJECTS_URL}?action=members&project_id=${projectId}&user_id=${user?.id || ""}`);
       const d = await r.json();
-      setMembers((d.members || []).filter((m: Member) => m.role !== "removed"));
+      setMembers((d.members || []).filter((m: Member) => m.role !== "removed" && m.role !== "owner"));
       setOwner(d.owner || null);
     } catch { /* silent */ }
     finally { setLoading(false); }
@@ -120,13 +120,15 @@ export default function ProjectMembersTab({ projectId, isOwner }: { projectId: s
     finally { setInviting(false); }
   };
 
-  const handleRemove = async (memberId: string) => {
-    setRemoving(memberId);
+  const handleRemove = async (member: Member) => {
+    const name = member.name || member.email;
+    if (!confirm(`Удалить доступ для ${name}?\n\nПартнёр потеряет доступ к этому проекту. Если он был добавлен через группу и других проектов группы нет — группа тоже исчезнет из его списка.`)) return;
+    setRemoving(member.id);
     try {
       await fetch(`${PROJECTS_URL}?action=remove_member`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId, userId: user?.id, memberId }),
+        body: JSON.stringify({ projectId, userId: user?.id, memberId: member.id }),
       });
       await load();
     } finally { setRemoving(null); }
@@ -230,7 +232,7 @@ export default function ProjectMembersTab({ projectId, isOwner }: { projectId: s
                 {/* Кнопка удалить (только для владельца проекта, только для не-владельцев) */}
                 {isOwner && !isOwnerRow && !isMe && memberId && (
                   <button
-                    onClick={() => handleRemove(memberId)}
+                    onClick={() => handleRemove(m as Member)}
                     disabled={removing === memberId}
                     className="w-8 h-8 flex items-center justify-center text-white/20 hover:text-neon-pink hover:bg-neon-pink/10 rounded-lg transition-all disabled:opacity-40"
                     title="Удалить участника"
