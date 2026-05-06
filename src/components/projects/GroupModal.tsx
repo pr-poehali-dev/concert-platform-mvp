@@ -86,9 +86,11 @@ export default function GroupModal({ userId, projects, group, groupProjects = []
   const [search, setSearch] = useState("");
 
   // При открытии редактирования подгружаем уже выбранные
+  // Используем join для стабильного сравнения содержимого массива
+  const groupProjectsKey = groupProjects.join(",");
   useEffect(() => {
     setSelected(new Set(groupProjects));
-  }, [groupProjects.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [groupProjectsKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggle = (id: string) => {
     setSelected(prev => {

@@ -46,7 +46,15 @@ export function Deals({ deals, companies, saveDeal, deleteDeal }: { deals: Deal[
           {STAGES.map(st => (
             <div key={st.id} style={{ minWidth:240, flexShrink:0, background:"#1c2333", borderRadius:10, border:"1px solid #21262d" }}
               onDragOver={e=>e.preventDefault()}
-              onDrop={()=>{ if(drag){ const d=deals.find(x=>x.id===drag); if(d) saveDeal({...d,stage:st.id}); } setDrag(null); }}>
+              onDrop={async ()=>{
+                if(drag){
+                  const d=deals.find(x=>x.id===drag);
+                  if(d && d.stage !== st.id){
+                    try { await saveDeal({...d, stage: st.id}); } catch { /* silent */ }
+                  }
+                }
+                setDrag(null);
+              }}>
               <div style={{ padding:"12px 14px", borderBottom:"1px solid #21262d", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}><div style={{ width:8,height:8,borderRadius:"50%",background:st.color }}/><span style={{ fontSize:13,fontWeight:600 }}>{st.label}</span></div>
                 <span style={{ fontSize:11,color:"#8b949e",background:"#21262d",padding:"2px 8px",borderRadius:20 }}>{deals.filter(d=>d.stage===st.id).length}</span>

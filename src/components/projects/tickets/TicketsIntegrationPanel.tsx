@@ -180,18 +180,18 @@ export default function TicketsIntegrationPanel({
             <>
               {/* Сводные метрики */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: "Продано билетов", value: stats.ticketsSold, icon: "Ticket", color: "neon-purple" },
-                  { label: "Выручка", value: `${fmt(stats.revenuePaid)} ₽`, icon: "TrendingUp", color: "neon-green" },
-                  { label: "Возвраты", value: `${fmt(stats.revenueRefunded)} ₽`, icon: "RotateCcw", color: "neon-pink" },
-                  { label: "Бронь", value: stats.ticketsReserved, icon: "Clock", color: "neon-cyan" },
-                ].map((m, i) => (
+                {([
+                  { label: "Продано билетов", value: String(stats.ticketsSold), icon: "Ticket",      color: "text-neon-purple" },
+                  { label: "Выручка",        value: `${fmt(stats.revenuePaid)} ₽`,    icon: "TrendingUp",  color: "text-neon-green"  },
+                  { label: "Возвраты",       value: `${fmt(stats.revenueRefunded)} ₽`, icon: "RotateCcw",  color: "text-neon-pink"   },
+                  { label: "Бронь",          value: String(stats.ticketsReserved),    icon: "Clock",       color: "text-neon-cyan"   },
+                ] as const).map((m, i) => (
                   <div key={i} className="glass rounded-xl p-3 border border-white/8">
                     <div className="flex items-center gap-2 mb-1">
-                      <Icon name={m.icon as never} size={13} className={`text-${m.color}`} />
+                      <Icon name={m.icon} size={13} className={m.color} />
                       <span className="text-white/40 text-xs">{m.label}</span>
                     </div>
-                    <p className={`font-oswald font-bold text-lg text-${m.color}`}>{m.value}</p>
+                    <p className={`font-oswald font-bold text-lg ${m.color}`}>{m.value}</p>
                   </div>
                 ))}
               </div>

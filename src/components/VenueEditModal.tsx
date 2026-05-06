@@ -369,7 +369,7 @@ export default function VenueEditModal({ venue, onClose, onSaved }: Props) {
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-white/10 shrink-0">
           <div className="flex items-center gap-2">
-            <button onClick={() => step > 1 ? setStep(s => s - 1) : onClose()}
+            <button onClick={() => { setError(""); if (step > 1) setStep(s => s - 1); else onClose(); }}
               className="flex items-center gap-2 px-4 py-2 glass rounded-xl text-white/60 hover:text-white transition-colors text-sm">
               <Icon name="ChevronLeft" size={16} />
               {step === 1 ? "Отмена" : "Назад"}

@@ -81,27 +81,30 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
     if (!deleteId) return;
     setDeleting(true);
     try {
-      await fetch(`${EMPLOYEES_URL}?action=delete`, {
+      const res = await fetch(`${EMPLOYEES_URL}?action=delete`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: deleteId }),
       });
+      if (!res.ok) throw new Error("delete failed");
       setDeleteId(null);
       onReload();
-    } finally {
-      setDeleting(false);
-    }
+    } catch { /* silent — оставляем модалку чтобы пользователь мог попробовать снова */ }
+    finally { setDeleting(false); }
   };
 
   const savePermissions = async () => {
     if (!editPermId) return;
     setSavingPerms(true);
-    await fetch(`${EMPLOYEES_URL}?action=update_permissions`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: editPermId, accessPermissions: editPerms }),
-    });
-    setSavingPerms(false);
-    setEditPermId(null);
-    onReload();
+    try {
+      const res = await fetch(`${EMPLOYEES_URL}?action=update_permissions`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editPermId, accessPermissions: editPerms }),
+      });
+      if (!res.ok) throw new Error("update_permissions failed");
+      setEditPermId(null);
+      onReload();
+    } catch { /* silent */ }
+    finally { setSavingPerms(false); }
   };
 
   const addEmployee = async () => {
@@ -110,27 +113,35 @@ export default function EmployeesSection({ userId, employees, empLoading, onRelo
     if (!empForm.email.includes("@")) return setEmpError("Некорректный email");
     if (empForm.password.length < 6) return setEmpError("Пароль минимум 6 символов");
     setEmpSaving(true);
-    const res = await fetch(`${EMPLOYEES_URL}?action=add`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ companyUserId: userId, ...empForm, accessPermissions: perms }),
-    });
-    const data = await res.json();
-    setEmpSaving(false);
-    if (!res.ok) { setEmpError(data.error || "Ошибка"); return; }
-    setEmpForm({ name: "", email: "", password: "", roleInCompany: "employee" });
-    setPerms({ ...DEFAULT_ACCESS_PERMISSIONS });
-    setShowAddEmp(false);
-    onReload();
+    try {
+      const res = await fetch(`${EMPLOYEES_URL}?action=add`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyUserId: userId, ...empForm, accessPermissions: perms }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) { setEmpError(data.error || "Ошибка"); return; }
+      setEmpForm({ name: "", email: "", password: "", roleInCompany: "employee" });
+      setPerms({ ...DEFAULT_ACCESS_PERMISSIONS });
+      setShowAddEmp(false);
+      onReload();
+    } catch {
+      setEmpError("Сеть недоступна");
+    } finally {
+      setEmpSaving(false);
+    }
   };
 
   const toggleEmployee = async (emp: Employee) => {
     const action = emp.isActive ? "deactivate" : "activate";
-    await fetch(`${EMPLOYEES_URL}?action=${action}`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: emp.id }),
-    });
-    onReload();
+    try {
+      const res = await fetch(`${EMPLOYEES_URL}?action=${action}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: emp.id }),
+      });
+      if (!res.ok) throw new Error(`${action} failed`);
+      onReload();
+    } catch { /* silent */ }
   };
 
   return (

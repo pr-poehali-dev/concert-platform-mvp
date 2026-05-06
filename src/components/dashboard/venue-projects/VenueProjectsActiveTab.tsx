@@ -79,10 +79,10 @@ export default function VenueProjectsActiveTab({
     const past = isPast(p.eventDate);
     if (showArchive ? !past : past) return false;
     if (!q) return true;
-    return p.projectTitle.toLowerCase().includes(q) ||
-      p.artist.toLowerCase().includes(q) ||
-      p.organizerName.toLowerCase().includes(q) ||
-      p.eventDate.includes(q);
+    return (p.projectTitle || "").toLowerCase().includes(q) ||
+      (p.artist || "").toLowerCase().includes(q) ||
+      (p.organizerName || "").toLowerCase().includes(q) ||
+      (p.eventDate || "").includes(q);
   });
 
   const archiveCount = projects.filter(p => isPast(p.eventDate)).length;

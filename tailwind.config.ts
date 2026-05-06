@@ -8,6 +8,24 @@ export default {
 		"./app/**/*.{ts,tsx}",
 		"./src/**/*.{ts,tsx}",
 	],
+	// Safelist для динамически генерируемых классов цветов групп проектов
+	safelist: [
+		// neon colors с прозрачностями для bg/border/text/via
+		...["purple", "cyan", "pink", "green", "yellow"].flatMap(c => [
+			`text-neon-${c}`,
+			`bg-neon-${c}`,
+			`border-neon-${c}`,
+			`via-neon-${c}`,
+			`from-neon-${c}`,
+			`to-neon-${c}`,
+			`bg-neon-${c}/5`,  `bg-neon-${c}/8`,  `bg-neon-${c}/10`, `bg-neon-${c}/15`,
+			`bg-neon-${c}/20`, `bg-neon-${c}/25`, `bg-neon-${c}/30`, `bg-neon-${c}/60`,
+			`border-neon-${c}/10`, `border-neon-${c}/20`, `border-neon-${c}/25`,
+			`border-neon-${c}/30`, `border-neon-${c}/40`, `border-neon-${c}/50`,
+			`hover:border-neon-${c}/40`, `hover:border-neon-${c}/50`, `hover:border-neon-${c}/60`,
+			`group-hover:text-neon-${c}`,
+		]),
+	],
 	prefix: "",
 	theme: {
 		container: {
@@ -71,6 +89,7 @@ export default {
 					cyan: '#22d3ee',
 					pink: '#ec4899',
 					green: '#4ade80',
+					yellow: '#facc15',
 				}
 			},
 			borderRadius: {

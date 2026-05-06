@@ -111,29 +111,35 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
   const toggleStep = async (itemId: string, currentDone: boolean, note: string, bookingId: string) => {
     setUpdatingItem(itemId);
     const newDone = !currentDone;
-    await fetch(`${BOOKING_TASKS_URL}?action=update_checklist`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId, isDone: newDone, note }),
-    });
-    setUpdatingItem(null);
-    setProjects(prev => prev.map(p =>
-      p.bookingId === bookingId
-        ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, isDone: newDone } : c) }
-        : p
-    ));
+    try {
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=update_checklist`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, isDone: newDone, note }),
+      });
+      if (!res.ok) throw new Error("update_checklist failed");
+      setProjects(prev => prev.map(p =>
+        p.bookingId === bookingId
+          ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, isDone: newDone } : c) }
+          : p
+      ));
+    } catch { /* silent — UI не обновляем при ошибке */ }
+    finally { setUpdatingItem(null); }
   };
 
   const saveNote = async (itemId: string, isDone: boolean, bookingId: string) => {
-    await fetch(`${BOOKING_TASKS_URL}?action=update_checklist`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ itemId, isDone, note: noteText }),
-    });
-    setProjects(prev => prev.map(p =>
-      p.bookingId === bookingId
-        ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, note: noteText } : c) }
-        : p
-    ));
-    setNoteEditing(null);
+    try {
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=update_checklist`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId, isDone, note: noteText }),
+      });
+      if (!res.ok) throw new Error("update_checklist failed");
+      setProjects(prev => prev.map(p =>
+        p.bookingId === bookingId
+          ? { ...p, checklist: p.checklist.map(c => c.id === itemId ? { ...c, note: noteText } : c) }
+          : p
+      ));
+    } catch { /* silent */ }
+    finally { setNoteEditing(null); }
   };
 
   const handleFileSelect = (bookingId: string, stepKey: string) => {
@@ -145,38 +151,49 @@ export default function DashboardVenueProjectsTab({ onOpenChat, onNavigate }: { 
     const file = e.target.files?.[0];
     if (!file || !pendingUpload || !user) return;
     const { bookingId, stepKey } = pendingUpload;
+    const userIdSnapshot = user.id;
+    const userNameSnapshot = user.name || "Вы";
     setUploadingStep(`${bookingId}:${stepKey}`);
     const reader = new FileReader();
     reader.onload = async () => {
-      const base64 = (reader.result as string).split(",")[1];
-      const res = await fetch(`${BOOKING_TASKS_URL}?action=upload_booking_file`, {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          bookingId, uploadedBy: user.id, stepKey,
-          fileName: file.name, fileData: base64, mimeType: file.type,
-        }),
-      }).then(r => r.json());
-      if (res.id) {
-        const newFile: BookingFile = {
-          id: res.id, stepKey, fileName: res.fileName, fileUrl: res.fileUrl,
-          fileSize: file.size, mimeType: file.type,
-          createdAt: new Date().toISOString(), uploadedBy: user.name || "Вы",
-        };
-        setFilesMap(prev => ({ ...prev, [bookingId]: [newFile, ...(prev[bookingId] || [])] }));
+      try {
+        const base64 = (reader.result as string).split(",")[1];
+        const httpRes = await fetch(`${BOOKING_TASKS_URL}?action=upload_booking_file`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookingId, uploadedBy: userIdSnapshot, stepKey,
+            fileName: file.name, fileData: base64, mimeType: file.type,
+          }),
+        });
+        if (!httpRes.ok) throw new Error("upload failed");
+        const res = await httpRes.json();
+        if (res?.id) {
+          const newFile: BookingFile = {
+            id: res.id, stepKey, fileName: res.fileName, fileUrl: res.fileUrl,
+            fileSize: file.size, mimeType: file.type,
+            createdAt: new Date().toISOString(), uploadedBy: userNameSnapshot,
+          };
+          setFilesMap(prev => ({ ...prev, [bookingId]: [newFile, ...(prev[bookingId] || [])] }));
+        }
+      } catch { /* silent */ }
+      finally {
+        setUploadingStep(null);
+        setPendingUpload(null);
       }
-      setUploadingStep(null);
-      setPendingUpload(null);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
   };
 
   const deleteFile = async (bookingId: string, fileId: string) => {
-    await fetch(`${BOOKING_TASKS_URL}?action=delete_booking_file`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ fileId }),
-    });
-    setFilesMap(prev => ({ ...prev, [bookingId]: (prev[bookingId] || []).filter(f => f.id !== fileId) }));
+    try {
+      const res = await fetch(`${BOOKING_TASKS_URL}?action=delete_booking_file`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId }),
+      });
+      if (!res.ok) throw new Error("delete failed");
+      setFilesMap(prev => ({ ...prev, [bookingId]: (prev[bookingId] || []).filter(f => f.id !== fileId) }));
+    } catch { /* silent */ }
   };
 
   const activeCount = projects.filter(p => !isPast(p.eventDate)).length;
