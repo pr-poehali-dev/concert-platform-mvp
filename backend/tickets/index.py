@@ -984,13 +984,14 @@ def handler(event: dict, context) -> dict:
 
         return ok({"received": True, "event": event_type, "inserted": inserted})
 
-    # ── POST sync — ручная синхронизация истории заказов ─────────────────
+    # ── POST sync — запускает синхронизацию в фоне, сразу возвращает job_id ──
     if method == "POST" and action == "sync":
         b      = json.loads(event.get("body") or "{}")
         int_id = b.get("integrationId", "")
         if not int_id:
             return err("integrationId required")
 
+        # Проверяем что интеграция существует
         conn = get_conn()
         try:
             cur = conn.cursor()
@@ -1000,21 +1001,29 @@ def handler(event: dict, context) -> dict:
             )
             row = cur.fetchone()
             if not row:
-                conn.close()
                 return err("Интеграция не найдена", 404)
             api_key, event_id_val, project_id, provider = row
 
-            orders = []
-            inserted = 0
-            api_error = ""
+            # Создаём запись задачи со статусом running
+            job_id = str(uuid.uuid4())
+            cur.execute(
+                f"INSERT INTO {SCHEMA}.sync_jobs (id, integration_id, status) VALUES (%s, %s, 'running')",
+                (job_id, int_id)
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
-            income_synced = 0
-            event_sets = []
-            event_info = {}
-            event_diff = {}
-            if provider == "ticketscloud":
-                try:
-                    # Параллельно: заказы + sets + event_info (если есть project_id)
+        def _run_sync(job_id, int_id, api_key, event_id_val, project_id, provider):
+            """Выполняет синхронизацию в фоновом потоке."""
+            conn2 = get_conn()
+            try:
+                cur2 = conn2.cursor()
+                orders, event_sets, event_info = [], [], {}
+                inserted, income_synced = 0, 0
+                event_diff = {}
+
+                if provider == "ticketscloud":
                     futures_map = {}
                     with ThreadPoolExecutor(max_workers=3) as pool:
                         futures_map["orders"] = pool.submit(fetch_ticketscloud_orders, api_key, event_id_val)
@@ -1023,84 +1032,111 @@ def handler(event: dict, context) -> dict:
                             futures_map["info"] = pool.submit(fetch_ticketscloud_event_info, api_key, event_id_val)
 
                     orders     = futures_map["orders"].result()
-                    event_sets = futures_map["sets"].result()   if "sets" in futures_map else []
-                    event_info = futures_map["info"].result()   if "info" in futures_map else {}
+                    event_sets = futures_map["sets"].result() if "sets" in futures_map else []
+                    event_info = futures_map["info"].result() if "info" in futures_map else {}
 
                     all_sales = []
                     for order in orders:
                         all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
-                    inserted = upsert_sales(cur, all_sales)
+                    inserted = upsert_sales(cur2, all_sales)
+
                     if project_id:
-                        income_synced = sync_income_lines(cur, str(project_id), int_id, event_sets)
+                        income_synced = sync_income_lines(cur2, str(project_id), int_id, event_sets)
                         if event_info:
-                            cur.execute(
+                            cur2.execute(
                                 f"SELECT city, date_start, date_end FROM {SCHEMA}.projects WHERE id=%s",
                                 (project_id,)
                             )
-                            proj_row = cur.fetchone()
+                            proj_row = cur2.fetchone()
                             if proj_row:
                                 p_city, p_date_start, p_date_end = proj_row
-                                tc_city = event_info.get("city") or ""
-                                tc_ds   = event_info.get("date_start") or ""
-                                tc_de   = event_info.get("date_end") or ""
 
                                 def fmt_date(d):
-                                    if not d:
-                                        return ""
+                                    if not d: return ""
                                     s = str(d)[:10]
                                     try:
-                                        from datetime import date
                                         y, m, day = s.split("-")
-                                        months = ["", "января","февраля","марта","апреля","мая","июня",
+                                        months = ["","января","февраля","марта","апреля","мая","июня",
                                                   "июля","августа","сентября","октября","ноября","декабря"]
                                         return f"{int(day)} {months[int(m)]} {y}"
-                                    except Exception:
-                                        return s
+                                    except Exception: return s
 
+                                tc_city = event_info.get("city") or ""
                                 p_city_str = (p_city or "").strip()
                                 if tc_city and tc_city != p_city_str:
-                                    event_diff["city"] = {
-                                        "current": p_city_str or "не указан",
-                                        "new": tc_city
-                                    }
+                                    event_diff["city"] = {"current": p_city_str or "не указан", "new": tc_city}
+                                tc_ds = event_info.get("date_start") or ""
                                 if tc_ds:
                                     p_date = str(p_date_start)[:10] if p_date_start else ""
                                     if tc_ds != p_date:
-                                        event_diff["date_start"] = {
-                                            "current": fmt_date(p_date) or "не указана",
-                                            "new": fmt_date(tc_ds),
-                                            "raw": tc_ds
-                                        }
+                                        event_diff["date_start"] = {"current": fmt_date(p_date) or "не указана", "new": fmt_date(tc_ds), "raw": tc_ds}
+                                tc_de = event_info.get("date_end") or ""
                                 if tc_de:
                                     p_date = str(p_date_end)[:10] if p_date_end else ""
                                     if tc_de != p_date:
-                                        event_diff["date_end"] = {
-                                            "current": fmt_date(p_date) or "не указана",
-                                            "new": fmt_date(tc_de),
-                                            "raw": tc_de
-                                        }
-                except RuntimeError as e:
-                    api_error = str(e)
+                                        event_diff["date_end"] = {"current": fmt_date(p_date) or "не указана", "new": fmt_date(tc_de), "raw": tc_de}
 
+                cur2.execute(
+                    f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
+                    (int_id,)
+                )
+                result = {
+                    "success": True,
+                    "inserted": inserted,
+                    "ordersProcessed": len(orders),
+                    "incomeLinesUpdated": income_synced,
+                    "eventSets": event_sets if project_id else [],
+                    "eventDiff": event_diff,
+                }
+                import json as _json
+                cur2.execute(
+                    f"UPDATE {SCHEMA}.sync_jobs SET status='done', result=%s, finished_at=NOW() WHERE id=%s",
+                    (_json.dumps(result), job_id)
+                )
+                conn2.commit()
+            except Exception as ex:
+                try:
+                    import json as _json
+                    cur2.execute(
+                        f"UPDATE {SCHEMA}.sync_jobs SET status='error', error=%s, finished_at=NOW() WHERE id=%s",
+                        (str(ex)[:500], job_id)
+                    )
+                    conn2.commit()
+                except Exception:
+                    pass
+            finally:
+                conn2.close()
+
+        # Запускаем в фоне — не ждём завершения
+        t = ThreadPoolExecutor(max_workers=1)
+        t.submit(_run_sync, job_id, int_id, api_key, event_id_val, project_id, provider)
+        t.shutdown(wait=False)
+
+        return ok({"queued": True, "jobId": job_id})
+
+    # ── GET sync_status — опрос статуса фоновой задачи ───────────────────
+    if method == "GET" and action == "sync_status":
+        job_id = params.get("job_id", "")
+        if not job_id:
+            return err("job_id required")
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
             cur.execute(
-                f"UPDATE {SCHEMA}.ticket_integrations SET last_sync_at=NOW() WHERE id=%s",
-                (int_id,)
+                f"SELECT status, result, error FROM {SCHEMA}.sync_jobs WHERE id=%s",
+                (job_id,)
             )
-            conn.commit()
+            row = cur.fetchone()
         finally:
             conn.close()
-
-        if api_error:
-            return err(f"Ошибка API провайдера: {api_error}", 422)
-
-        return ok({
-            "success": True,
-            "inserted": inserted,
-            "ordersProcessed": len(orders),
-            "incomeLinesUpdated": income_synced,
-            "eventSets": event_sets if project_id else [],
-            "eventDiff": event_diff,
-        })
+        if not row:
+            return err("Job не найден", 404)
+        status, result, error = row
+        if status == "running":
+            return ok({"status": "running"})
+        if status == "error":
+            return ok({"status": "error", "error": error})
+        return ok({"status": "done", **(result or {})})
 
     # ── GET list_for_sync — список интеграций пользователя для пофронтовой синхронизации ──
     if method == "GET" and action == "list_for_sync":

@@ -205,32 +205,51 @@ export default function ProjectTicketsTab({ projectId }: Props) {
   };
 
   const handleSync = async (intId: string) => {
-    setSyncing(true); setSyncMsg(""); setEventDiff(null);
+    setSyncing(true); setSyncMsg("Синхронизация запущена…"); setEventDiff(null);
     try {
+      // Шаг 1: запускаем фоновую задачу — бэкенд отвечает мгновенно
       const res = await fetch(`${TICKETS_URL}?action=sync`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ integrationId: intId }),
       });
       const data = await res.json();
-      if (res.ok) {
-        const parts = [`Загружено ${data.ordersProcessed} заказов`];
-        if (data.incomeLinesUpdated > 0)
-          parts.push(`обновлено ${data.incomeLinesUpdated} категорий в доходах`);
-        if (data.eventSets?.length > 0)
-          parts.push(`тираж: ${data.eventSets.map((s: {name:string;total:number}) => `${s.name} ${s.total} шт.`).join(", ")}`);
-        setSyncMsg(parts.join(" · "));
-        loadStats(intId);
-        // Если есть расхождения в данных события — показываем диалог
-        if (data.eventDiff && Object.keys(data.eventDiff).length > 0) {
-          setEventDiff(data.eventDiff);
-          setPendingIntId(intId);
-        }
-      } else {
-        setSyncMsg(data.error || "Ошибка синхронизации");
-      }
-    } catch { setSyncMsg("Ошибка соединения"); }
-    finally { setSyncing(false); }
+      if (!res.ok) { setSyncMsg(data.error || "Ошибка синхронизации"); setSyncing(false); return; }
+
+      const jobId = data.jobId;
+      if (!jobId) { setSyncMsg("Ошибка запуска задачи"); setSyncing(false); return; }
+
+      // Шаг 2: polling — опрашиваем статус каждые 2 сек, максимум 60 сек
+      let attempts = 0;
+      const poll = async (): Promise<void> => {
+        attempts++;
+        if (attempts > 30) { setSyncMsg("Синхронизация занимает слишком долго, попробуйте позже"); setSyncing(false); return; }
+        try {
+          const sr = await fetch(`${TICKETS_URL}?action=sync_status&job_id=${jobId}`);
+          const sd = await sr.json();
+          if (sd.status === "running") {
+            setTimeout(poll, 2000);
+          } else if (sd.status === "error") {
+            setSyncMsg(`Ошибка: ${sd.error || "неизвестная ошибка"}`);
+            setSyncing(false);
+          } else {
+            // done
+            const parts = [`Загружено ${sd.ordersProcessed ?? 0} заказов`];
+            if (sd.incomeLinesUpdated > 0) parts.push(`обновлено ${sd.incomeLinesUpdated} категорий`);
+            if (sd.eventSets?.length > 0)
+              parts.push(`тираж: ${sd.eventSets.map((s: {name:string;total:number}) => `${s.name} ${s.total} шт.`).join(", ")}`);
+            setSyncMsg(parts.join(" · "));
+            loadStats(intId);
+            if (sd.eventDiff && Object.keys(sd.eventDiff).length > 0) {
+              setEventDiff(sd.eventDiff);
+              setPendingIntId(intId);
+            }
+            setSyncing(false);
+          }
+        } catch { setTimeout(poll, 2000); }
+      };
+      setTimeout(poll, 2000);
+    } catch { setSyncMsg("Ошибка соединения"); setSyncing(false); }
   };
 
   if (loading) return (
