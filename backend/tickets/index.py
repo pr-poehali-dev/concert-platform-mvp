@@ -280,17 +280,21 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
 
     TC v2 НЕ поддерживает фильтр ?event= — возвращает 400 Bad Request.
     Получаем все заказы аккаунта и фильтруем по event_id на нашей стороне.
-    Лимит: 10 страниц × 50 = 500 заказов за один sync.
+    Лимит: 40 страниц × 100 = 4000 заказов за один sync.
     """
     base = "https://ticketscloud.com"
     all_orders = []
     page = 1
-    MAX_PAGES = 10
+    MAX_PAGES = 40
+    PAGE_SIZE = 100
+    # Если искали конкретное событие — позволяем 3 пустые страницы подряд, потом стоп
+    empty_streak = 0
+    MAX_EMPTY_STREAK = 3
 
     while True:
-        params_q = {"page_size": "50", "page": str(page)}
+        params_q = {"page_size": str(PAGE_SIZE), "page": str(page)}
         url = f"{base}/v2/resources/orders?" + urllib.parse.urlencode(params_q)
-        data = _tc_request(url, api_key, timeout=15)
+        data = _tc_request(url, api_key, timeout=20)
 
         raw_data = data.get("data") or []
         if isinstance(raw_data, list):
@@ -300,21 +304,26 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
         else:
             items = []
 
+        found_on_page = 0
         for item in items:
             if event_id == "__ALL__":
                 all_orders.append(item)
+                found_on_page += 1
             else:
                 item_event = item.get("event") or ""
                 if isinstance(item_event, dict):
                     item_event = item_event.get("id") or item_event.get("_id") or ""
                 if str(item_event).strip() == str(event_id).strip():
                     all_orders.append(item)
+                    found_on_page += 1
+
+        print(f"[tc_orders] page={page} items={len(items)} matched={found_on_page} total_so_far={len(all_orders)} event_id={event_id!r}")
 
         # Пагинация
         pagination = data.get("pagination") or data.get("meta") or {}
-        page_size   = int(pagination.get("page_size") or pagination.get("size") or pagination.get("limit") or 50)
-        total_pages = int(pagination.get("total") or pagination.get("pages") or pagination.get("total_pages") or 0)
-        current     = int(pagination.get("page") or page)
+        page_size_resp = int(pagination.get("page_size") or pagination.get("size") or pagination.get("limit") or PAGE_SIZE)
+        total_pages    = int(pagination.get("total") or pagination.get("pages") or pagination.get("total_pages") or 0)
+        current        = int(pagination.get("page") or page)
 
         if len(items) == 0:
             break
@@ -322,10 +331,21 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
             break
         if total_pages and current >= total_pages:
             break
-        if len(items) < page_size:
+        if len(items) < page_size_resp:
             break
         if page >= MAX_PAGES:
             break
+
+        # Если ищем конкретное событие и 3 страницы подряд без совпадений — стоп
+        if event_id != "__ALL__":
+            if found_on_page == 0:
+                empty_streak += 1
+                if empty_streak >= MAX_EMPTY_STREAK:
+                    print(f"[tc_orders] {MAX_EMPTY_STREAK} empty pages in a row for event {event_id!r}, stopping")
+                    break
+            else:
+                empty_streak = 0
+
         page += 1
 
     return all_orders
@@ -1036,6 +1056,13 @@ def handler(event: dict, context) -> dict:
                     orders     = futures_map["orders"].result()
                     event_sets = futures_map["sets"].result() if "sets" in futures_map else []
                     event_info = futures_map["info"].result() if "info" in futures_map else {}
+
+                    # Диагностика: логируем что пришло от TC и как фильтруется
+                    sample_events = list({
+                        str((o.get("event") or {}).get("id") if isinstance(o.get("event"), dict) else o.get("event") or "").strip()
+                        for o in orders[:50]
+                    })
+                    print(f"[sync][{int_id}] event_id_val={event_id_val!r} | total_orders_from_api={len(orders)} | sample_event_ids={sample_events[:10]}")
             except Exception as ex:
                 fetch_error = str(ex)[:500]
 
