@@ -275,26 +275,19 @@ def fetch_ticketscloud_event_sets(api_key: str, event_id: str) -> list:
 
 
 def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
-    """Запрашивает заказы из TicketsCloud API v2 с фильтром по event_id.
+    """Запрашивает заказы из TicketsCloud API v2.
 
-    Стратегия:
-    1. Сначала пробуем фильтр ?event=<id> — если TC поддерживает, получаем только нужные заказы
-    2. Если фильтр не работает (все заказы пришли без привязки к event) — откат к полной выборке
-    Жёсткий лимит: 10 страниц × 50 = 500 заказов за один sync.
-    Timeout увеличен до 15 сек — TC иногда медленно отвечает.
+    TC v2 НЕ поддерживает фильтр ?event= — возвращает 400 Bad Request.
+    Получаем все заказы аккаунта и фильтруем по event_id на нашей стороне.
+    Лимит: 10 страниц × 50 = 500 заказов за один sync.
     """
     base = "https://ticketscloud.com"
     all_orders = []
     page = 1
     MAX_PAGES = 10
 
-    # Пробуем серверный фильтр по event (экономит время при нескольких интеграциях на одном аккаунте)
-    use_server_filter = (event_id and event_id != "__ALL__")
-
     while True:
         params_q = {"page_size": "50", "page": str(page)}
-        if use_server_filter:
-            params_q["event"] = event_id
         url = f"{base}/v2/resources/orders?" + urllib.parse.urlencode(params_q)
         data = _tc_request(url, api_key, timeout=15)
 
@@ -315,13 +308,6 @@ def fetch_ticketscloud_orders(api_key: str, event_id: str) -> list:
                     item_event = item_event.get("id") or item_event.get("_id") or ""
                 if str(item_event).strip() == str(event_id).strip():
                     all_orders.append(item)
-
-        # Если серверный фильтр не дал ни одного совпадения на первой странице —
-        # значит TC игнорирует параметр event, отключаем и перезапрашиваем
-        if use_server_filter and page == 1 and len(items) > 0 and len(all_orders) == 0:
-            use_server_filter = False
-            all_orders = []
-            continue
 
         # Пагинация
         pagination = data.get("pagination") or data.get("meta") or {}
