@@ -21,6 +21,7 @@ import hashlib
 import urllib.request
 import urllib.parse
 import psycopg2
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SCHEMA = "t_p17532248_concert_platform_mvp"
 
@@ -430,26 +431,17 @@ def parse_ticketscloud_order(order: dict, integration_id: str, project_id) -> li
 
 
 def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: list = None):
-    """Синхронизирует строки доходов проекта.
+    """Синхронизирует строки доходов проекта одним батчевым UPSERT.
 
-    Логика:
-    - Каждая категория идентифицируется по set_id (уникален в TicketsCloud)
-    - note = 'ticketscloud:{integration_id}:{set_id}' — уникальный ключ строки
-    - ticket_count (план) = amount из /v1/events/{id}/sets
-    - sold_count   (факт) = sum paid из ticket_sales GROUP BY set_id
-    - Устаревшие строки (set_id больше не существует) обнуляются до 0
+    note = 'ticketscloud:{integration_id}:{set_id}' — уникальный ключ строки.
+    Вместо N×(SELECT+UPDATE/INSERT) делаем 1 агрегат + 1 executemany UPSERT.
     """
-    if not project_id:
+    if not project_id or not event_sets:
         return 0
 
-    if not event_sets:
-        return 0
-
-    # Факт продаж по set_id из ticket_sales
+    # Факт продаж по set_id — один агрегирующий запрос
     cur.execute(
-        f"""SELECT
-              set_id,
-              SUM(CASE WHEN status='paid' THEN quantity ELSE 0 END) as paid_qty
+        f"""SELECT set_id, SUM(CASE WHEN status='paid' THEN quantity ELSE 0 END)
             FROM {SCHEMA}.ticket_sales
             WHERE integration_id = %s AND status != 'refunded'
             GROUP BY set_id""",
@@ -458,92 +450,80 @@ def sync_income_lines(cur, project_id: str, integration_id: str, event_sets: lis
     sales_by_set: dict = {row[0]: int(row[1] or 0) for row in cur.fetchall()}
 
     base_marker = f"ticketscloud:{integration_id}"
-    synced = 0
-    active_note_keys = set()
 
-    for s in event_sets:
-        set_id     = s["id"]
-        name       = s["name"]
-        price      = s["price"]
-        total      = s["total"]
-        sold_count = sales_by_set.get(set_id, 0)
-        note_key   = f"{base_marker}:{set_id}"
-        active_note_keys.add(note_key)
-
-        cur.execute(
-            f"SELECT id FROM {SCHEMA}.project_income_lines WHERE project_id = %s AND note = %s LIMIT 1",
-            (project_id, note_key)
-        )
-        existing = cur.fetchone()
-
-        if existing:
-            cur.execute(
-                f"""UPDATE {SCHEMA}.project_income_lines
-                    SET category = %s, ticket_count = %s, sold_count = %s, ticket_price = %s
-                    WHERE id = %s""",
-                (name, total, sold_count, price, existing[0])
-            )
-        else:
-            cur.execute(
-                f"SELECT COALESCE(MAX(sort_order), 0) + 1 FROM {SCHEMA}.project_income_lines WHERE project_id = %s",
-                (project_id,)
-            )
-            sort_order = cur.fetchone()[0]
-            cur.execute(
-                f"""INSERT INTO {SCHEMA}.project_income_lines
-                    (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)""",
-                (project_id, name, total, price, sold_count, note_key, sort_order)
-            )
-        synced += 1
-
-    # Обнуляем только строки со старым форматом note (без set_id) — это мусор
+    # sort_order: берём текущий максимум один раз
     cur.execute(
-        f"""UPDATE {SCHEMA}.project_income_lines
-            SET ticket_count = 0, sold_count = 0
-            WHERE project_id = %s AND note = %s""",
-        (project_id, base_marker)
+        f"SELECT COALESCE(MAX(sort_order), 0) FROM {SCHEMA}.project_income_lines WHERE project_id = %s",
+        (project_id,)
+    )
+    max_sort = cur.fetchone()[0]
+
+    rows = []
+    for i, s in enumerate(event_sets):
+        note_key = f"{base_marker}:{s['id']}"
+        rows.append((
+            project_id, s["name"], s["total"], s["price"],
+            sales_by_set.get(s["id"], 0), note_key, max_sort + i + 1,
+        ))
+
+    # Один батчевый UPSERT по уникальному индексу (project_id, note)
+    cur.executemany(
+        f"""INSERT INTO {SCHEMA}.project_income_lines
+            (project_id, category, ticket_count, ticket_price, sold_count, note, sort_order)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (project_id, note) WHERE note IS NOT NULL AND note != ''
+            DO UPDATE SET
+              category     = EXCLUDED.category,
+              ticket_count = EXCLUDED.ticket_count,
+              ticket_price = EXCLUDED.ticket_price,
+              sold_count   = EXCLUDED.sold_count""",
+        rows,
     )
 
-    # Пересчитываем итоги проекта
+    # Пересчитываем итоги проекта одним запросом
     cur.execute(
         f"""UPDATE {SCHEMA}.projects SET
               total_income_plan = COALESCE(
-                (SELECT SUM(ticket_count::numeric * ticket_price) FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
+                (SELECT SUM(ticket_count::numeric * ticket_price)
+                 FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
               total_income_fact = COALESCE(
-                (SELECT SUM(sold_count::numeric * ticket_price) FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
+                (SELECT SUM(sold_count::numeric * ticket_price)
+                 FROM {SCHEMA}.project_income_lines WHERE project_id = %s), 0),
               updated_at = NOW()
             WHERE id = %s""",
         (project_id, project_id, project_id)
     )
 
-    return synced
+    return len(rows)
 
 
 def upsert_sales(cur, sales: list):
-    """Вставляет продажи, пропуская дубликаты по (integration_id, order_id)."""
-    inserted = 0
-    for s in sales:
-        cur.execute(
-            f"""INSERT INTO {SCHEMA}.ticket_sales
-                (integration_id, project_id, provider, event_id, order_id,
-                 ticket_type, set_id, quantity, price, total_amount, status,
-                 buyer_name, buyer_email, sold_at, raw_payload)
-                VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s)
-                ON CONFLICT (integration_id, order_id) DO UPDATE SET
-                  status       = EXCLUDED.status,
-                  set_id       = EXCLUDED.set_id,
-                  ticket_type  = EXCLUDED.ticket_type,
-                  total_amount = EXCLUDED.total_amount,
-                  raw_payload  = EXCLUDED.raw_payload""",
-            (
-                s["integration_id"], s["project_id"], s["provider"], s["event_id"], s["order_id"],
-                s["ticket_type"], s.get("set_id", ""), s["quantity"], s["price"], s["total_amount"], s["status"],
-                s["buyer_name"], s["buyer_email"], s.get("sold_at"), s["raw_payload"],
-            ),
+    """Вставляет продажи батчем через executemany — в разы быстрее поштучной вставки."""
+    if not sales:
+        return 0
+    rows = [
+        (
+            s["integration_id"], s["project_id"], s["provider"], s["event_id"], s["order_id"],
+            s["ticket_type"], s.get("set_id", ""), s["quantity"], s["price"], s["total_amount"], s["status"],
+            s["buyer_name"], s["buyer_email"], s.get("sold_at"), s["raw_payload"],
         )
-        inserted += 1
-    return inserted
+        for s in sales
+    ]
+    cur.executemany(
+        f"""INSERT INTO {SCHEMA}.ticket_sales
+            (integration_id, project_id, provider, event_id, order_id,
+             ticket_type, set_id, quantity, price, total_amount, status,
+             buyer_name, buyer_email, sold_at, raw_payload)
+            VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s)
+            ON CONFLICT (integration_id, order_id) DO UPDATE SET
+              status       = EXCLUDED.status,
+              set_id       = EXCLUDED.set_id,
+              ticket_type  = EXCLUDED.ticket_type,
+              total_amount = EXCLUDED.total_amount,
+              raw_payload  = EXCLUDED.raw_payload""",
+        rows,
+    )
+    return len(rows)
 
 
 def handler(event: dict, context) -> dict:
@@ -1034,16 +1014,24 @@ def handler(event: dict, context) -> dict:
             event_diff = {}
             if provider == "ticketscloud":
                 try:
-                    orders = fetch_ticketscloud_orders(api_key, event_id_val)
+                    # Параллельно: заказы + sets + event_info (если есть project_id)
+                    futures_map = {}
+                    with ThreadPoolExecutor(max_workers=3) as pool:
+                        futures_map["orders"] = pool.submit(fetch_ticketscloud_orders, api_key, event_id_val)
+                        if project_id:
+                            futures_map["sets"] = pool.submit(fetch_ticketscloud_event_sets, api_key, event_id_val)
+                            futures_map["info"] = pool.submit(fetch_ticketscloud_event_info, api_key, event_id_val)
+
+                    orders     = futures_map["orders"].result()
+                    event_sets = futures_map["sets"].result()   if "sets" in futures_map else []
+                    event_info = futures_map["info"].result()   if "info" in futures_map else {}
+
                     all_sales = []
                     for order in orders:
                         all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
                     inserted = upsert_sales(cur, all_sales)
                     if project_id:
-                        event_sets = fetch_ticketscloud_event_sets(api_key, event_id_val)
                         income_synced = sync_income_lines(cur, str(project_id), int_id, event_sets)
-                        # Получаем мета-данные события и сравниваем с проектом
-                        event_info = fetch_ticketscloud_event_info(api_key, event_id_val)
                         if event_info:
                             cur.execute(
                                 f"SELECT city, date_start, date_end FROM {SCHEMA}.projects WHERE id=%s",
