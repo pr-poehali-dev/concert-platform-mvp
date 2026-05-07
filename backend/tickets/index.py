@@ -613,6 +613,18 @@ def handler(event: dict, context) -> dict:
         if provider not in PROVIDERS:
             return err(f"Провайдер {provider} не поддерживается")
 
+        # Проверяем что event_id реально существует в TC-аккаунте
+        if provider == "ticketscloud":
+            try:
+                _tc_request(f"https://ticketscloud.com/v1/resources/events/{event_id}", api_key, timeout=10)
+            except RuntimeError as e:
+                err_msg = str(e)
+                if "404" in err_msg:
+                    return err("Событие с таким ID не найдено в TicketsCloud. Проверьте ID события.")
+                if "401" in err_msg or "403" in err_msg:
+                    return err("Неверный API-ключ TicketsCloud. Проверьте ключ.")
+                return err(f"Не удалось подключиться к TicketsCloud: {err_msg[:120]}")
+
         webhook_secret = generate_webhook_secret()
         conn = get_conn()
         try:
@@ -696,6 +708,17 @@ def handler(event: dict, context) -> dict:
 
         if not user_id or not api_key or not tc_event_id:
             return err("userId, apiKey, eventId обязательны")
+
+        # Проверяем event_id и получаем мета-данные одним запросом
+        try:
+            _tc_request(f"https://ticketscloud.com/v1/resources/events/{tc_event_id}", api_key, timeout=10)
+        except RuntimeError as e:
+            err_msg = str(e)
+            if "404" in err_msg:
+                return err("Событие с таким ID не найдено в TicketsCloud. Проверьте ID события.")
+            if "401" in err_msg or "403" in err_msg:
+                return err("Неверный API-ключ TicketsCloud. Проверьте ключ.")
+            return err(f"Не удалось подключиться к TicketsCloud: {err_msg[:120]}")
 
         # Получаем только мета-данные и категории (2 быстрых запроса, ~1 сек)
         event_info = fetch_ticketscloud_event_info(api_key, tc_event_id)
