@@ -260,6 +260,70 @@ def handler(event: dict, context) -> dict:
             "createdAt":     datetime.utcnow().isoformat(),
         })
 
+    # ── POST presign — генерирует presigned URL для прямой загрузки в S3 ──
+    if method == "POST" and action == "presign":
+        body       = json.loads(event.get("body") or "{}")
+        file_name  = body.get("fileName", "document")
+        mime_type  = body.get("mimeType", "application/octet-stream")
+        file_size  = int(body.get("fileSize", 0))
+        category   = body.get("category", "other")
+        note       = body.get("note", "")
+        project_id = body.get("projectId", None)
+
+        MAX_PRESIGN_SIZE = 100 * 1024 * 1024  # 100 МБ
+        if file_size > MAX_PRESIGN_SIZE:
+            return err("Файл слишком большой (максимум 100 МБ)")
+
+        if category not in CATEGORIES:
+            category = "other"
+
+        ext    = EXT_MAP.get(mime_type, "bin")
+        folder = f"documents/projects/{project_id}" if project_id else f"documents/{user_role}/{user_id}"
+        s3_key = f"{folder}/{uuid.uuid4()}.{ext}"
+
+        s3 = get_s3()
+        presigned_url = s3.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": "files",
+                "Key": s3_key,
+                "ContentType": mime_type,
+            },
+            ExpiresIn=600,  # 10 минут
+        )
+
+        # Сохраняем мета-данные в БД сразу (файл будет загружен напрямую в S3)
+        doc_id   = str(uuid.uuid4())
+        file_url = cdn_url(s3_key)
+        conn = get_conn()
+        cur  = conn.cursor()
+        cur.execute(
+            f"""INSERT INTO {SCHEMA}.user_documents
+                (id, user_id, user_role, category, name, file_url, file_size, mime_type, note, project_id)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+            (doc_id, user_id, user_role, category, file_name,
+             file_url, file_size, mime_type, note, project_id or None),
+        )
+        conn.commit()
+        conn.close()
+
+        return ok({
+            "uploadUrl": presigned_url,
+            "id":            doc_id,
+            "fileUrl":       file_url,
+            "fileSize":      file_size,
+            "fileSizeHuman": format_size(file_size),
+            "name":          file_name,
+            "category":      category,
+            "categoryLabel": CATEGORIES.get(category, "Прочее"),
+            "mimeType":      mime_type,
+            "note":          note,
+            "projectId":     project_id,
+            "folder":        "",
+            "isSigned":      False,
+            "createdAt":     datetime.utcnow().isoformat(),
+        })
+
     # ── POST update_note ──────────────────────────────────────────────────
     if method == "POST" and action == "update_note":
         body   = json.loads(event.get("body") or "{}")

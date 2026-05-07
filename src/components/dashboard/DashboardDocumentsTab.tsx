@@ -74,8 +74,8 @@ export default function DashboardDocumentsTab() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (f.size > 20 * 1024 * 1024) {
-      setUploadError("Файл больше 20 МБ");
+    if (f.size > 100 * 1024 * 1024) {
+      setUploadError("Файл больше 100 МБ");
       return;
     }
     setUploadFile(f);
@@ -89,28 +89,46 @@ export default function DashboardDocumentsTab() {
     setUploadProgress(true);
     setUploadError("");
     try {
-      const base64: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve((reader.result as string).split(",")[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(uploadFile);
-      });
+      const mime = uploadFile.type || "application/octet-stream";
+      const SMALL = 5 * 1024 * 1024; // до 5 МБ — через base64, крупнее — presigned URL
 
-      const res = await fetch(`${DOCS_URL}?action=upload`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Session-Id": session() },
-        body: JSON.stringify({
-          fileData:  base64,
-          fileName:  uploadFile.name,
-          mimeType:  uploadFile.type || "application/octet-stream",
-          category:  uploadCategory,
-          note:      uploadNote,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+      if (uploadFile.size <= SMALL) {
+        // Маленький файл — старый путь через base64
+        const base64: string = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve((reader.result as string).split(",")[1]);
+          reader.onerror = reject;
+          reader.readAsDataURL(uploadFile);
+        });
+        const res = await fetch(`${DOCS_URL}?action=upload`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+          body: JSON.stringify({ fileData: base64, fileName: uploadFile.name, mimeType: mime, category: uploadCategory, note: uploadNote }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Ошибка загрузки");
+        setDocs(prev => [data, ...prev]);
+      } else {
+        // Большой файл — presigned URL: загружаем напрямую в S3
+        const presignRes = await fetch(`${DOCS_URL}?action=presign`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Id": session() },
+          body: JSON.stringify({ fileName: uploadFile.name, mimeType: mime, fileSize: uploadFile.size, category: uploadCategory, note: uploadNote }),
+        });
+        const presignData = await presignRes.json();
+        if (!presignRes.ok) throw new Error(presignData.error || "Ошибка подготовки загрузки");
 
-      setDocs(prev => [data, ...prev]);
+        // Загружаем файл напрямую в S3 по presigned URL
+        const s3Res = await fetch(presignData.uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": mime },
+          body: uploadFile,
+        });
+        if (!s3Res.ok) throw new Error("Ошибка загрузки файла в хранилище");
+
+        setDocs(prev => [presignData, ...prev]);
+      }
+
       setUploadModal(false);
       setUploadFile(null);
       setUploadNote("");
