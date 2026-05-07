@@ -96,25 +96,31 @@ export default function ProjectTicketsTab({ projectId }: Props) {
       setIntegrations(filtered);
 
       // Автосинхронизация: если прошло >30 мин с последней синхронизации
+      // Запускаем последовательно (не параллельно) чтобы не перегружать TC API
       if (autoSync && filtered.length > 0) {
         const now = Date.now();
-        for (const int of filtered) {
-          if (!int.isActive) continue;
+        const toSync = filtered.filter(int => {
+          if (!int.isActive) return false;
           const lastSync = int.lastSyncAt ? new Date(int.lastSyncAt).getTime() : 0;
-          const diffMin = (now - lastSync) / 1000 / 60;
-          if (diffMin > 30) {
-            // Тихая фоновая синхронизация без UI-лоадера
-            fetch(`${TICKETS_URL}?action=sync`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ integrationId: int.id }),
-            }).then(r => r.json()).then(d => {
-              if (d.eventDiff && Object.keys(d.eventDiff).length > 0) {
-                setEventDiff(d.eventDiff);
-                setPendingIntId(int.id);
-              }
-            }).catch(() => {});
-          }
+          return (now - lastSync) / 1000 / 60 > 30;
+        });
+        if (toSync.length > 0) {
+          (async () => {
+            for (const int of toSync) {
+              try {
+                const r = await fetch(`${TICKETS_URL}?action=sync`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ integrationId: int.id }),
+                });
+                const d = await r.json();
+                if (d.eventDiff && Object.keys(d.eventDiff).length > 0) {
+                  setEventDiff(d.eventDiff);
+                  setPendingIntId(int.id);
+                }
+              } catch { /* тихая ошибка */ }
+            }
+          })();
         }
       }
     } catch { setIntegrations([]); }
