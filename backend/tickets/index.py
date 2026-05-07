@@ -935,7 +935,6 @@ def handler(event: dict, context) -> dict:
             )
             row = cur.fetchone()
             if not row:
-                conn.close()
                 return err("Интеграция не найдена", 404)
 
             api_key, webhook_secret, project_id = row
@@ -943,7 +942,6 @@ def handler(event: dict, context) -> dict:
             # Верификация подписи TicketsCloud
             if webhook_secret and signature:
                 if not verify_ticketscloud_signature(payload_bytes, signature, webhook_secret):
-                    conn.close()
                     return err("Неверная подпись вебхука", 403)
 
             try:
@@ -1015,14 +1013,18 @@ def handler(event: dict, context) -> dict:
             conn.close()
 
         def _run_sync(job_id, int_id, api_key, event_id_val, project_id, provider):
-            """Выполняет синхронизацию в фоновом потоке."""
-            conn2 = get_conn()
-            try:
-                cur2 = conn2.cursor()
-                orders, event_sets, event_info = [], [], {}
-                inserted, income_synced = 0, 0
-                event_diff = {}
+            """Выполняет синхронизацию в фоновом потоке.
+            ВАЖНО: соединение к БД открывается ТОЛЬКО после завершения запросов к внешнему API,
+            чтобы не держать коннект во время ожидания ответа от TicketsCloud (10-30 сек).
+            """
+            import json as _json
+            orders, event_sets, event_info = [], [], {}
+            inserted, income_synced = 0, 0
+            event_diff = {}
+            fetch_error = None
 
+            # ── 1. Все запросы к внешнему API — без открытого соединения к БД ──
+            try:
                 if provider == "ticketscloud":
                     futures_map = {}
                     with ThreadPoolExecutor(max_workers=3) as pool:
@@ -1034,7 +1036,23 @@ def handler(event: dict, context) -> dict:
                     orders     = futures_map["orders"].result()
                     event_sets = futures_map["sets"].result() if "sets" in futures_map else []
                     event_info = futures_map["info"].result() if "info" in futures_map else {}
+            except Exception as ex:
+                fetch_error = str(ex)[:500]
 
+            # ── 2. Только теперь открываем соединение к БД и сохраняем данные ──
+            conn2 = get_conn()
+            try:
+                cur2 = conn2.cursor()
+
+                if fetch_error:
+                    cur2.execute(
+                        f"UPDATE {SCHEMA}.sync_jobs SET status='error', error=%s, finished_at=NOW() WHERE id=%s",
+                        (fetch_error, job_id)
+                    )
+                    conn2.commit()
+                    return
+
+                if provider == "ticketscloud":
                     all_sales = []
                     for order in orders:
                         all_sales.extend(parse_ticketscloud_order(order, int_id, project_id))
@@ -1088,7 +1106,6 @@ def handler(event: dict, context) -> dict:
                     "eventSets": event_sets if project_id else [],
                     "eventDiff": event_diff,
                 }
-                import json as _json
                 cur2.execute(
                     f"UPDATE {SCHEMA}.sync_jobs SET status='done', result=%s, finished_at=NOW() WHERE id=%s",
                     (_json.dumps(result), job_id)
@@ -1096,7 +1113,6 @@ def handler(event: dict, context) -> dict:
                 conn2.commit()
             except Exception as ex:
                 try:
-                    import json as _json
                     cur2.execute(
                         f"UPDATE {SCHEMA}.sync_jobs SET status='error', error=%s, finished_at=NOW() WHERE id=%s",
                         (str(ex)[:500], job_id)
