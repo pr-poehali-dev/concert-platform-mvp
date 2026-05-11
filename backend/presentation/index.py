@@ -594,7 +594,6 @@ class ProgressBarFlowable(Flowable):
 def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ticket_sales: list, ai_summary: str, user_prompt: str = ""):
     doc = SimpleDocTemplate(buf, pagesize=A4,
         leftMargin=20*mm, rightMargin=20*mm, topMargin=15*mm, bottomMargin=15*mm)
-
     CW = W - 40*mm
 
     def bg(canvas, doc):
@@ -603,154 +602,134 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
 
     story = []
 
-    # ── Данные проекта ────────────────────────────────────────────────────────
+    # ── Данные ────────────────────────────────────────────────────────────────
     title    = project.get("title") or "Проект"
     artist   = project.get("artist") or ""
     city     = project.get("city") or ""
-    venue    = project.get("venue_name") or project.get("venueName") or ""
-    d_start  = str(project.get("date_start") or project.get("dateStart") or "")
-    d_end    = str(project.get("date_end") or project.get("dateEnd") or "")
+    venue    = project.get("venue_name") or ""
+    d_start  = str(project.get("date_start") or "")
+    d_end    = str(project.get("date_end") or "")
     status   = project.get("status") or ""
-    tax_sys  = project.get("tax_system") or project.get("taxSystem") or "usn6"
+    tax_sys  = project.get("tax_system") or "usn6"
 
-    inc_plan = float(project.get("total_income_plan") or project.get("totalIncomePlan") or 0)
-    inc_fact = float(project.get("total_income_fact") or project.get("totalIncomeFact") or 0)
-    exp_plan = float(project.get("total_expenses_plan") or project.get("totalExpensesPlan") or 0)
-    exp_fact = float(project.get("total_expenses_fact") or project.get("totalExpensesFact") or 0)
+    inc_plan = float(project.get("total_income_plan") or 0)
+    inc_fact = float(project.get("total_income_fact") or 0)
+    exp_plan = float(project.get("total_expenses_plan") or 0)
+    exp_fact = float(project.get("total_expenses_fact") or 0)
 
-    TAX_RATES   = {"usn6": 0.06, "usn15": 0.15, "osn": 0.20, "patent": 0, "npd": 0.06}
+    TAX_RATES   = {"usn6":0.06,"usn15":0.15,"osn":0.20,"patent":0,"npd":0.06}
     tax_rate    = TAX_RATES.get(tax_sys, 0.06)
     tax_plan    = inc_plan * tax_rate
     tax_fact    = inc_fact * tax_rate
     profit_plan = inc_plan - exp_plan - tax_plan
     profit_fact = inc_fact - exp_fact - tax_fact
+    profit_col  = C_GREEN if profit_plan >= 0 else C_PINK
+    tax_lbl     = f"УСН {int(tax_rate*100)}%" if tax_sys.startswith("usn") else "ОСН"
 
-    STATUS_LABELS = {"planning": "Планирование", "active": "Активный", "completed": "Завершён", "cancelled": "Отменён"}
-    profit_color  = C_GREEN if profit_plan >= 0 else C_PINK
-    tax_label     = f"УСН {int(tax_rate*100)}%" if tax_sys.startswith("usn") else ("ОСН" if tax_sys == "osn" else tax_sys.upper())
+    STATUS_RU = {"planning":"Планирование","active":"Активный","completed":"Завершён","cancelled":"Отменён"}
+    date_str  = d_start
+    if d_end and d_end != d_start: date_str += f" — {d_end}"
+    meta      = "  ·  ".join(p for p in [city, venue, date_str] if p)
 
-    date_str = d_start
-    if d_end and d_end != d_start:
-        date_str += f" — {d_end}"
+    def fmt(v):
+        v = float(v or 0)
+        if abs(v) >= 1_000_000: return f"{v/1_000_000:.1f} млн ₽"
+        return f"{int(v):,} ₽".replace(",", " ")
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # ОБЛОЖКА
-    # ═══════════════════════════════════════════════════════════════════════
-    story += [sp(5), grad_line(), sp(2)]
+    # ════════════════════════════════════════════════════════════════════════
+    # ОБЛОЖКА — как слайд HERO
+    # ════════════════════════════════════════════════════════════════════════
+    story += [sp(4), grad_line(), sp(2)]
 
     if user_prompt:
-        story.append(Paragraph(
-            user_prompt[:80].upper(),
-            style("up_tag", fontName="Helvetica-Bold", fontSize=9, textColor=C_CYAN, leading=13, alignment=TA_CENTER)
-        ))
-        story.append(sp(1))
+        story += [Paragraph(user_prompt[:90],
+            style("upt", fontName="Helvetica-Bold", fontSize=10, textColor=C_CYAN, leading=14, alignment=TA_CENTER)), sp(1)]
 
     if artist:
-        story.append(Paragraph(
-            artist,
-            style("art_h", fontName="Helvetica-Bold", fontSize=16, textColor=C_PURPLE, leading=22, alignment=TA_CENTER)
-        ))
-        story.append(sp(1))
+        story += [Paragraph(artist, style("art", fontName="Helvetica-Bold", fontSize=13,
+            textColor=C_PURPLE, leading=18, alignment=TA_CENTER)), sp(1)]
 
-    story.append(Paragraph(title.upper(), S_HERO_TITLE))
-    story.append(sp(2))
+    story += [Paragraph(title.upper(), S_HERO_TITLE), sp(2)]
+    if meta:
+        story += [Paragraph(meta, S_HERO_SUB), sp(1)]
+    story += [Paragraph(STATUS_RU.get(status, status), S_CAPTION), sp(2), grad_line(), sp(3)]
 
-    meta_parts = [p for p in [city, venue, date_str] if p]
-    if meta_parts:
-        story.append(Paragraph("  ·  ".join(meta_parts), S_HERO_SUB))
-        story.append(sp(1))
+    # Картинка-дашборд (как в слайде «РЕШЕНИЕ»)
+    img = fetch_image(IMG_DASHBOARD, CW, 80*mm)
+    if img:
+        img.hAlign = "CENTER"
+        story += [img, sp(1),
+            Paragraph("Управление концертным проектом на платформе GLOBAL LINK", S_CAPTION), sp(3)]
 
+    # KPI-блок — 4 цифры как в HERO-слайде
     story += [
-        Paragraph(STATUS_LABELS.get(status, status), S_CAPTION),
-        sp(2), grad_line(), sp(3),
-    ]
-
-    # Картинка дашборда на обложку
-    img_dash = fetch_image(IMG_DASHBOARD, CW, 80*mm)
-    if img_dash:
-        img_dash.hAlign = "CENTER"
-        story.append(img_dash)
-        story += [sp(1), Paragraph("Управление проектом на платформе GLOBAL LINK", S_CAPTION), sp(4)]
-    else:
-        story.append(sp(4))
-
-    # ═══════════════════════════════════════════════════════════════════════
-    # ФИНАНСОВЫЕ KPI — 4 крупных числа
-    # ═══════════════════════════════════════════════════════════════════════
-    story += [
-        Paragraph("ФИНАНСЫ ПРОЕКТА", S_TAG), sp(1),
-        Paragraph("Ключевые показатели", S_SECTION), sp(3),
         stat_block([
-            (fmt_money(inc_plan),    f"Доход\nплан"),
-            (fmt_money(inc_fact),    f"Доход\nфакт"),
-            (fmt_money(exp_plan),    f"Расходы\nплан"),
-            (fmt_money(profit_plan), f"Прибыль\nплан"),
+            (fmt(inc_plan),    "Доход\nплан"),
+            (fmt(inc_fact),    "Доход\nфакт"),
+            (fmt(exp_plan),    "Расходы\nплан"),
+            (fmt(profit_plan), "Прибыль\nплан"),
         ]),
-        sp(4),
+        sp(6),
     ]
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # КАРТОЧКИ — план vs факт
-    # ═══════════════════════════════════════════════════════════════════════
-    inc_pct = f"{inc_fact/inc_plan*100:.0f}% от плана" if inc_plan else "нет данных"
-    exp_pct = f"{exp_fact/exp_plan*100:.0f}% от плана" if exp_plan else "нет данных"
-
+    # ════════════════════════════════════════════════════════════════════════
+    # ПЛАН VS ФАКТ — как слайд «ФИНАНСЫ»
+    # ════════════════════════════════════════════════════════════════════════
     story += [
         grad_line(), sp(3),
-        Paragraph("ПЛАН И ФАКТ", S_TAG), sp(1),
-        Paragraph("Как идёт проект относительно бюджета", S_SECTION_PURP), sp(3),
+        Paragraph("ФИНАНСЫ", S_TAG), sp(1),
+        Paragraph("Бюджет, доходы и чистая прибыль", S_SECTION_PURP), sp(3),
+    ]
+
+    inc_pct = f"{inc_fact/inc_plan*100:.0f}% выполнено" if inc_plan else "нет данных"
+    exp_pct = f"{exp_fact/exp_plan*100:.0f}% израсходовано" if exp_plan else "нет данных"
+
+    story += [
         two_col(
             [
-                feature_card("🎯", "Доходы", f"Запланировано: {fmt_money(inc_plan)}\nПолучено: {fmt_money(inc_fact)}\n{inc_pct}", C_GREEN),
-                sp(3),
-                feature_card("📊", "Налог " + tax_label, f"Запланировано: {fmt_money(tax_plan)}\nНачислено: {fmt_money(tax_fact)}", C_CYAN),
+                feature_card("🎯", "Доходы",
+                    f"План: {fmt(inc_plan)}\nФакт: {fmt(inc_fact)} · {inc_pct}", C_GREEN),
+                sp(4),
+                feature_card("💰", f"Налог ({tax_lbl})",
+                    f"К уплате план: {fmt(tax_plan)}\nФакт: {fmt(tax_fact)}", C_CYAN),
             ],
             [
-                feature_card("💸", "Расходы", f"Запланировано: {fmt_money(exp_plan)}\nПотрачено: {fmt_money(exp_fact)}\n{exp_pct}", C_PINK),
-                sp(3),
-                feature_card("✨", "Чистая прибыль", f"Запланировано: {fmt_money(profit_plan)}\nПо факту: {fmt_money(profit_fact)}", profit_color),
+                feature_card("💸", "Расходы",
+                    f"Бюджет: {fmt(exp_plan)}\nПотрачено: {fmt(exp_fact)} · {exp_pct}", C_PINK),
+                sp(4),
+                feature_card("✨", "Чистая прибыль",
+                    f"Прогноз: {fmt(profit_plan)}\nПо факту: {fmt(profit_fact)}", profit_col),
             ]
         ),
         sp(4),
     ]
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # ИИ-АНАЛИТИКА
-    # ═══════════════════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════════════════════
+    # ИИ-АНАЛИТИКА — как слайд «РЕШЕНИЕ» с картинкой
+    # ════════════════════════════════════════════════════════════════════════
     if ai_summary:
         story += [
             grad_line(), sp(3),
-            Paragraph("АНАЛИТИКА И ВЫВОДЫ", S_TAG), sp(1),
-            Paragraph("Оценка проекта от ИИ-ассистента GLOBAL LINK", S_SECTION_CYAN), sp(2),
+            Paragraph("АНАЛИТИКА", S_TAG), sp(1),
+            Paragraph("Оценка проекта и рекомендации", S_SECTION_CYAN), sp(2),
         ]
-        # Картинка для визуального разделения
-        img_net = fetch_image(IMG_NETWORK, CW, 55*mm)
-        if img_net:
-            img_net.hAlign = "CENTER"
-            story.append(img_net)
-            story.append(sp(2))
+        img2 = fetch_image(IMG_NETWORK, CW, 55*mm)
+        if img2:
+            img2.hAlign = "CENTER"
+            story += [img2, sp(2)]
 
-        for para in ai_summary.split("\n"):
-            para = para.strip()
-            if not para:
-                story.append(sp(1))
-                continue
-            # Убираем markdown-символы
-            clean = para.lstrip("#*•-").strip()
-            if not clean:
-                continue
-            if para.startswith("##") or para.startswith("**"):
-                story.append(Paragraph(clean, S_HIGHLIGHT))
-            elif para.startswith("•") or para.startswith("-") or para.startswith("*"):
-                story.append(Paragraph(f"• {clean}", S_BULLET))
+        for line in ai_summary.split("\n"):
+            line = line.strip().lstrip("#*").strip()
+            if not line: story.append(sp(1)); continue
+            if line.startswith("•") or line.startswith("-"):
+                story += [Paragraph(f"• {line.lstrip('•-').strip()}", S_BULLET), sp(1)]
             else:
-                story.append(Paragraph(clean, S_BODY))
-            story.append(sp(1))
+                story += [Paragraph(line, S_BODY), sp(1)]
         story.append(sp(3))
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # СТРУКТУРА РАСХОДОВ
-    # ═══════════════════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════════════════════
+    # РАСХОДЫ — как слайд «ИНСТРУМЕНТЫ» (feature_card + прогресс)
+    # ════════════════════════════════════════════════════════════════════════
     if expenses:
         cats: dict = {}
         for e in expenses:
@@ -762,120 +741,107 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
         story += [
             grad_line(), sp(3),
             Paragraph("БЮДЖЕТ РАСХОДОВ", S_TAG), sp(1),
-            Paragraph("Статьи затрат с прогрессом исполнения", S_SECTION_PURP), sp(3),
+            Paragraph("Статьи затрат — план и исполнение", S_SECTION_PURP), sp(3),
         ]
 
-        CAT_ICONS  = ["🏛", "🎵", "📢", "🚌", "🎤", "💡", "🎬", "🖥", "📋", "💰"]
-        CAT_COLORS = [C_PINK, C_PURPLE, C_CYAN, C_GREEN,
-                      colors.HexColor("#f59e0b"), colors.HexColor("#ef4444"),
-                      colors.HexColor("#8b5cf6"), colors.HexColor("#06b6d4")]
+        ICONS  = ["🏛","🎵","📢","🚌","🎤","💡","🎬","🖥","📋","💰","🎸","🎺"]
+        COLS   = [C_PINK, C_PURPLE, C_CYAN, C_GREEN,
+                  colors.HexColor("#f59e0b"), colors.HexColor("#8b5cf6"),
+                  colors.HexColor("#ef4444"), colors.HexColor("#06b6d4")]
 
-        sorted_cats = sorted(cats.items(), key=lambda x: -x[1]["plan"])
-
-        for idx, (cat, vals) in enumerate(sorted_cats):
-            pv   = vals["plan"]
-            fv   = vals["fact"]
-            icon = CAT_ICONS[idx % len(CAT_ICONS)]
-            col  = CAT_COLORS[idx % len(CAT_COLORS)]
-            share = f"{pv/exp_plan*100:.0f}%" if exp_plan else "—"
-
-            story.append(feature_card(
-                icon, cat,
-                f"План: {fmt_money(pv)} ({share} от бюджета)  ·  Факт: {fmt_money(fv)}",
-                col
-            ))
-            story.append(ProgressBarFlowable(fv if fv else pv * 0.02, pv if pv else 1, col, CW, bar_h=5))
-            story.append(sp(3))
-
+        for idx, (cat, vals) in enumerate(sorted(cats.items(), key=lambda x: -x[1]["plan"])):
+            pv, fv = vals["plan"], vals["fact"]
+            col    = COLS[idx % len(COLS)]
+            icon   = ICONS[idx % len(ICONS)]
+            share  = f"{pv/exp_plan*100:.0f}% от бюджета" if exp_plan else ""
+            done   = f"{fv/pv*100:.0f}% исполнено" if pv else ""
+            desc   = "  ·  ".join(p for p in [f"План: {fmt(pv)}", share, f"Факт: {fmt(fv)}", done] if p)
+            story += [
+                feature_card(icon, cat, desc, col),
+                ProgressBarFlowable(fv if fv else pv*0.01, pv if pv else 1, col, CW, bar_h=5),
+                sp(3),
+            ]
         story.append(sp(2))
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # ПРОДАЖИ БИЛЕТОВ (категории)
-    # ═══════════════════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════════════════════
+    # ПРОДАЖИ БИЛЕТОВ — как слайд «БИЛЕТЫ»
+    # ════════════════════════════════════════════════════════════════════════
     if income_lines:
-        total_plan_tix = sum(int(il.get("ticket_count") or 0) for il in income_lines)
-        total_sold_tix = sum(int(il.get("sold_count") or 0) for il in income_lines)
-        conv_total     = f"{total_sold_tix/total_plan_tix*100:.0f}%" if total_plan_tix else "—"
+        total_plan = sum(int(il.get("ticket_count") or 0) for il in income_lines)
+        total_sold = sum(int(il.get("sold_count") or 0) for il in income_lines)
+        conv       = f"{total_sold/total_plan*100:.0f}%" if total_plan else "—"
 
         story += [
             grad_line(), sp(3),
-            Paragraph("ПРОДАЖИ БИЛЕТОВ", S_TAG), sp(1),
-            Paragraph("Плановые и фактические продажи по категориям", S_SECTION_CYAN), sp(3),
+            Paragraph("БИЛЕТЫ", S_TAG), sp(1),
+            Paragraph("Продажи по категориям", S_SECTION_CYAN), sp(3),
             stat_block([
-                (str(total_plan_tix), "Билетов\nв плане"),
-                (str(total_sold_tix), "Продано\nбилетов"),
-                (conv_total,          "Конверсия\nпродаж"),
-                (fmt_money(inc_fact), "Выручка\nот билетов"),
+                (str(total_plan), "Билетов\nзапланировано"),
+                (str(total_sold), "Билетов\nпродано"),
+                (conv,            "Конверсия"),
+                (fmt(inc_fact),   "Выручка\nот продаж"),
             ]),
             sp(3),
         ]
 
+        img3 = fetch_image(IMG_VENUE, CW, 60*mm)
+        if img3:
+            img3.hAlign = "CENTER"
+            story += [img3, sp(2)]
+
         for il in income_lines:
-            cat      = il.get("category") or "Билеты"
-            cnt_plan = int(il.get("ticket_count") or 0)
-            sold     = int(il.get("sold_count") or 0)
-            price    = float(il.get("ticket_price") or 0)
-            fact_sum = sold * price
-            conv     = f"{sold/cnt_plan*100:.0f}% продано" if cnt_plan else "—"
-
-            story.append(feature_card(
-                "🎟",
-                cat,
-                f"Цена: {fmt_money(price)}  ·  Продано: {sold} из {cnt_plan} ({conv})  ·  Выручка: {fmt_money(fact_sum)}",
-                C_GREEN
-            ))
-            story.append(ProgressBarFlowable(sold, cnt_plan if cnt_plan else 1, C_GREEN, CW, bar_h=5))
-            story.append(sp(3))
-
+            cat  = il.get("category") or "Билеты"
+            plan = int(il.get("ticket_count") or 0)
+            sold = int(il.get("sold_count") or 0)
+            price= float(il.get("ticket_price") or 0)
+            cv   = f"{sold/plan*100:.0f}% продано" if plan else "—"
+            desc = f"Цена: {fmt(price)}  ·  Продано {sold} из {plan} ({cv})  ·  Выручка: {fmt(sold*price)}"
+            story += [
+                feature_card("🎟", cat, desc, C_GREEN),
+                ProgressBarFlowable(sold, plan if plan else 1, C_GREEN, CW, bar_h=5),
+                sp(3),
+            ]
         story.append(sp(2))
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # СТАТИСТИКА TicketsCloud
-    # ═══════════════════════════════════════════════════════════════════════
+    # ════════════════════════════════════════════════════════════════════════
+    # TC-СТАТИСТИКА
+    # ════════════════════════════════════════════════════════════════════════
     if ticket_sales:
-        total_sold    = len(ticket_sales)
-        total_revenue = sum(float(s.get("total_amount") or 0) for s in ticket_sales)
-        paid_cnt      = sum(1 for s in ticket_sales if s.get("status") == "paid")
-        reserved_cnt  = total_sold - paid_cnt
-        avg_check     = total_revenue / paid_cnt if paid_cnt else 0
+        total   = len(ticket_sales)
+        revenue = sum(float(s.get("total_amount") or 0) for s in ticket_sales)
+        paid    = sum(1 for s in ticket_sales if s.get("status") == "paid")
+        resv    = total - paid
+        avg     = revenue / paid if paid else 0
 
         story += [
             grad_line(), sp(3),
             Paragraph("ДАННЫЕ ПРОДАЖ", S_TAG), sp(1),
-            Paragraph("Реальные продажи из системы бронирования", S_SECTION_PURP), sp(3),
+            Paragraph("Реальные данные из системы билетов", S_SECTION_PURP), sp(3),
             stat_block([
-                (str(total_sold),          "Всего\nзаказов"),
-                (str(paid_cnt),            "Оплачено"),
-                (str(reserved_cnt),        "Забронировано"),
-                (fmt_money(avg_check),     "Средний\nчек"),
+                (str(total),  "Всего\nзаказов"),
+                (str(paid),   "Оплачено"),
+                (str(resv),   "Забронировано"),
+                (fmt(avg),    "Средний\nчек"),
             ]),
             sp(3),
             two_col(
-                [
-                    feature_card("✅", "Оплаченные заказы", f"{paid_cnt} заказов на сумму {fmt_money(total_revenue)}", C_GREEN),
-                ],
-                [
-                    feature_card("🔖", "Забронировано", f"{reserved_cnt} заказов ожидают оплаты", C_CYAN),
-                ]
+                [feature_card("✅", "Оплаченные заказы",
+                    f"{paid} заказов · выручка {fmt(revenue)}", C_GREEN)],
+                [feature_card("🔖", "Ожидают оплаты",
+                    f"{resv} заказов забронировано", C_CYAN)],
             ),
             sp(4),
         ]
 
-    # ═══════════════════════════════════════════════════════════════════════
-    # ПОДВАЛ с картинкой площадки
-    # ═══════════════════════════════════════════════════════════════════════
-    img_venue = fetch_image(IMG_VENUE, CW, 60*mm)
-    if img_venue:
-        story += [grad_line(), sp(3)]
-        img_venue.hAlign = "CENTER"
-        story.append(img_venue)
-        story.append(sp(2))
-
+    # ════════════════════════════════════════════════════════════════════════
+    # ПОДВАЛ — как в build_investors
+    # ════════════════════════════════════════════════════════════════════════
     story += [
         grad_line(), sp(2),
-        Paragraph(f"GLOBAL LINK  ·  {title.upper()}", style("ft1", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE30, leading=13, alignment=TA_CENTER)),
+        Paragraph(f"GLOBAL LINK  ·  {title.upper()}",
+            style("ft", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE30, leading=13, alignment=TA_CENTER)),
         sp(1),
-        Paragraph("globallink.art  ·  Конфиденциально  ·  Сформировано автоматически", S_FOOTER),
+        Paragraph("globallink.art  ·  Конфиденциально  ·  Сформировано платформой GLOBAL LINK", S_FOOTER),
     ]
 
     doc.build(story, onFirstPage=bg, onLaterPages=bg)
@@ -950,6 +916,58 @@ def handler(event: dict, context) -> dict:
 
         finally:
             conn.close()
+
+        # ── ИИ-аналитика прямо здесь, строго на русском ─────────────────────
+        ai_summary = ""
+        try:
+            api_key = os.environ.get("AITUNNEL_API_KEY", "")
+            if api_key:
+                title_p  = project.get("title") or "проект"
+                artist_p = project.get("artist") or ""
+                city_p   = project.get("city") or ""
+                inc_p    = float(project.get("total_income_plan") or 0)
+                inc_f    = float(project.get("total_income_fact") or 0)
+                exp_p    = float(project.get("total_expenses_plan") or 0)
+                exp_f    = float(project.get("total_expenses_fact") or 0)
+                tax_r    = {"usn6":0.06,"usn15":0.15,"osn":0.20,"patent":0,"npd":0.06}.get(
+                               project.get("tax_system") or "usn6", 0.06)
+                prf_p    = inc_p - exp_p - inc_p * tax_r
+                prf_f    = inc_f - exp_f - inc_f * tax_r
+                prompt_extra = f"\n\nОсобый акцент: {user_prompt}" if user_prompt else ""
+
+                sys_msg = ("Ты аналитик концертной индустрии. Отвечай ТОЛЬКО на русском языке. "
+                           "Пиши живо, по-деловому, коротко. Используй • для списков.")
+                user_msg = (
+                    f"Напиши аналитику для PDF-презентации концертного проекта (8-12 строк, только русский язык).{prompt_extra}\n\n"
+                    f"Проект: «{title_p}»{', артист: ' + artist_p if artist_p else ''}{', город: ' + city_p if city_p else ''}\n"
+                    f"Доход план: {inc_p:,.0f} ₽, факт: {inc_f:,.0f} ₽\n"
+                    f"Расходы план: {exp_p:,.0f} ₽, факт: {exp_f:,.0f} ₽\n"
+                    f"Чистая прибыль план: {prf_p:,.0f} ₽, факт: {prf_f:,.0f} ₽\n\n"
+                    f"Структура ответа:\n"
+                    f"1. Одно предложение — общая оценка проекта\n"
+                    f"2. 3-4 пункта со знаком • — ключевые наблюдения по цифрам\n"
+                    f"3. Одно предложение — главная рекомендация\n"
+                    f"Не используй markdown заголовки ##. Не пиши ни слова на английском."
+                )
+                payload = json.dumps({
+                    "model": "gpt-4o-mini",
+                    "messages": [{"role": "system", "content": sys_msg},
+                                 {"role": "user",   "content": user_msg}],
+                    "temperature": 0.5,
+                    "max_tokens": 600,
+                }).encode("utf-8")
+                req = urllib.request.Request(
+                    "https://api.aitunnel.ru/v1/chat/completions",
+                    data=payload,
+                    headers={"Content-Type": "application/json",
+                             "Authorization": f"Bearer {api_key}"},
+                    method="POST"
+                )
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    resp = json.loads(r.read())
+                    ai_summary = resp["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            print(f"[presentation] ai error: {e}")
 
         safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in (project.get("title") or "project"))[:40].strip()
         filename   = f"Presentation_{safe_title}.pdf"

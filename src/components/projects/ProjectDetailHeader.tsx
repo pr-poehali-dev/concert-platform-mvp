@@ -6,7 +6,6 @@ import { exportCSV, exportExcel, exportPDF, companyInfoFromUser } from "@/lib/ex
 import { useAuth } from "@/context/AuthContext";
 
 const PRESENTATION_URL = "https://functions.poehali.dev/3a1c12fb-cacd-4731-961b-2f37badc2c08";
-const AI_URL = "https://functions.poehali.dev/8841fd93-d5cc-414b-a912-d185ca8cab48";
 
 interface Props {
   project: Project;
@@ -49,26 +48,11 @@ export default function ProjectDetailHeader({
     setPdfError(null);
     setPdfUrl(null);
     try {
-      const sessionId = localStorage.getItem("sessionId") || "";
-      let aiSummary = "";
-      const promptExtra = pdfPrompt.trim() ? `\n\nДополнительные пожелания к тону и содержанию: ${pdfPrompt.trim()}` : "";
-      try {
-        const aiRes = await fetch(`${AI_URL}?action=ask`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
-          body: JSON.stringify({
-            message: `Проанализируй финансовые показатели концертного проекта и напиши текст для PDF-презентации (6-10 предложений, живой язык, можно использовать • для списка).${promptExtra}\n\nДанные проекта:\n- Название: ${project.title}\n- Артист: ${project.artist || "—"}\n- Город: ${project.city || "—"}, Площадка: ${project.venueName || "—"}\n- Доход план: ${project.totalIncomePlan} ₽, факт: ${project.totalIncomeFact} ₽\n- Расходы план: ${project.totalExpensesPlan} ₽, факт: ${project.totalExpensesFact} ₽\n- Чистая прибыль план: ${project.finance.profitPlan} ₽, факт: ${project.finance.profitFact} ₽\n- Статус: ${project.status}\n\nДай аналитику + 2-3 рекомендации.`,
-          }),
-        });
-        const aiData = await aiRes.json();
-        aiSummary = aiData.answer || "";
-      } catch { /* ИИ необязателен */ }
-
       setPdfStep("pdf");
       const res = await fetch(`${PRESENTATION_URL}?action=project_pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id, userId: user?.id || "", aiSummary, userPrompt: pdfPrompt.trim() }),
+        body: JSON.stringify({ projectId: project.id, userId: user?.id || "", userPrompt: pdfPrompt.trim() }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || "Ошибка генерации");
