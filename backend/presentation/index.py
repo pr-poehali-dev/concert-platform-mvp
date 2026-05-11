@@ -612,8 +612,8 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
     artist   = project.get("artist") or ""
     city     = project.get("city") or ""
     venue    = project.get("venue_name") or project.get("venueName") or ""
-    d_start  = project.get("date_start") or project.get("dateStart") or ""
-    d_end    = project.get("date_end") or project.get("dateEnd") or ""
+    d_start  = str(project.get("date_start") or project.get("dateStart") or "")
+    d_end    = str(project.get("date_end") or project.get("dateEnd") or "")
     status   = project.get("status") or ""
     tax_sys  = project.get("tax_system") or project.get("taxSystem") or "usn6"
 
