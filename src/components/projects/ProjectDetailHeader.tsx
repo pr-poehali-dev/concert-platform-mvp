@@ -34,6 +34,14 @@ export default function ProjectDetailHeader({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfCopied, setPdfCopied] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pdfPrompt, setPdfPrompt] = useState("");
+
+  const PDF_PRESETS = [
+    { label: "Для инвесторов", text: "Акцентируй внимание на доходности и потенциале роста. Тон — деловой, убедительный." },
+    { label: "Для партнёров", text: "Подчеркни масштаб проекта, охват аудитории и взаимные выгоды от сотрудничества." },
+    { label: "Итоги для команды", text: "Расскажи об итогах проекта честно — что получилось, где отклонились от плана и что улучшить." },
+    { label: "Спонсорам", text: "Опиши проект ярко и эмоционально. Покажи масштаб события и ценность для бренда спонсора." },
+  ];
 
   const generatePdf = async () => {
     setPdfLoading(true);
@@ -43,12 +51,13 @@ export default function ProjectDetailHeader({
     try {
       const sessionId = localStorage.getItem("sessionId") || "";
       let aiSummary = "";
+      const promptExtra = pdfPrompt.trim() ? `\n\nДополнительные пожелания к тону и содержанию: ${pdfPrompt.trim()}` : "";
       try {
         const aiRes = await fetch(`${AI_URL}?action=ask`, {
           method: "POST",
           headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
           body: JSON.stringify({
-            message: `Проанализируй финансовые показатели концертного проекта и дай краткое деловое резюме (5-8 предложений). Данные:\n- Название: ${project.title}\n- Артист: ${project.artist || "—"}\n- Доход план: ${project.totalIncomePlan} ₽, факт: ${project.totalIncomeFact} ₽\n- Расходы план: ${project.totalExpensesPlan} ₽, факт: ${project.totalExpensesFact} ₽\n- Чистая прибыль план: ${project.finance.profitPlan} ₽, факт: ${project.finance.profitFact} ₽\n- Статус: ${project.status}\nСделай вывод об эффективности проекта и дай 2-3 практических рекомендации.`,
+            message: `Проанализируй финансовые показатели концертного проекта и напиши текст для PDF-презентации (6-10 предложений, живой язык, можно использовать • для списка).${promptExtra}\n\nДанные проекта:\n- Название: ${project.title}\n- Артист: ${project.artist || "—"}\n- Город: ${project.city || "—"}, Площадка: ${project.venueName || "—"}\n- Доход план: ${project.totalIncomePlan} ₽, факт: ${project.totalIncomeFact} ₽\n- Расходы план: ${project.totalExpensesPlan} ₽, факт: ${project.totalExpensesFact} ₽\n- Чистая прибыль план: ${project.finance.profitPlan} ₽, факт: ${project.finance.profitFact} ₽\n- Статус: ${project.status}\n\nДай аналитику + 2-3 рекомендации.`,
           }),
         });
         const aiData = await aiRes.json();
@@ -59,7 +68,7 @@ export default function ProjectDetailHeader({
       const res = await fetch(`${PRESENTATION_URL}?action=project_pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: project.id, userId: user?.id || "", aiSummary }),
+        body: JSON.stringify({ projectId: project.id, userId: user?.id || "", aiSummary, userPrompt: pdfPrompt.trim() }),
       });
       const data = await res.json();
       if (!res.ok || !data.url) throw new Error(data.error || "Ошибка генерации");
@@ -84,6 +93,7 @@ export default function ProjectDetailHeader({
     setPdfUrl(null);
     setPdfError(null);
     setPdfCopied(false);
+    setPdfPrompt("");
   };
 
   const createShareLink = async (showFiles: boolean) => {
@@ -253,22 +263,43 @@ export default function ProjectDetailHeader({
 
           {!pdfUrl && !pdfLoading && !pdfError && (
             <>
-              <p className="text-white/50 text-sm mb-5">
-                ИИ проанализирует цифры проекта и сформирует PDF-презентацию с финансовой сводкой, расходами и продажами билетов. Ссылка будет готова за ~15 секунд.
-              </p>
-              <div className="glass rounded-xl p-4 border border-white/10 mb-5 space-y-2">
+              <div className="grid grid-cols-2 gap-2 mb-4">
                 {[
                   { icon: "BarChart3", label: "Финансовое резюме", color: "text-neon-green" },
-                  { icon: "Brain", label: "ИИ-аналитика и рекомендации", color: "text-neon-purple" },
-                  { icon: "PieChart", label: "Структура расходов по категориям", color: "text-neon-pink" },
-                  { icon: "Ticket", label: "Статистика продаж билетов", color: "text-neon-cyan" },
+                  { icon: "Brain", label: "ИИ-аналитика", color: "text-neon-purple" },
+                  { icon: "PieChart", label: "Расходы по статьям", color: "text-neon-pink" },
+                  { icon: "Ticket", label: "Продажи билетов", color: "text-neon-cyan" },
                 ].map((it, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <Icon name={it.icon} size={15} className={it.color}/>
-                    <span className="text-white/70 text-sm">{it.label}</span>
+                  <div key={i} className="flex items-center gap-2 glass rounded-lg px-3 py-2 border border-white/8">
+                    <Icon name={it.icon} size={13} className={it.color}/>
+                    <span className="text-white/60 text-xs">{it.label}</span>
                   </div>
                 ))}
               </div>
+
+              <div className="mb-3">
+                <p className="text-white/40 text-xs mb-2 uppercase tracking-wider">Для кого презентация?</p>
+                <div className="flex flex-wrap gap-2">
+                  {PDF_PRESETS.map((p, i) => (
+                    <button key={i}
+                      onClick={() => setPdfPrompt(prev => prev === p.text ? "" : p.text)}
+                      className={`px-3 py-1.5 rounded-lg text-xs transition-all border ${pdfPrompt === p.text ? "bg-neon-purple/20 border-neon-purple/50 text-neon-purple" : "glass border-white/10 text-white/50 hover:border-white/20 hover:text-white/70"}`}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <textarea
+                  value={pdfPrompt}
+                  onChange={e => setPdfPrompt(e.target.value)}
+                  placeholder="Или напиши сам: для кого, какой тон, на что сделать акцент..."
+                  rows={3}
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white/80 text-sm placeholder-white/25 outline-none focus:border-neon-purple/40 resize-none transition-colors"
+                />
+              </div>
+
               <button
                 onClick={generatePdf}
                 className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-purple/80 to-neon-cyan/60 text-white font-medium text-sm hover:opacity-90 transition-opacity"
