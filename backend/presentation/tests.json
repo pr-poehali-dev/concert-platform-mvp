@@ -14,6 +14,14 @@
       "body": {},
       "expectedStatus": 400,
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "project_html_pdf missing fields",
+      "method": "POST",
+      "path": "/?action=project_html_pdf",
+      "body": {},
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
     }
   ]
 }

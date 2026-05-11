@@ -1,9 +1,10 @@
 """
 Генерация PDF-презентаций платформы GLOBAL LINK.
-GET ?type=investors         — для инвесторов
-GET ?type=users             — для организаторов и площадок
-GET ?type=partners          — для партнёров
-POST ?action=project_pdf    — презентация конкретного проекта (цифры + картинки)
+GET  ?type=investors          — для инвесторов
+GET  ?type=users              — для организаторов и площадок
+GET  ?type=partners           — для партнёров
+POST ?action=project_pdf      — презентация проекта (ReportLab)
+POST ?action=project_html_pdf — красивая презентация проекта (WeasyPrint HTML→PDF)
 """
 import os, io, uuid, json, urllib.request, math
 import psycopg2
@@ -847,6 +848,371 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
     doc.build(story, onFirstPage=bg, onLaterPages=bg)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# HTML-ШАБЛОН ДЛЯ WEASYPRINT
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def build_html_template(project: dict, expenses: list, income_lines: list,
+                        ticket_sales: list, ai_summary: str, user_prompt: str) -> str:
+    IMG_HERO      = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/c969ae71-7a9a-4f65-b744-3969d9375dbb.jpg"
+    IMG_DASHBOARD = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/de320665-a1c3-4e3c-bda4-fafc277293f7.jpg"
+    IMG_VENUE     = "https://cdn.poehali.dev/projects/1ed8ea58-594e-40fe-8962-42d12ff34e0f/files/1c73dd10-0cee-421e-ae63-02ea7734eacc.jpg"
+
+    title   = str(project.get("title") or "Проект")
+    artist  = str(project.get("artist") or "")
+    city    = str(project.get("city") or "")
+    venue   = str(project.get("venue_name") or "")
+    d_start = str(project.get("date_start") or "")[:10]
+    d_end   = str(project.get("date_end") or "")[:10]
+    status  = str(project.get("status") or "")
+    tax_sys = str(project.get("tax_system") or "usn6")
+
+    inc_plan = float(project.get("total_income_plan") or 0)
+    inc_fact = float(project.get("total_income_fact") or 0)
+    exp_plan = float(project.get("total_expenses_plan") or 0)
+    exp_fact = float(project.get("total_expenses_fact") or 0)
+
+    TAX = {"usn6":0.06,"usn15":0.15,"osn":0.20,"patent":0,"npd":0.06}
+    tax_rate = TAX.get(tax_sys, 0.06)
+    tax_plan = inc_plan * tax_rate
+    tax_fact = inc_fact * tax_rate
+    prf_plan = inc_plan - exp_plan - tax_plan
+    prf_fact = inc_fact - exp_fact - tax_fact
+    tax_lbl  = f"УСН {int(tax_rate*100)}%" if tax_sys.startswith("usn") else "ОСН"
+    prf_col  = "#4ade80" if prf_plan >= 0 else "#ec4899"
+
+    STATUS_RU = {"planning":"Планирование","active":"Активный","completed":"Завершён","cancelled":"Отменён"}
+    date_str  = d_start + (f" — {d_end}" if d_end and d_end != d_start else "")
+    meta      = "  ·  ".join(p for p in [city, venue, date_str] if p)
+
+    def fmt(v):
+        v = float(v or 0)
+        if abs(v) >= 1_000_000: return f"{v/1_000_000:.1f} млн ₽"
+        return f"{int(v):,} ₽".replace(",", " ")
+
+    def pct(fact, plan):
+        if not plan: return "—"
+        return f"{fact/plan*100:.0f}%"
+
+    # Расходы по категориям
+    cats = {}
+    for e in expenses:
+        cat = str(e.get("category") or "Прочее")
+        cats.setdefault(cat, {"plan": 0.0, "fact": 0.0})
+        cats[cat]["plan"] += float(e.get("amount_plan") or 0)
+        cats[cat]["fact"] += float(e.get("amount_fact") or 0)
+    sorted_cats = sorted(cats.items(), key=lambda x: -x[1]["plan"])
+
+    CAT_COLORS = ["#a855f7","#ec4899","#22d3ee","#4ade80","#f59e0b","#8b5cf6","#ef4444","#06b6d4"]
+    CAT_ICONS  = ["🏛","🎵","📢","🚌","🎤","💡","🎬","🖥","📋","💰"]
+
+    # Билеты
+    total_plan_tix = sum(int(il.get("ticket_count") or 0) for il in income_lines)
+    total_sold_tix = sum(int(il.get("sold_count") or 0) for il in income_lines)
+
+    # TC
+    tc_total   = len(ticket_sales)
+    tc_paid    = sum(1 for s in ticket_sales if s.get("status") == "paid")
+    tc_revenue = sum(float(s.get("total_amount") or 0) for s in ticket_sales)
+    tc_avg     = tc_revenue / tc_paid if tc_paid else 0
+
+    # AI текст
+    def ai_to_html(text):
+        lines = []
+        for line in text.split("\n"):
+            line = line.strip().lstrip("#*").strip()
+            if not line: continue
+            if line.startswith("•") or line.startswith("-"):
+                lines.append(f'<div class="ai-bullet">• {line.lstrip("•- ").strip()}</div>')
+            else:
+                lines.append(f'<p class="ai-para">{line}</p>')
+        return "".join(lines)
+
+    # Расходы — прогресс-бары
+    expenses_html = ""
+    for idx, (cat, vals) in enumerate(sorted_cats):
+        col   = CAT_COLORS[idx % len(CAT_COLORS)]
+        icon  = CAT_ICONS[idx % len(CAT_ICONS)]
+        share = f"{vals['plan']/exp_plan*100:.0f}%" if exp_plan else "—"
+        done  = min(100, int(vals["fact"]/vals["plan"]*100)) if vals["plan"] else 0
+        expenses_html += f"""
+        <div class="progress-row">
+          <div class="progress-header">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:18px;">{icon}</span>
+              <span class="progress-name">{cat}</span>
+              <span class="badge" style="color:{col};background:{col}18;border-color:{col}44;">{share} бюджета</span>
+            </div>
+            <div class="progress-vals">
+              <span style="color:#fff;">{fmt(vals['plan'])}</span> · факт: <span style="color:{col};">{fmt(vals['fact'])}</span>
+            </div>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width:{done}%;background:{col};"></div>
+          </div>
+        </div>"""
+
+    # Строки таблицы билетов
+    ticket_rows_html = ""
+    ticket_bars_html = ""
+    for il in income_lines:
+        cat   = str(il.get("category") or "Билеты")
+        plan  = int(il.get("ticket_count") or 0)
+        sold  = int(il.get("sold_count") or 0)
+        price = float(il.get("ticket_price") or 0)
+        conv  = f"{sold/plan*100:.0f}%" if plan else "—"
+        bar_w = min(100, int(sold/plan*100)) if plan else 0
+        ticket_rows_html += f"""
+        <tr>
+          <td><b>🎟 {cat}</b></td>
+          <td style="color:#999;">{fmt(price)}</td>
+          <td style="text-align:center;">{plan}</td>
+          <td style="text-align:center;color:#4ade80;font-weight:700;">{sold}</td>
+          <td style="text-align:center;color:#22d3ee;">{conv}</td>
+          <td style="text-align:right;color:#4ade80;font-weight:700;">{fmt(sold*price)}</td>
+        </tr>"""
+        ticket_bars_html += f"""
+        <div class="progress-row">
+          <div class="progress-header">
+            <span class="progress-name">🎟 {cat}</span>
+            <span class="progress-vals">{sold} из {plan}</span>
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill" style="width:{bar_w}%;background:#4ade80;"></div>
+          </div>
+        </div>"""
+
+    return f"""<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8"/>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Inter:wght@400;500;600&display=swap');
+*,*::before,*::after{{box-sizing:border-box;margin:0;padding:0;}}
+:root{{
+  --bg:#0d0d1a; --card:#13131f; --border:#1e1e30;
+  --purple:#a855f7; --cyan:#22d3ee; --pink:#ec4899; --green:#4ade80;
+  --w:#fff; --w60:rgba(255,255,255,.6); --w40:rgba(255,255,255,.4);
+  --w20:rgba(255,255,255,.2); --w10:rgba(255,255,255,.1);
+}}
+html,body{{background:var(--bg);color:var(--w);font-family:'Inter',sans-serif;font-size:13px;line-height:1.6;}}
+.page{{width:210mm;min-height:297mm;padding:14mm 16mm;background:var(--bg);position:relative;page-break-after:always;overflow:hidden;}}
+.page:last-child{{page-break-after:auto;}}
+.glow-tl{{position:absolute;top:-80px;left:-80px;width:320px;height:320px;background:radial-gradient(circle,rgba(168,85,247,.12) 0%,transparent 70%);pointer-events:none;}}
+.glow-br{{position:absolute;bottom:-80px;right:-80px;width:260px;height:260px;background:radial-gradient(circle,rgba(34,211,238,.10) 0%,transparent 70%);pointer-events:none;}}
+.oswald{{font-family:'Oswald',sans-serif;}}
+.hero-title{{font-family:'Oswald',sans-serif;font-size:46px;font-weight:700;text-transform:uppercase;line-height:1.05;letter-spacing:-1px;background:linear-gradient(135deg,var(--purple),var(--cyan));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;text-align:center;}}
+.section-label{{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:3px;color:var(--cyan);margin-bottom:6px;}}
+.section-title{{font-family:'Oswald',sans-serif;font-size:24px;font-weight:600;line-height:1.2;}}
+.s-purple{{color:var(--purple);}} .s-cyan{{color:var(--cyan);}} .s-white{{color:var(--w);}}
+.grad-line{{height:2px;background:linear-gradient(90deg,transparent 0%,var(--purple) 25%,var(--cyan) 75%,transparent 100%);margin:12px 0;}}
+.thin-line{{height:1px;background:var(--border);margin:8px 0;}}
+.body-text{{color:var(--w60);font-size:13px;line-height:1.65;}}
+.caption{{font-size:11px;color:var(--w40);text-align:center;}}
+.footer-text{{font-size:9px;color:rgba(255,255,255,.2);text-align:center;}}
+/* KPI */
+.kpi-grid{{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0;}}
+.kpi-card{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 10px;text-align:center;}}
+.kpi-num{{font-family:'Oswald',sans-serif;font-size:18px;font-weight:700;line-height:1.2;}}
+.kpi-label{{font-size:10px;color:var(--w40);margin-top:4px;}}
+.kpi-sub{{font-size:10px;color:var(--w40);margin-top:2px;}}
+/* Stat block */
+.stat-block{{display:grid;background:var(--card);border-radius:14px;border:1px solid var(--border);overflow:hidden;margin:12px 0;}}
+.c2{{grid-template-columns:repeat(2,1fr);}} .c3{{grid-template-columns:repeat(3,1fr);}} .c4{{grid-template-columns:repeat(4,1fr);}}
+.stat-item{{padding:18px 10px;text-align:center;border-right:1px solid var(--border);}}
+.stat-item:last-child{{border-right:none;}}
+.stat-num{{font-family:'Oswald',sans-serif;font-size:24px;font-weight:700;line-height:1.1;}}
+.stat-label{{font-size:10px;color:var(--w40);margin-top:4px;}}
+/* Feature card */
+.feature-grid{{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0;}}
+.feature-card{{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;display:flex;gap:12px;align-items:flex-start;}}
+.feature-icon{{font-size:20px;line-height:1;flex-shrink:0;margin-top:2px;}}
+.feature-title{{font-weight:600;font-size:13px;color:var(--w);margin-bottom:4px;}}
+.feature-body{{font-size:12px;color:var(--w60);line-height:1.5;}}
+/* Progress */
+.progress-row{{margin:6px 0 14px;}}
+.progress-header{{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;}}
+.progress-name{{font-size:13px;font-weight:500;color:var(--w);}}
+.progress-vals{{font-size:11px;color:var(--w40);}}
+.progress-track{{height:6px;background:rgba(255,255,255,.08);border-radius:6px;overflow:hidden;}}
+.progress-fill{{height:100%;border-radius:6px;}}
+/* Badge */
+.badge{{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:600;border:1px solid;}}
+/* AI */
+.ai-box{{background:var(--card);border:1px solid var(--border);border-left:3px solid var(--cyan);border-radius:12px;padding:16px 20px;margin:14px 0;}}
+.ai-para{{color:var(--w60);font-size:13px;line-height:1.65;margin-bottom:8px;}}
+.ai-bullet{{color:var(--w60);font-size:13px;line-height:1.65;margin-bottom:6px;padding-left:4px;}}
+/* Table */
+.ticket-table{{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px;}}
+.ticket-table th{{background:rgba(168,85,247,.12);color:var(--w40);padding:8px 10px;text-align:left;font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;}}
+.ticket-table td{{padding:9px 10px;border-bottom:1px solid var(--border);color:var(--w);vertical-align:middle;}}
+.ticket-table tr:last-child td{{border-bottom:none;}}
+.ticket-table tr:nth-child(even) td{{background:rgba(255,255,255,.02);}}
+/* Img */
+.hero-img{{width:100%;height:180px;object-fit:cover;border-radius:14px;margin:14px 0 6px;border:1px solid var(--border);}}
+.section-img{{width:100%;height:140px;object-fit:cover;border-radius:12px;border:1px solid var(--border);margin:14px 0 6px;}}
+</style>
+</head>
+<body>
+
+<!-- СТРАНИЦА 1 — ОБЛОЖКА -->
+<div class="page">
+  <div class="glow-tl"></div><div class="glow-br"></div>
+  <div style="padding-top:16px;">
+    {f'<div style="text-align:center;margin-bottom:10px;"><span class="badge" style="color:#22d3ee;background:rgba(34,211,238,.08);border-color:rgba(34,211,238,.3);">{user_prompt[:80]}</span></div>' if user_prompt else ""}
+    <div class="grad-line"></div>
+    <div style="margin:20px 0 10px;text-align:center;">
+      {f'<div style="font-family:Oswald,sans-serif;font-size:15px;font-weight:600;color:var(--purple);letter-spacing:2px;text-transform:uppercase;margin-bottom:8px;">{artist}</div>' if artist else ""}
+      <div class="hero-title">{title.upper()}</div>
+      {f'<div style="color:var(--w40);font-size:13px;margin-top:10px;">{meta}</div>' if meta else ""}
+    </div>
+    <div style="text-align:center;margin:8px 0;">
+      <span class="badge" style="color:var(--purple);background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.3);">{STATUS_RU.get(status, status)}</span>
+    </div>
+    <div class="grad-line"></div>
+    <img src="{IMG_HERO}" class="hero-img" alt="Концерт"/>
+    <p class="caption" style="margin-bottom:18px;">Платформа GLOBAL LINK — управление концертными проектами</p>
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:#4ade80;">{fmt(inc_plan)}</div>
+        <div class="kpi-label">Доход план</div>
+        <div class="kpi-sub">факт: {fmt(inc_fact)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:#ec4899;">{fmt(exp_plan)}</div>
+        <div class="kpi-label">Расходы план</div>
+        <div class="kpi-sub">факт: {fmt(exp_fact)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:#22d3ee;">{fmt(tax_plan)}</div>
+        <div class="kpi-label">Налог ({tax_lbl})</div>
+        <div class="kpi-sub">факт: {fmt(tax_fact)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-num" style="color:{prf_col};">{fmt(prf_plan)}</div>
+        <div class="kpi-label">Чистая прибыль</div>
+        <div class="kpi-sub">факт: {fmt(prf_fact)}</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- СТРАНИЦА 2 — ФИНАНСЫ + ИИ -->
+<div class="page">
+  <div class="glow-tl"></div><div class="glow-br"></div>
+  <div class="section-label">Финансы проекта</div>
+  <div class="section-title s-purple">Бюджет, доходы и чистая прибыль</div>
+  <div class="grad-line"></div>
+  <div class="feature-grid">
+    <div class="feature-card" style="border-color:rgba(74,222,128,.25);">
+      <div class="feature-icon">🎯</div>
+      <div>
+        <div class="feature-title">Доходы</div>
+        <div class="feature-body"><b style="color:#4ade80;">План: {fmt(inc_plan)}</b><br/>Факт: {fmt(inc_fact)} · {pct(inc_fact, inc_plan)} выполнено</div>
+      </div>
+    </div>
+    <div class="feature-card" style="border-color:rgba(236,72,153,.25);">
+      <div class="feature-icon">💸</div>
+      <div>
+        <div class="feature-title">Расходы</div>
+        <div class="feature-body"><b style="color:#ec4899;">Бюджет: {fmt(exp_plan)}</b><br/>Потрачено: {fmt(exp_fact)} · {pct(exp_fact, exp_plan)} от плана</div>
+      </div>
+    </div>
+    <div class="feature-card" style="border-color:rgba(34,211,238,.25);">
+      <div class="feature-icon">💰</div>
+      <div>
+        <div class="feature-title">Налог ({tax_lbl})</div>
+        <div class="feature-body"><b style="color:#22d3ee;">К уплате план: {fmt(tax_plan)}</b><br/>Факт: {fmt(tax_fact)}</div>
+      </div>
+    </div>
+    <div class="feature-card" style="border-color:rgba({('168,85,247' if prf_plan >= 0 else '236,72,153')},.25);">
+      <div class="feature-icon">✨</div>
+      <div>
+        <div class="feature-title">Чистая прибыль</div>
+        <div class="feature-body"><b style="color:{prf_col};">Прогноз: {fmt(prf_plan)}</b><br/>По факту: {fmt(prf_fact)}</div>
+      </div>
+    </div>
+  </div>
+  <img src="{IMG_DASHBOARD}" class="section-img" alt="Дашборд"/>
+  <p class="caption" style="margin-bottom:14px;">Управление финансами проекта в платформе GLOBAL LINK</p>
+  {f'''<div class="section-label" style="margin-top:8px;">ИИ-аналитика</div>
+  <div class="section-title s-cyan">Оценка проекта и рекомендации</div>
+  <div class="grad-line"></div>
+  <div class="ai-box">{ai_to_html(ai_summary)}</div>''' if ai_summary else ""}
+</div>
+
+<!-- СТРАНИЦА 3 — РАСХОДЫ -->
+{"" if not sorted_cats else f'''
+<div class="page">
+  <div class="glow-tl"></div>
+  <div class="section-label">Бюджет расходов</div>
+  <div class="section-title s-purple">Статьи затрат — план и исполнение</div>
+  <div class="grad-line"></div>
+  <div class="stat-block c3" style="margin-bottom:18px;">
+    <div class="stat-item"><div class="stat-num" style="color:#ec4899;">{fmt(exp_plan)}</div><div class="stat-label">Всего бюджет</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#22d3ee;">{fmt(exp_fact)}</div><div class="stat-label">Потрачено</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:{"#4ade80" if exp_fact <= exp_plan else "#ec4899"};">{pct(exp_fact, exp_plan)}</div><div class="stat-label">Исполнение</div></div>
+  </div>
+  {expenses_html}
+</div>'''}
+
+<!-- СТРАНИЦА 4 — БИЛЕТЫ -->
+{"" if not income_lines else f'''
+<div class="page">
+  <div class="glow-tl"></div><div class="glow-br"></div>
+  <div class="section-label">Продажи билетов</div>
+  <div class="section-title s-cyan">Плановые и фактические продажи</div>
+  <div class="grad-line"></div>
+  <div class="stat-block c4" style="margin-bottom:18px;">
+    <div class="stat-item"><div class="stat-num" style="color:#a855f7;">{total_plan_tix}</div><div class="stat-label">Билетов план</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#4ade80;">{total_sold_tix}</div><div class="stat-label">Продано</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#22d3ee;">{pct(total_sold_tix, total_plan_tix)}</div><div class="stat-label">Конверсия</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#4ade80;">{fmt(inc_fact)}</div><div class="stat-label">Выручка</div></div>
+  </div>
+  <table class="ticket-table">
+    <thead><tr><th>Категория</th><th>Цена</th><th>План</th><th>Продано</th><th>%</th><th>Выручка</th></tr></thead>
+    <tbody>{ticket_rows_html}</tbody>
+  </table>
+  {ticket_bars_html}
+  <img src="{IMG_VENUE}" class="section-img" alt="Площадка"/>
+  <p class="caption" style="margin-top:6px;">Площадка концерта</p>
+</div>'''}
+
+<!-- СТРАНИЦА 5 — TC + ПОДВАЛ -->
+<div class="page">
+  <div class="glow-tl"></div><div class="glow-br"></div>
+  {"" if not tc_total else f'''
+  <div class="section-label">Данные продаж</div>
+  <div class="section-title s-purple">Реальные данные из системы билетов</div>
+  <div class="grad-line"></div>
+  <div class="stat-block c4">
+    <div class="stat-item"><div class="stat-num" style="color:#a855f7;">{tc_total}</div><div class="stat-label">Всего заказов</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#4ade80;">{tc_paid}</div><div class="stat-label">Оплачено</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#22d3ee;">{tc_total - tc_paid}</div><div class="stat-label">Забронировано</div></div>
+    <div class="stat-item"><div class="stat-num" style="color:#4ade80;">{fmt(tc_avg)}</div><div class="stat-label">Средний чек</div></div>
+  </div>
+  <div class="feature-grid" style="margin-top:16px;">
+    <div class="feature-card" style="border-color:rgba(74,222,128,.25);">
+      <div class="feature-icon">✅</div>
+      <div><div class="feature-title">Оплаченные заказы</div>
+      <div class="feature-body"><b style="color:#4ade80;">{tc_paid} заказов</b><br/>Выручка: {fmt(tc_revenue)}</div></div>
+    </div>
+    <div class="feature-card" style="border-color:rgba(34,211,238,.25);">
+      <div class="feature-icon">🔖</div>
+      <div><div class="feature-title">Ожидают оплаты</div>
+      <div class="feature-body"><b style="color:#22d3ee;">{tc_total - tc_paid} заказов</b><br/>Забронировано, не оплачено</div></div>
+    </div>
+  </div>'''}
+  <div style="margin-top:40px;">
+    <div class="grad-line"></div>
+    <p class="footer-text" style="margin-top:10px;">GLOBAL LINK  ·  {title.upper()}</p>
+    <p class="footer-text">globallink.art  ·  Конфиденциально  ·  Сформировано платформой GLOBAL LINK</p>
+  </div>
+</div>
+
+</body></html>"""
+
+
 # HANDLER
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -859,8 +1225,8 @@ def handler(event: dict, context) -> dict:
     action = params.get("action", "")
     ptype  = params.get("type", "users")
 
-    # ── action=project_pdf — презентация проекта ──────────────────────────────
-    if action == "project_pdf":
+    # ── action=project_pdf / project_html_pdf — презентация проекта ─────────
+    if action in ("project_pdf", "project_html_pdf"):
         body       = json.loads(event.get("body") or "{}")
         project_id = body.get("projectId") or params.get("projectId", "")
         user_id    = body.get("userId") or params.get("userId", "")
@@ -972,9 +1338,16 @@ def handler(event: dict, context) -> dict:
         safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in (project.get("title") or "project"))[:40].strip()
         filename   = f"Presentation_{safe_title}.pdf"
 
-        buf = io.BytesIO()
-        build_project_pdf(buf, project, expenses, income_lines, ticket_sales, ai_summary, user_prompt)
-        pdf_bytes = buf.getvalue()
+        if action == "project_html_pdf":
+            # WeasyPrint: HTML → PDF
+            from weasyprint import HTML as WP_HTML
+            html_str = build_html_template(project, expenses, income_lines, ticket_sales, ai_summary, user_prompt)
+            pdf_bytes = WP_HTML(string=html_str, base_url="https://globallink.art").write_pdf()
+        else:
+            # ReportLab (старый путь, оставляем для совместимости)
+            buf = io.BytesIO()
+            build_project_pdf(buf, project, expenses, income_lines, ticket_sales, ai_summary, user_prompt)
+            pdf_bytes = buf.getvalue()
 
         s3  = get_s3()
         key = f"presentations/projects/{project_id}/{uuid.uuid4()}.pdf"

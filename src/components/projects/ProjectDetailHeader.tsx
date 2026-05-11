@@ -49,7 +49,7 @@ export default function ProjectDetailHeader({
     setPdfUrl(null);
     try {
       setPdfStep("pdf");
-      const res = await fetch(`${PRESENTATION_URL}?action=project_pdf`, {
+      const res = await fetch(`${PRESENTATION_URL}?action=project_html_pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ projectId: project.id, userId: user?.id || "", userPrompt: pdfPrompt.trim() }),
