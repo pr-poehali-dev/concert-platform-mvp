@@ -881,7 +881,7 @@ def handler(event: dict, context) -> dict:
 
             # Расходы
             cur.execute(
-                f"SELECT category, title, amount_plan, amount_fact FROM {SCHEMA}.expenses "
+                f"SELECT category, title, amount_plan, amount_fact FROM {SCHEMA}.project_expenses "
                 f"WHERE project_id = %s ORDER BY sort_order ASC",
                 (project_id,)
             )
@@ -890,7 +890,7 @@ def handler(event: dict, context) -> dict:
 
             # Строки доходов
             cur.execute(
-                f"SELECT category, ticket_count, ticket_price, sold_count FROM {SCHEMA}.income_lines "
+                f"SELECT category, ticket_count, ticket_price, sold_count FROM {SCHEMA}.project_income_lines "
                 f"WHERE project_id = %s ORDER BY sort_order ASC",
                 (project_id,)
             )
