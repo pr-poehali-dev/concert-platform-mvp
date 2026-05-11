@@ -5,6 +5,9 @@ import { STATUS_CONFIG, fmt, type Project, PROJECTS_URL } from "@/hooks/useProje
 import { exportCSV, exportExcel, exportPDF, companyInfoFromUser } from "@/lib/exportProject";
 import { useAuth } from "@/context/AuthContext";
 
+const PRESENTATION_URL = "https://functions.poehali.dev/3a1c12fb-cacd-4731-961b-2f37badc2c08";
+const AI_URL = "https://functions.poehali.dev/8841fd93-d5cc-414b-a912-d185ca8cab48";
+
 interface Props {
   project: Project;
   exportOpen: boolean;
@@ -24,6 +27,64 @@ export default function ProjectDetailHeader({
   const [shareLoading, setShareLoading] = useState(false);
   const [shareLink, setShareLink] = useState<string | null>(null);
   const [shareCopied, setShareCopied] = useState(false);
+
+  const [pdfOpen, setPdfOpen] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfStep, setPdfStep] = useState<"idle"|"ai"|"pdf">("idle");
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfCopied, setPdfCopied] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+
+  const generatePdf = async () => {
+    setPdfLoading(true);
+    setPdfStep("ai");
+    setPdfError(null);
+    setPdfUrl(null);
+    try {
+      const sessionId = localStorage.getItem("sessionId") || "";
+      let aiSummary = "";
+      try {
+        const aiRes = await fetch(`${AI_URL}?action=ask`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Session-Id": sessionId },
+          body: JSON.stringify({
+            message: `Проанализируй финансовые показатели концертного проекта и дай краткое деловое резюме (5-8 предложений). Данные:\n- Название: ${project.title}\n- Артист: ${project.artist || "—"}\n- Доход план: ${project.totalIncomePlan} ₽, факт: ${project.totalIncomeFact} ₽\n- Расходы план: ${project.totalExpensesPlan} ₽, факт: ${project.totalExpensesFact} ₽\n- Чистая прибыль план: ${project.finance.profitPlan} ₽, факт: ${project.finance.profitFact} ₽\n- Статус: ${project.status}\nСделай вывод об эффективности проекта и дай 2-3 практических рекомендации.`,
+          }),
+        });
+        const aiData = await aiRes.json();
+        aiSummary = aiData.answer || "";
+      } catch { /* ИИ необязателен */ }
+
+      setPdfStep("pdf");
+      const res = await fetch(`${PRESENTATION_URL}?action=project_pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: project.id, userId: user?.id || "", aiSummary }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.url) throw new Error(data.error || "Ошибка генерации");
+      setPdfUrl(data.url);
+    } catch (e: unknown) {
+      setPdfError(e instanceof Error ? e.message : "Что-то пошло не так");
+    } finally {
+      setPdfLoading(false);
+      setPdfStep("idle");
+    }
+  };
+
+  const copyPdfLink = () => {
+    if (!pdfUrl) return;
+    navigator.clipboard.writeText(pdfUrl);
+    setPdfCopied(true);
+    setTimeout(() => setPdfCopied(false), 2000);
+  };
+
+  const closePdf = () => {
+    setPdfOpen(false);
+    setPdfUrl(null);
+    setPdfError(null);
+    setPdfCopied(false);
+  };
 
   const createShareLink = async (showFiles: boolean) => {
     setShareLoading(true);
@@ -89,6 +150,12 @@ export default function ProjectDetailHeader({
             <button onClick={() => setShareOpen(true)}
               className="flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/15 hover:border-neon-cyan/40 text-white/60 hover:text-neon-cyan transition-all text-sm">
               <Icon name="Share2" size={15}/>Поделиться
+            </button>
+
+            {/* Presentation PDF button */}
+            <button onClick={() => { setPdfOpen(true); setPdfUrl(null); setPdfError(null); }}
+              className="flex items-center gap-2 px-4 py-2 glass rounded-xl border border-white/15 hover:border-neon-purple/50 text-white/60 hover:text-neon-purple transition-all text-sm">
+              <Icon name="Presentation" size={15}/>Презентация
             </button>
 
             {/* Delete button */}
@@ -172,6 +239,101 @@ export default function ProjectDetailHeader({
         </div>
       </div>
     </div>
+
+    {/* PDF Presentation modal */}
+    {pdfOpen && (
+      <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={closePdf}>
+        <div className="glass-strong rounded-2xl p-6 max-w-md w-full" onClick={e => e.stopPropagation()}>
+          <div className="flex items-center justify-between mb-5">
+            <h2 className="font-oswald font-bold text-xl text-white">Презентация проекта</h2>
+            <button onClick={closePdf} className="text-white/30 hover:text-white transition-colors">
+              <Icon name="X" size={20}/>
+            </button>
+          </div>
+
+          {!pdfUrl && !pdfLoading && !pdfError && (
+            <>
+              <p className="text-white/50 text-sm mb-5">
+                ИИ проанализирует цифры проекта и сформирует PDF-презентацию с финансовой сводкой, расходами и продажами билетов. Ссылка будет готова за ~15 секунд.
+              </p>
+              <div className="glass rounded-xl p-4 border border-white/10 mb-5 space-y-2">
+                {[
+                  { icon: "BarChart3", label: "Финансовое резюме", color: "text-neon-green" },
+                  { icon: "Brain", label: "ИИ-аналитика и рекомендации", color: "text-neon-purple" },
+                  { icon: "PieChart", label: "Структура расходов по категориям", color: "text-neon-pink" },
+                  { icon: "Ticket", label: "Статистика продаж билетов", color: "text-neon-cyan" },
+                ].map((it, i) => (
+                  <div key={i} className="flex items-center gap-3">
+                    <Icon name={it.icon} size={15} className={it.color}/>
+                    <span className="text-white/70 text-sm">{it.label}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={generatePdf}
+                className="w-full py-3 rounded-xl bg-gradient-to-r from-neon-purple/80 to-neon-cyan/60 text-white font-medium text-sm hover:opacity-90 transition-opacity"
+              >
+                Сгенерировать PDF
+              </button>
+            </>
+          )}
+
+          {pdfLoading && (
+            <div className="py-8 text-center space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-neon-purple/10 flex items-center justify-center mx-auto">
+                <Icon name="Loader2" size={28} className="text-neon-purple animate-spin"/>
+              </div>
+              <div>
+                <p className="text-white font-medium">
+                  {pdfStep === "ai" ? "ИИ анализирует проект..." : "Формирую PDF..."}
+                </p>
+                <p className="text-white/40 text-sm mt-1">
+                  {pdfStep === "ai" ? "Готовлю аналитику и рекомендации" : "Генерирую документ и загружаю на сервер"}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {pdfError && (
+            <div className="py-4 text-center space-y-4">
+              <Icon name="AlertCircle" size={32} className="text-neon-pink mx-auto"/>
+              <p className="text-neon-pink text-sm">{pdfError}</p>
+              <button onClick={generatePdf} className="px-6 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 text-sm hover:bg-white/10 transition-colors">
+                Попробовать ещё раз
+              </button>
+            </div>
+          )}
+
+          {pdfUrl && !pdfLoading && (
+            <div className="space-y-4">
+              <div className="glass rounded-xl p-4 border border-neon-green/20 bg-neon-green/5 flex items-center gap-3">
+                <Icon name="CheckCircle2" size={20} className="text-neon-green shrink-0"/>
+                <p className="text-white text-sm">Презентация готова!</p>
+              </div>
+              <div className="flex gap-2">
+                <div className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-white/60 text-xs truncate">
+                  {pdfUrl}
+                </div>
+                <button
+                  onClick={copyPdfLink}
+                  className={`px-4 py-2.5 rounded-xl text-sm font-medium shrink-0 transition-all ${pdfCopied ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : "bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 hover:bg-neon-cyan/20"}`}
+                >
+                  {pdfCopied ? "Скопировано!" : "Копировать"}
+                </button>
+              </div>
+              <a href={pdfUrl} target="_blank" rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-neon-purple/10 border border-neon-purple/30 text-neon-purple text-sm font-medium hover:bg-neon-purple/20 transition-colors">
+                <Icon name="ExternalLink" size={15}/>Открыть PDF
+              </a>
+              <button onClick={() => { setPdfUrl(null); setPdfError(null); }}
+                className="w-full text-white/30 hover:text-white/60 text-xs transition-colors">
+                ← Сгенерировать заново
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )}
 
     {/* Share modal */}
     {shareOpen && (

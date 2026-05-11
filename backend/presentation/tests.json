@@ -6,6 +6,14 @@
       "path": "/?type=invalid",
       "expectedStatus": 400,
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "project_pdf missing fields",
+      "method": "POST",
+      "path": "/?action=project_pdf",
+      "body": {},
+      "expectedStatus": 400,
+      "bodyMatcher": "partial"
     }
   ]
 }

@@ -1,11 +1,19 @@
 """
 Генерация PDF-презентаций платформы GLOBAL LINK.
-GET ?type=investors  — для инвесторов
-GET ?type=users      — для организаторов и площадок
-GET ?type=partners   — для партнёров
+GET ?type=investors         — для инвесторов
+GET ?type=users             — для организаторов и площадок
+GET ?type=partners          — для партнёров
+POST ?action=project_pdf    — презентация конкретного проекта (цифры + картинки)
 """
-import os, io, uuid, json, urllib.request
+import os, io, uuid, json, urllib.request, math
+import psycopg2
 import boto3
+
+SCHEMA = "t_p17532248_concert_platform_mvp"
+
+
+def get_conn():
+    return psycopg2.connect(os.environ["DATABASE_URL"])
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.units import mm
@@ -527,6 +535,303 @@ def build_partners(buf):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# ВАРИАНТ 4 — ПРЕЗЕНТАЦИЯ КОНКРЕТНОГО ПРОЕКТА
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def fmt_money(v):
+    """Форматирование денег: 1 234 567 ₽"""
+    try:
+        v = float(v or 0)
+        if abs(v) >= 1_000_000:
+            return f"{v/1_000_000:.1f} млн ₽"
+        return f"{int(v):,} ₽".replace(",", " ")
+    except Exception:
+        return "0 ₽"
+
+
+def pct(a, b):
+    """Процент выполнения a/b"""
+    try:
+        a, b = float(a or 0), float(b or 0)
+        if b == 0:
+            return "—"
+        return f"{a/b*100:.0f}%"
+    except Exception:
+        return "—"
+
+
+def progress_bar(canvas, x, y, w, h, value, total, color):
+    """Горизонтальный прогресс-бар."""
+    try:
+        ratio = min(1.0, float(value or 0) / float(total or 1))
+    except Exception:
+        ratio = 0
+    canvas.setFillColor(C_CARD)
+    canvas.roundRect(x, y, w, h, h/2, fill=1, stroke=0)
+    if ratio > 0:
+        canvas.setFillColor(color)
+        canvas.roundRect(x, y, max(h, w * ratio), h, h/2, fill=1, stroke=0)
+
+
+class ProgressBarFlowable(Flowable):
+    def __init__(self, value, total, color, bar_w=None, bar_h=6):
+        super().__init__()
+        self._val = value
+        self._tot = total
+        self._color = color
+        self._bar_w = bar_w
+        self._bar_h = bar_h
+
+    def wrap(self, availW, availH):
+        self._w = self._bar_w or availW
+        return self._w, self._bar_h + 2
+
+    def draw(self):
+        progress_bar(self.canv, 0, 1, self._w, self._bar_h, self._val, self._tot, self._color)
+
+
+def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ticket_sales: list, ai_summary: str):
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+        leftMargin=18*mm, rightMargin=18*mm, topMargin=14*mm, bottomMargin=14*mm)
+
+    def bg(canvas, doc):
+        canvas.setFillColor(C_BG)
+        canvas.rect(0, 0, W, H, fill=1, stroke=0)
+
+    story = []
+    CW = W - 36*mm  # ширина контента
+
+    title    = project.get("title") or "Проект"
+    artist   = project.get("artist") or ""
+    city     = project.get("city") or ""
+    venue    = project.get("venue_name") or project.get("venueName") or ""
+    d_start  = project.get("date_start") or project.get("dateStart") or ""
+    d_end    = project.get("date_end") or project.get("dateEnd") or ""
+    status   = project.get("status") or ""
+    tax_sys  = project.get("tax_system") or project.get("taxSystem") or "usn6"
+
+    inc_plan = float(project.get("total_income_plan") or project.get("totalIncomePlan") or 0)
+    inc_fact = float(project.get("total_income_fact") or project.get("totalIncomeFact") or 0)
+    exp_plan = float(project.get("total_expenses_plan") or project.get("totalExpensesPlan") or 0)
+    exp_fact = float(project.get("total_expenses_fact") or project.get("totalExpensesFact") or 0)
+
+    TAX_RATES = {"usn6": 0.06, "usn15": 0.15, "osn": 0.20, "patent": 0, "npd": 0.06}
+    tax_rate  = TAX_RATES.get(tax_sys, 0.06)
+    tax_plan  = inc_plan * tax_rate
+    tax_fact  = inc_fact * tax_rate
+    profit_plan = inc_plan - exp_plan - tax_plan
+    profit_fact = inc_fact - exp_fact - tax_fact
+
+    STATUS_LABELS = {"planning": "Планирование", "active": "Активный", "completed": "Завершён", "cancelled": "Отменён"}
+
+    # ── Обложка ──────────────────────────────────────────────────────────────
+    date_str = d_start or ""
+    if d_end and d_end != d_start:
+        date_str += f" — {d_end}"
+
+    story += [
+        sp(4),
+        grad_line(), sp(2),
+        Paragraph(title.upper(), S_HERO_TITLE),
+        sp(2),
+    ]
+    if artist:
+        story.append(Paragraph(artist, style("art", fontName="Helvetica-Bold", fontSize=16, textColor=C_CYAN, leading=22, alignment=TA_CENTER)))
+        story.append(sp(1))
+
+    meta_parts = []
+    if city:     meta_parts.append(city)
+    if venue:    meta_parts.append(venue)
+    if date_str: meta_parts.append(date_str)
+    if meta_parts:
+        story.append(Paragraph("  ·  ".join(meta_parts), S_HERO_SUB))
+        story.append(sp(1))
+
+    story += [
+        Paragraph(f"Статус: {STATUS_LABELS.get(status, status)}", S_CAPTION),
+        sp(2), grad_line(), sp(4),
+    ]
+
+    # ── Финансовое резюме (4 KPI-карточки) ──────────────────────────────────
+    story += [
+        Paragraph("ФИНАНСОВОЕ РЕЗЮМЕ", S_TAG), sp(2),
+    ]
+
+    kpi_data = [[
+        [Paragraph(fmt_money(inc_plan),  style("kn", fontName="Helvetica-Bold", fontSize=22, textColor=C_GREEN,  leading=26, alignment=TA_CENTER)),
+         sp(1),
+         Paragraph(f"факт: {fmt_money(inc_fact)}", S_STAT_LABEL),
+         sp(1),
+         Paragraph("Доход план", S_STAT_LABEL)],
+
+        [Paragraph(fmt_money(exp_plan),  style("kn2", fontName="Helvetica-Bold", fontSize=22, textColor=C_PINK, leading=26, alignment=TA_CENTER)),
+         sp(1),
+         Paragraph(f"факт: {fmt_money(exp_fact)}", S_STAT_LABEL),
+         sp(1),
+         Paragraph("Расходы план", S_STAT_LABEL)],
+
+        [Paragraph(fmt_money(tax_plan),  style("kn3", fontName="Helvetica-Bold", fontSize=22, textColor=C_CYAN, leading=26, alignment=TA_CENTER)),
+         sp(1),
+         Paragraph(f"факт: {fmt_money(tax_fact)}", S_STAT_LABEL),
+         sp(1),
+         Paragraph(f"Налог ({int(tax_rate*100)}%)", S_STAT_LABEL)],
+
+        [Paragraph(fmt_money(profit_plan), style("kn4", fontName="Helvetica-Bold", fontSize=22, textColor=C_PURPLE if profit_plan >= 0 else C_PINK, leading=26, alignment=TA_CENTER)),
+         sp(1),
+         Paragraph(f"факт: {fmt_money(profit_fact)}", S_STAT_LABEL),
+         sp(1),
+         Paragraph("Чистая прибыль", S_STAT_LABEL)],
+    ]]
+
+    t = Table(kpi_data, colWidths=[CW/4]*4)
+    t.setStyle(TableStyle([
+        ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",        (0,0), (-1,-1), "CENTER"),
+        ("BACKGROUND",   (0,0), (-1,-1), C_CARD),
+        ("TOPPADDING",   (0,0), (-1,-1), 10),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 10),
+        ("LEFTPADDING",  (0,0), (-1,-1), 4),
+        ("RIGHTPADDING", (0,0), (-1,-1), 4),
+        ("LINEAFTER",    (0,0), (2,-1), 1, C_BORDER),
+    ]))
+    story += [t, sp(4)]
+
+    # ── AI-аналитика ─────────────────────────────────────────────────────────
+    if ai_summary:
+        story += [
+            grad_line(), sp(3),
+            Paragraph("ИИ-АНАЛИТИКА", S_TAG), sp(1),
+            Paragraph("Анализ проекта", S_SECTION_PURP), sp(2),
+        ]
+        for para in ai_summary.split("\n"):
+            para = para.strip()
+            if not para:
+                story.append(sp(1))
+                continue
+            if para.startswith("##"):
+                story.append(Paragraph(para.lstrip("#").strip(), S_HIGHLIGHT))
+                story.append(sp(1))
+            elif para.startswith("•") or para.startswith("-") or para.startswith("*"):
+                story.append(Paragraph(para, S_BULLET))
+                story.append(sp(1))
+            else:
+                story.append(Paragraph(para, S_BODY))
+                story.append(sp(1))
+        story.append(sp(2))
+
+    # ── Расходы по категориям ─────────────────────────────────────────────────
+    if expenses:
+        story += [
+            grad_line(), sp(3),
+            Paragraph("СТРУКТУРА РАСХОДОВ", S_TAG), sp(1),
+            Paragraph("Бюджет по статьям", S_SECTION_CYAN), sp(2),
+        ]
+
+        cats: dict = {}
+        for e in expenses:
+            cat = e.get("category") or "Прочее"
+            cats.setdefault(cat, {"plan": 0, "fact": 0})
+            cats[cat]["plan"] += float(e.get("amount_plan") or e.get("amountPlan") or 0)
+            cats[cat]["fact"] += float(e.get("amount_fact") or e.get("amountFact") or 0)
+
+        for cat, vals in sorted(cats.items(), key=lambda x: -x[1]["plan"]):
+            pv, fv = vals["plan"], vals["fact"]
+            row_data = [[
+                Paragraph(cat, S_CARD_TITLE),
+                Paragraph(fmt_money(pv), style(f"cp{cat}", fontName="Helvetica-Bold", fontSize=11, textColor=C_WHITE, leading=15, alignment=TA_RIGHT)),
+                Paragraph(f"факт: {fmt_money(fv)}", style(f"cf{cat}", fontSize=9, textColor=C_WHITE60, leading=13, alignment=TA_RIGHT)),
+            ]]
+            rt = Table(row_data, colWidths=[CW*0.5, CW*0.27, CW*0.23])
+            rt.setStyle(TableStyle([
+                ("VALIGN",       (0,0),(-1,-1),"MIDDLE"),
+                ("LEFTPADDING",  (0,0),(-1,-1), 8),
+                ("RIGHTPADDING", (0,0),(-1,-1), 8),
+                ("TOPPADDING",   (0,0),(-1,-1), 8),
+                ("BOTTOMPADDING",(0,0),(-1,-1), 4),
+            ]))
+            story.append(rt)
+            story.append(ProgressBarFlowable(fv, exp_plan, C_PINK, CW))
+            story.append(sp(2))
+
+        story.append(sp(2))
+
+    # ── Доходы / билеты ───────────────────────────────────────────────────────
+    if income_lines:
+        story += [
+            grad_line(), sp(3),
+            Paragraph("ПРОДАЖИ БИЛЕТОВ", S_TAG), sp(1),
+            Paragraph("Плановые и фактические продажи", S_SECTION_PURP), sp(2),
+        ]
+
+        hdr = [
+            Paragraph("Категория", style("ih", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE60, leading=13)),
+            Paragraph("Кол-во план", style("ih2", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE60, leading=13, alignment=TA_CENTER)),
+            Paragraph("Продано", style("ih3", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE60, leading=13, alignment=TA_CENTER)),
+            Paragraph("Цена", style("ih4", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE60, leading=13, alignment=TA_RIGHT)),
+            Paragraph("Факт доход", style("ih5", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE60, leading=13, alignment=TA_RIGHT)),
+        ]
+        rows = [hdr]
+
+        for il in income_lines:
+            cat       = il.get("category") or "Билеты"
+            cnt_plan  = int(il.get("ticket_count") or il.get("ticketCount") or 0)
+            sold      = int(il.get("sold_count") or il.get("soldCount") or 0)
+            price     = float(il.get("ticket_price") or il.get("ticketPrice") or 0)
+            fact_sum  = sold * price
+            rows.append([
+                Paragraph(cat, S_CARD_BODY),
+                Paragraph(str(cnt_plan), style(f"ic{cat}", fontSize=10, textColor=C_WHITE, leading=14, alignment=TA_CENTER)),
+                Paragraph(str(sold), style(f"is{cat}", fontSize=10, textColor=C_GREEN, leading=14, alignment=TA_CENTER)),
+                Paragraph(f"{int(price):,} ₽".replace(",", " "), style(f"ip{cat}", fontSize=10, textColor=C_WHITE60, leading=14, alignment=TA_RIGHT)),
+                Paragraph(fmt_money(fact_sum), style(f"if{cat}", fontName="Helvetica-Bold", fontSize=10, textColor=C_GREEN, leading=14, alignment=TA_RIGHT)),
+            ])
+
+        it = Table(rows, colWidths=[CW*0.35, CW*0.15, CW*0.15, CW*0.15, CW*0.20])
+        it.setStyle(TableStyle([
+            ("BACKGROUND",   (0,0), (-1,0), C_CARD),
+            ("BACKGROUND",   (0,1), (-1,-1), colors.HexColor("#0f0f1e")),
+            ("ROWBACKGROUNDS",(0,1),(-1,-1),[colors.HexColor("#0f0f1e"), C_CARD]),
+            ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+            ("TOPPADDING",   (0,0), (-1,-1), 7),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 7),
+            ("LEFTPADDING",  (0,0), (-1,-1), 8),
+            ("RIGHTPADDING", (0,0), (-1,-1), 8),
+            ("LINEBELOW",    (0,0), (-1,0), 1, C_BORDER),
+        ]))
+        story += [it, sp(4)]
+
+    # ── Статистика продаж из TC ───────────────────────────────────────────────
+    if ticket_sales:
+        total_sold    = len(ticket_sales)
+        total_revenue = sum(float(s.get("total_amount") or 0) for s in ticket_sales)
+        paid_cnt      = sum(1 for s in ticket_sales if s.get("status") == "paid")
+        avg_check     = total_revenue / paid_cnt if paid_cnt else 0
+
+        story += [
+            grad_line(), sp(3),
+            Paragraph("СТАТИСТИКА TicketsCloud", S_TAG), sp(1),
+            Paragraph("Реальные данные о продажах", S_SECTION_CYAN), sp(2),
+            stat_block([
+                (str(total_sold),          "Всего заказов"),
+                (str(paid_cnt),            "Оплачено"),
+                (fmt_money(total_revenue), "Выручка"),
+                (fmt_money(avg_check),     "Средний чек"),
+            ]),
+            sp(4),
+        ]
+
+    # ── Подвал ───────────────────────────────────────────────────────────────
+    story += [
+        grad_line(), sp(2),
+        Paragraph(f"Сформировано платформой GLOBAL LINK · {title}", S_FOOTER),
+        sp(1),
+        Paragraph("Конфиденциально · Только для внутреннего использования", S_FOOTER),
+    ]
+
+    doc.build(story, onFirstPage=bg, onLaterPages=bg)
+
+
 # HANDLER
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -536,8 +841,84 @@ def handler(event: dict, context) -> dict:
         return {"statusCode": 200, "headers": cors(), "body": ""}
 
     params = event.get("queryStringParameters") or {}
+    action = params.get("action", "")
     ptype  = params.get("type", "users")
 
+    # ── action=project_pdf — презентация проекта ──────────────────────────────
+    if action == "project_pdf":
+        body       = json.loads(event.get("body") or "{}")
+        project_id = body.get("projectId") or params.get("projectId", "")
+        user_id    = body.get("userId") or params.get("userId", "")
+        ai_summary = (body.get("aiSummary") or "").strip()
+
+        if not project_id or not user_id:
+            return err("projectId и userId обязательны")
+
+        conn = get_conn()
+        try:
+            cur = conn.cursor()
+
+            # Проект
+            cur.execute(
+                f"SELECT id, title, artist, city, venue_name, date_start, date_end, status, tax_system, "
+                f"total_income_plan, total_income_fact, total_expenses_plan, total_expenses_fact "
+                f"FROM {SCHEMA}.projects WHERE id = %s AND user_id = %s",
+                (project_id, user_id)
+            )
+            row = cur.fetchone()
+            if not row:
+                return err("Проект не найден", 404)
+            cols = [d[0] for d in cur.description]
+            project = dict(zip(cols, row))
+
+            # Расходы
+            cur.execute(
+                f"SELECT category, title, amount_plan, amount_fact FROM {SCHEMA}.expenses "
+                f"WHERE project_id = %s ORDER BY sort_order ASC",
+                (project_id,)
+            )
+            ec = [d[0] for d in cur.description]
+            expenses = [dict(zip(ec, r)) for r in cur.fetchall()]
+
+            # Строки доходов
+            cur.execute(
+                f"SELECT category, ticket_count, ticket_price, sold_count FROM {SCHEMA}.income_lines "
+                f"WHERE project_id = %s ORDER BY sort_order ASC",
+                (project_id,)
+            )
+            ic = [d[0] for d in cur.description]
+            income_lines = [dict(zip(ic, r)) for r in cur.fetchall()]
+
+            # Продажи билетов (TC)
+            cur.execute(
+                f"SELECT status, total_amount FROM {SCHEMA}.ticket_sales "
+                f"WHERE project_id = %s",
+                (project_id,)
+            )
+            sc = [d[0] for d in cur.description]
+            ticket_sales = [dict(zip(sc, r)) for r in cur.fetchall()]
+
+        finally:
+            conn.close()
+
+        safe_title = "".join(c if c.isalnum() or c in " _-" else "_" for c in (project.get("title") or "project"))[:40].strip()
+        filename   = f"Presentation_{safe_title}.pdf"
+
+        buf = io.BytesIO()
+        build_project_pdf(buf, project, expenses, income_lines, ticket_sales, ai_summary)
+        pdf_bytes = buf.getvalue()
+
+        s3  = get_s3()
+        key = f"presentations/projects/{project_id}/{uuid.uuid4()}.pdf"
+        s3.put_object(
+            Bucket="files", Key=key, Body=pdf_bytes,
+            ContentType="application/pdf",
+            ContentDisposition=f'attachment; filename="{filename}"',
+        )
+        url = cdn(key)
+        return ok({"url": url, "filename": filename, "projectId": project_id})
+
+    # ── Обычные презентации платформы ─────────────────────────────────────────
     if ptype not in ("investors", "users", "partners"):
         return err("type must be investors, users or partners")
 
