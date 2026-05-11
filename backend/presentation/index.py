@@ -600,14 +600,10 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
     def bg(canvas, doc):
         canvas.setFillColor(C_BG)
         canvas.rect(0, 0, W, H, fill=1, stroke=0)
-        # Декоративный угловой акцент — фиолетовый круг в правом верхнем углу
-        canvas.setFillColor(colors.HexColor("#1a0a2e"))
-        canvas.circle(W, H, 120, fill=1, stroke=0)
-        canvas.setFillColor(colors.HexColor("#0a1a2e"))
-        canvas.circle(0, 0, 80, fill=1, stroke=0)
 
     story = []
 
+    # ── Данные проекта ────────────────────────────────────────────────────────
     title    = project.get("title") or "Проект"
     artist   = project.get("artist") or ""
     city     = project.get("city") or ""
@@ -622,7 +618,7 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
     exp_plan = float(project.get("total_expenses_plan") or project.get("totalExpensesPlan") or 0)
     exp_fact = float(project.get("total_expenses_fact") or project.get("totalExpensesFact") or 0)
 
-    TAX_RATES = {"usn6": 0.06, "usn15": 0.15, "osn": 0.20, "patent": 0, "npd": 0.06}
+    TAX_RATES   = {"usn6": 0.06, "usn15": 0.15, "osn": 0.20, "patent": 0, "npd": 0.06}
     tax_rate    = TAX_RATES.get(tax_sys, 0.06)
     tax_plan    = inc_plan * tax_rate
     tax_fact    = inc_fact * tax_rate
@@ -631,16 +627,29 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
 
     STATUS_LABELS = {"planning": "Планирование", "active": "Активный", "completed": "Завершён", "cancelled": "Отменён"}
     profit_color  = C_GREEN if profit_plan >= 0 else C_PINK
+    tax_label     = f"УСН {int(tax_rate*100)}%" if tax_sys.startswith("usn") else ("ОСН" if tax_sys == "osn" else tax_sys.upper())
 
-    date_str = d_start or ""
+    date_str = d_start
     if d_end and d_end != d_start:
         date_str += f" — {d_end}"
 
-    # ── ОБЛОЖКА ──────────────────────────────────────────────────────────────
-    story += [sp(6), grad_line(), sp(2)]
+    # ═══════════════════════════════════════════════════════════════════════
+    # ОБЛОЖКА
+    # ═══════════════════════════════════════════════════════════════════════
+    story += [sp(5), grad_line(), sp(2)]
+
+    if user_prompt:
+        story.append(Paragraph(
+            user_prompt[:80].upper(),
+            style("up_tag", fontName="Helvetica-Bold", fontSize=9, textColor=C_CYAN, leading=13, alignment=TA_CENTER)
+        ))
+        story.append(sp(1))
 
     if artist:
-        story.append(Paragraph(artist.upper(), style("art_tag", fontName="Helvetica-Bold", fontSize=11, textColor=C_PURPLE, leading=15, alignment=TA_CENTER)))
+        story.append(Paragraph(
+            artist,
+            style("art_h", fontName="Helvetica-Bold", fontSize=16, textColor=C_PURPLE, leading=22, alignment=TA_CENTER)
+        ))
         story.append(sp(1))
 
     story.append(Paragraph(title.upper(), S_HERO_TITLE))
@@ -652,133 +661,154 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
         story.append(sp(1))
 
     story += [
-        Paragraph(f"Статус: {STATUS_LABELS.get(status, status)}", S_CAPTION),
+        Paragraph(STATUS_LABELS.get(status, status), S_CAPTION),
         sp(2), grad_line(), sp(3),
     ]
 
-    # Плашка с промптом (тип презентации)
-    if user_prompt:
-        pt = Table([[Paragraph(f'Презентация: {user_prompt[:120]}', style("pt", fontSize=10, textColor=C_CYAN, leading=14, alignment=TA_CENTER))]],
-                   colWidths=[CW])
-        pt.setStyle(TableStyle([
-            ("BACKGROUND",   (0,0),(-1,-1), colors.HexColor("#0d1f33")),
-            ("TOPPADDING",   (0,0),(-1,-1), 8),
-            ("BOTTOMPADDING",(0,0),(-1,-1), 8),
-            ("LEFTPADDING",  (0,0),(-1,-1), 12),
-            ("RIGHTPADDING", (0,0),(-1,-1), 12),
-            ("LINEABOVE",    (0,0),(-1,0),  1, C_CYAN),
-            ("LINEBELOW",    (0,0),(-1,-1), 1, C_CYAN),
-        ]))
-        story += [pt, sp(3)]
+    # Картинка дашборда на обложку
+    img_dash = fetch_image(IMG_DASHBOARD, CW, 80*mm)
+    if img_dash:
+        img_dash.hAlign = "CENTER"
+        story.append(img_dash)
+        story += [sp(1), Paragraph("Управление проектом на платформе GLOBAL LINK", S_CAPTION), sp(4)]
+    else:
+        story.append(sp(4))
 
-    # ── KPI-БЛОК — крупные цифры ─────────────────────────────────────────────
-    story += [Paragraph("ФИНАНСОВЫЕ ПОКАЗАТЕЛИ", S_TAG), sp(2)]
+    # ═══════════════════════════════════════════════════════════════════════
+    # ФИНАНСОВЫЕ KPI — 4 крупных числа
+    # ═══════════════════════════════════════════════════════════════════════
+    story += [
+        Paragraph("ФИНАНСЫ ПРОЕКТА", S_TAG), sp(1),
+        Paragraph("Ключевые показатели", S_SECTION), sp(3),
+        stat_block([
+            (fmt_money(inc_plan),    f"Доход\nплан"),
+            (fmt_money(inc_fact),    f"Доход\nфакт"),
+            (fmt_money(exp_plan),    f"Расходы\nплан"),
+            (fmt_money(profit_plan), f"Прибыль\nплан"),
+        ]),
+        sp(4),
+    ]
 
-    story.append(stat_block([
-        (fmt_money(inc_plan),    f"Доход план\nфакт: {fmt_money(inc_fact)}"),
-        (fmt_money(exp_plan),    f"Расходы план\nфакт: {fmt_money(exp_fact)}"),
-        (fmt_money(profit_plan), f"Прибыль план\nфакт: {fmt_money(profit_fact)}"),
-    ]))
-    story.append(sp(3))
+    # ═══════════════════════════════════════════════════════════════════════
+    # КАРТОЧКИ — план vs факт
+    # ═══════════════════════════════════════════════════════════════════════
+    inc_pct = f"{inc_fact/inc_plan*100:.0f}% от плана" if inc_plan else "нет данных"
+    exp_pct = f"{exp_fact/exp_plan*100:.0f}% от плана" if exp_plan else "нет данных"
 
-    # ── КАРТОЧКИ-КЛЮЧЕВЫЕ ФАКТЫ (feature_card стиль) ─────────────────────────
-    story += [grad_line(), sp(3), Paragraph("КЛЮЧЕВЫЕ ПОКАЗАТЕЛИ", S_TAG), sp(1),
-              Paragraph("Обзор проекта в цифрах", S_SECTION_PURP), sp(3)]
+    story += [
+        grad_line(), sp(3),
+        Paragraph("ПЛАН И ФАКТ", S_TAG), sp(1),
+        Paragraph("Как идёт проект относительно бюджета", S_SECTION_PURP), sp(3),
+        two_col(
+            [
+                feature_card("🎯", "Доходы", f"Запланировано: {fmt_money(inc_plan)}\nПолучено: {fmt_money(inc_fact)}\n{inc_pct}", C_GREEN),
+                sp(3),
+                feature_card("📊", "Налог " + tax_label, f"Запланировано: {fmt_money(tax_plan)}\nНачислено: {fmt_money(tax_fact)}", C_CYAN),
+            ],
+            [
+                feature_card("💸", "Расходы", f"Запланировано: {fmt_money(exp_plan)}\nПотрачено: {fmt_money(exp_fact)}\n{exp_pct}", C_PINK),
+                sp(3),
+                feature_card("✨", "Чистая прибыль", f"Запланировано: {fmt_money(profit_plan)}\nПо факту: {fmt_money(profit_fact)}", profit_color),
+            ]
+        ),
+        sp(4),
+    ]
 
-    exp_exec  = f"{pct(exp_fact, exp_plan)} исполнено" if exp_plan else "нет данных"
-    inc_exec  = f"{pct(inc_fact, inc_plan)} выполнено" if inc_plan else "нет данных"
-    tax_label = f"УСН {int(tax_rate*100)}%" if tax_sys.startswith("usn") else tax_sys.upper()
-
-    story.append(two_col(
-        [
-            feature_card("◈", "Доходы", f"План: {fmt_money(inc_plan)}\nФакт: {fmt_money(inc_fact)} · {inc_exec}", C_GREEN),
-            sp(3),
-            feature_card("◆", "Расходы", f"План: {fmt_money(exp_plan)}\nФакт: {fmt_money(exp_fact)} · {exp_exec}", C_PINK),
-        ],
-        [
-            feature_card("◉", "Чистая прибыль", f"План: {fmt_money(profit_plan)}\nФакт: {fmt_money(profit_fact)}", profit_color),
-            sp(3),
-            feature_card("⬡", f"Налог ({tax_label})", f"План: {fmt_money(tax_plan)}\nФакт: {fmt_money(tax_fact)}", C_CYAN),
-        ]
-    ))
-    story.append(sp(4))
-
-    # ── AI-АНАЛИТИКА ─────────────────────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════════════
+    # ИИ-АНАЛИТИКА
+    # ═══════════════════════════════════════════════════════════════════════
     if ai_summary:
         story += [
             grad_line(), sp(3),
-            Paragraph("ИИ-АНАЛИТИКА", S_TAG), sp(1),
-            Paragraph("Анализ и рекомендации", S_SECTION_CYAN), sp(2),
+            Paragraph("АНАЛИТИКА И ВЫВОДЫ", S_TAG), sp(1),
+            Paragraph("Оценка проекта от ИИ-ассистента GLOBAL LINK", S_SECTION_CYAN), sp(2),
         ]
+        # Картинка для визуального разделения
+        img_net = fetch_image(IMG_NETWORK, CW, 55*mm)
+        if img_net:
+            img_net.hAlign = "CENTER"
+            story.append(img_net)
+            story.append(sp(2))
+
         for para in ai_summary.split("\n"):
             para = para.strip()
             if not para:
                 story.append(sp(1))
                 continue
+            # Убираем markdown-символы
+            clean = para.lstrip("#*•-").strip()
+            if not clean:
+                continue
             if para.startswith("##") or para.startswith("**"):
-                story.append(Paragraph(para.lstrip("#*").strip(), S_HIGHLIGHT))
-                story.append(sp(1))
+                story.append(Paragraph(clean, S_HIGHLIGHT))
             elif para.startswith("•") or para.startswith("-") or para.startswith("*"):
-                story.append(Paragraph(para.lstrip("-*").strip(), S_BULLET))
-                story.append(sp(1))
+                story.append(Paragraph(f"• {clean}", S_BULLET))
             else:
-                story.append(Paragraph(para, S_BODY))
-                story.append(sp(1))
-        story.append(sp(2))
+                story.append(Paragraph(clean, S_BODY))
+            story.append(sp(1))
+        story.append(sp(3))
 
-    # ── СТРУКТУРА РАСХОДОВ — прогресс-бары ───────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════════════
+    # СТРУКТУРА РАСХОДОВ
+    # ═══════════════════════════════════════════════════════════════════════
     if expenses:
         cats: dict = {}
         for e in expenses:
             cat = e.get("category") or "Прочее"
-            cats.setdefault(cat, {"plan": 0, "fact": 0})
+            cats.setdefault(cat, {"plan": 0.0, "fact": 0.0})
             cats[cat]["plan"] += float(e.get("amount_plan") or 0)
             cats[cat]["fact"] += float(e.get("amount_fact") or 0)
 
         story += [
             grad_line(), sp(3),
-            Paragraph("СТРУКТУРА РАСХОДОВ", S_TAG), sp(1),
-            Paragraph("Бюджет по категориям", S_SECTION_PURP), sp(2),
+            Paragraph("БЮДЖЕТ РАСХОДОВ", S_TAG), sp(1),
+            Paragraph("Статьи затрат с прогрессом исполнения", S_SECTION_PURP), sp(3),
         ]
 
-        CAT_COLORS = [C_PINK, C_PURPLE, C_CYAN, C_GREEN, colors.HexColor("#f59e0b"), colors.HexColor("#ef4444")]
-        for idx, (cat, vals) in enumerate(sorted(cats.items(), key=lambda x: -x[1]["plan"])):
-            pv, fv   = vals["plan"], vals["fact"]
-            bar_col  = CAT_COLORS[idx % len(CAT_COLORS)]
-            share    = f"{pv/exp_plan*100:.0f}%" if exp_plan else "—"
+        CAT_ICONS  = ["🏛", "🎵", "📢", "🚌", "🎤", "💡", "🎬", "🖥", "📋", "💰"]
+        CAT_COLORS = [C_PINK, C_PURPLE, C_CYAN, C_GREEN,
+                      colors.HexColor("#f59e0b"), colors.HexColor("#ef4444"),
+                      colors.HexColor("#8b5cf6"), colors.HexColor("#06b6d4")]
 
-            row_data = [[
-                Paragraph(cat, S_CARD_TITLE),
-                Paragraph(share, style(f"sh{idx}", fontSize=9, textColor=C_WHITE30, leading=13, alignment=TA_CENTER)),
-                Paragraph(fmt_money(pv), style(f"cp{idx}", fontName="Helvetica-Bold", fontSize=11, textColor=C_WHITE, leading=15, alignment=TA_RIGHT)),
-                Paragraph(f"факт {fmt_money(fv)}", style(f"cf{idx}", fontSize=9, textColor=C_WHITE60, leading=13, alignment=TA_RIGHT)),
-            ]]
-            rt = Table(row_data, colWidths=[CW*0.42, CW*0.10, CW*0.25, CW*0.23])
-            rt.setStyle(TableStyle([
-                ("VALIGN",       (0,0),(-1,-1),"MIDDLE"),
-                ("LEFTPADDING",  (0,0),(-1,-1), 0),
-                ("RIGHTPADDING", (0,0),(-1,-1), 0),
-                ("TOPPADDING",   (0,0),(-1,-1), 6),
-                ("BOTTOMPADDING",(0,0),(-1,-1), 3),
-            ]))
-            story.append(rt)
-            story.append(ProgressBarFlowable(fv if fv else pv * 0.01, pv if pv else 1, bar_col, CW, bar_h=5))
-            story.append(sp(2))
+        sorted_cats = sorted(cats.items(), key=lambda x: -x[1]["plan"])
+
+        for idx, (cat, vals) in enumerate(sorted_cats):
+            pv   = vals["plan"]
+            fv   = vals["fact"]
+            icon = CAT_ICONS[idx % len(CAT_ICONS)]
+            col  = CAT_COLORS[idx % len(CAT_COLORS)]
+            share = f"{pv/exp_plan*100:.0f}%" if exp_plan else "—"
+
+            story.append(feature_card(
+                icon, cat,
+                f"План: {fmt_money(pv)} ({share} от бюджета)  ·  Факт: {fmt_money(fv)}",
+                col
+            ))
+            story.append(ProgressBarFlowable(fv if fv else pv * 0.02, pv if pv else 1, col, CW, bar_h=5))
+            story.append(sp(3))
 
         story.append(sp(2))
 
-    # ── ПРОДАЖИ БИЛЕТОВ — таблица ─────────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════════════
+    # ПРОДАЖИ БИЛЕТОВ (категории)
+    # ═══════════════════════════════════════════════════════════════════════
     if income_lines:
+        total_plan_tix = sum(int(il.get("ticket_count") or 0) for il in income_lines)
+        total_sold_tix = sum(int(il.get("sold_count") or 0) for il in income_lines)
+        conv_total     = f"{total_sold_tix/total_plan_tix*100:.0f}%" if total_plan_tix else "—"
+
         story += [
             grad_line(), sp(3),
             Paragraph("ПРОДАЖИ БИЛЕТОВ", S_TAG), sp(1),
-            Paragraph("Плановые и фактические продажи", S_SECTION_CYAN), sp(2),
+            Paragraph("Плановые и фактические продажи по категориям", S_SECTION_CYAN), sp(3),
+            stat_block([
+                (str(total_plan_tix), "Билетов\nв плане"),
+                (str(total_sold_tix), "Продано\nбилетов"),
+                (conv_total,          "Конверсия\nпродаж"),
+                (fmt_money(inc_fact), "Выручка\nот билетов"),
+            ]),
+            sp(3),
         ]
-
-        mk = lambda name, txt, **kw: Paragraph(txt, style(name, **{"fontSize": 9, "textColor": C_WHITE60, "leading": 13, **kw}))
-        hdr = [mk("ih0","Категория"), mk("ih1","Кол-во",alignment=TA_CENTER), mk("ih2","Продано",alignment=TA_CENTER,textColor=C_GREEN),
-               mk("ih3","Цена",alignment=TA_RIGHT), mk("ih4","Доход факт",fontName="Helvetica-Bold",alignment=TA_RIGHT,textColor=C_WHITE)]
-        rows = [hdr]
 
         for il in income_lines:
             cat      = il.get("category") or "Билеты"
@@ -786,54 +816,66 @@ def build_project_pdf(buf, project: dict, expenses: list, income_lines: list, ti
             sold     = int(il.get("sold_count") or 0)
             price    = float(il.get("ticket_price") or 0)
             fact_sum = sold * price
-            conv     = f"{sold/cnt_plan*100:.0f}%" if cnt_plan else "—"
-            rows.append([
-                Paragraph(cat, S_CARD_BODY),
-                Paragraph(str(cnt_plan), style(f"ic{cat}", fontSize=10, textColor=C_WHITE, leading=14, alignment=TA_CENTER)),
-                Paragraph(f"{sold} ({conv})", style(f"is{cat}", fontSize=10, textColor=C_GREEN, leading=14, alignment=TA_CENTER)),
-                Paragraph(f"{int(price):,} ₽".replace(",", " "), style(f"ip{cat}", fontSize=10, textColor=C_WHITE60, leading=14, alignment=TA_RIGHT)),
-                Paragraph(fmt_money(fact_sum), style(f"if{cat}", fontName="Helvetica-Bold", fontSize=10, textColor=C_GREEN, leading=14, alignment=TA_RIGHT)),
-            ])
+            conv     = f"{sold/cnt_plan*100:.0f}% продано" if cnt_plan else "—"
 
-        it = Table(rows, colWidths=[CW*0.32, CW*0.14, CW*0.18, CW*0.16, CW*0.20])
-        it.setStyle(TableStyle([
-            ("BACKGROUND",    (0,0), (-1,0),  C_CARD),
-            ("ROWBACKGROUNDS",(0,1), (-1,-1), [colors.HexColor("#0f0f1e"), C_CARD]),
-            ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
-            ("TOPPADDING",    (0,0), (-1,-1), 7),
-            ("BOTTOMPADDING", (0,0), (-1,-1), 7),
-            ("LEFTPADDING",   (0,0), (-1,-1), 8),
-            ("RIGHTPADDING",  (0,0), (-1,-1), 8),
-            ("LINEBELOW",     (0,0), (-1,0),  1, C_BORDER),
-        ]))
-        story += [it, sp(4)]
+            story.append(feature_card(
+                "🎟",
+                cat,
+                f"Цена: {fmt_money(price)}  ·  Продано: {sold} из {cnt_plan} ({conv})  ·  Выручка: {fmt_money(fact_sum)}",
+                C_GREEN
+            ))
+            story.append(ProgressBarFlowable(sold, cnt_plan if cnt_plan else 1, C_GREEN, CW, bar_h=5))
+            story.append(sp(3))
 
-    # ── TC-СТАТИСТИКА — stat_block ────────────────────────────────────────────
+        story.append(sp(2))
+
+    # ═══════════════════════════════════════════════════════════════════════
+    # СТАТИСТИКА TicketsCloud
+    # ═══════════════════════════════════════════════════════════════════════
     if ticket_sales:
         total_sold    = len(ticket_sales)
         total_revenue = sum(float(s.get("total_amount") or 0) for s in ticket_sales)
         paid_cnt      = sum(1 for s in ticket_sales if s.get("status") == "paid")
+        reserved_cnt  = total_sold - paid_cnt
         avg_check     = total_revenue / paid_cnt if paid_cnt else 0
 
         story += [
             grad_line(), sp(3),
-            Paragraph("СТАТИСТИКА TICKETSCLOUD", S_TAG), sp(1),
-            Paragraph("Реальные данные о продажах", S_SECTION_CYAN), sp(2),
+            Paragraph("ДАННЫЕ ПРОДАЖ", S_TAG), sp(1),
+            Paragraph("Реальные продажи из системы бронирования", S_SECTION_PURP), sp(3),
             stat_block([
                 (str(total_sold),          "Всего\nзаказов"),
                 (str(paid_cnt),            "Оплачено"),
-                (fmt_money(total_revenue), "Выручка\nфакт"),
+                (str(reserved_cnt),        "Забронировано"),
                 (fmt_money(avg_check),     "Средний\nчек"),
             ]),
+            sp(3),
+            two_col(
+                [
+                    feature_card("✅", "Оплаченные заказы", f"{paid_cnt} заказов на сумму {fmt_money(total_revenue)}", C_GREEN),
+                ],
+                [
+                    feature_card("🔖", "Забронировано", f"{reserved_cnt} заказов ожидают оплаты", C_CYAN),
+                ]
+            ),
             sp(4),
         ]
 
-    # ── ПОДВАЛ ───────────────────────────────────────────────────────────────
+    # ═══════════════════════════════════════════════════════════════════════
+    # ПОДВАЛ с картинкой площадки
+    # ═══════════════════════════════════════════════════════════════════════
+    img_venue = fetch_image(IMG_VENUE, CW, 60*mm)
+    if img_venue:
+        story += [grad_line(), sp(3)]
+        img_venue.hAlign = "CENTER"
+        story.append(img_venue)
+        story.append(sp(2))
+
     story += [
         grad_line(), sp(2),
-        Paragraph(f"GLOBAL LINK · {title.upper()}", style("ft1", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE30, leading=13, alignment=TA_CENTER)),
+        Paragraph(f"GLOBAL LINK  ·  {title.upper()}", style("ft1", fontName="Helvetica-Bold", fontSize=9, textColor=C_WHITE30, leading=13, alignment=TA_CENTER)),
         sp(1),
-        Paragraph("Конфиденциально · Сформировано автоматически", S_FOOTER),
+        Paragraph("globallink.art  ·  Конфиденциально  ·  Сформировано автоматически", S_FOOTER),
     ]
 
     doc.build(story, onFirstPage=bg, onLaterPages=bg)
