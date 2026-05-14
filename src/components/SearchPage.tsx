@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { toast } from "sonner";
 import Icon from "@/components/ui/icon";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/context/AuthContext";
@@ -153,8 +154,8 @@ export default function SearchPage({ onNavigate }: SearchPageProps) {
       });
       const data = await res.json();
       if (res.ok) setClaimDone(prev => new Set([...prev, venueId]));
-      else alert(data.error || "Ошибка");
-    } catch { alert("Ошибка соединения"); }
+      else toast.error(data.error || "Ошибка");
+    } catch { toast.error("Ошибка соединения"); }
     finally { setClaimingId(null); }
   };
 

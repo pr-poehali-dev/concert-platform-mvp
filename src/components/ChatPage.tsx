@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { toast } from "sonner";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 import { startPolling, stopPolling } from "@/lib/polling";
@@ -143,7 +144,7 @@ export default function ChatPage({ initialConversationId }: { initialConversatio
 
   // ── Upload file to S3 via chat backend ──────────────────────────────────
   const uploadFile = async (file: File) => {
-    if (file.size > 20 * 1024 * 1024) { alert("Файл больше 20 МБ"); return; }
+    if (file.size > 20 * 1024 * 1024) { toast.error("Файл больше 20 МБ"); return; }
     setPendingAttachment({ url: "", name: file.name, size: file.size, mime: file.type, sizeHuman: formatSize(file.size), uploading: true });
     try {
       const base64: string = await new Promise((resolve, reject) => {

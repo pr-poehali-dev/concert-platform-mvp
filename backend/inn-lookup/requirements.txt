@@ -1,0 +1,2 @@
+# inn-lookup использует только встроенные модули Python (json, urllib)
+# requirements.txt обязателен для деплоя

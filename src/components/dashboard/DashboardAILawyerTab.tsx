@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { toast } from "sonner";
 import Icon from "@/components/ui/icon";
 import { useAuth } from "@/context/AuthContext";
 
@@ -194,7 +195,7 @@ export default function DashboardAILawyerTab() {
 
   const handleFile = (file: File) => {
     if (file.size > 5 * 1024 * 1024) {
-      alert("Файл слишком большой. Максимум 5 МБ.");
+      toast.error("Файл слишком большой. Максимум 5 МБ.");
       return;
     }
     const reader = new FileReader();
